@@ -35,6 +35,20 @@ Use `SPARK_` prefix:
 - Macros: `SPARK_LOG_H` (uppercase with `SPARK_` prefix)
 - Internal/static functions: no prefix required
 
+## Platform ifdefs
+
+Use `_MSC_VER` (not `_WIN32`) for platform splits. MinGW provides POSIX APIs
+(`clock_gettime`, `strcasecmp`, etc.) so it should take the POSIX path alongside Linux.
+Only use Windows-specific APIs when compiling with MSVC:
+
+```c
+#ifdef _MSC_VER
+    /* MSVC only */
+#else
+    /* GCC, MinGW, Clang, POSIX */
+#endif
+```
+
 ## Style
 
 - C17 standard (`-std=c17`)

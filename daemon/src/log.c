@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#endif
+
 static spark_log_level_t current_level = SPARK_LOG_INFO;
 
 static const char* SPARK_LOG_DEBUG_STR = "DEBUG";
@@ -63,8 +67,9 @@ const char *spark_log_level_to_string(spark_log_level_t level)
             return SPARK_LOG_WARN_STR;
         case SPARK_LOG_ERROR:
             return SPARK_LOG_ERROR_STR;
+        default:
+            return "UNKNOWN";
     }
-    return ""; // I might want toi return NULL?
 }
 
 void spark_log_write(spark_log_level_t level, const char *fmt, ...)

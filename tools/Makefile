@@ -1,7 +1,7 @@
 # sparkctl Makefile
 
 CC      ?= gcc
-CFLAGS  := -Wall -Wextra -pedantic -std=c17 -g
+CFLAGS  := -Wall -Wextra -pedantic -std=c17 -g -Isrc
 LDFLAGS :=
 
 BUILDDIR := ../build

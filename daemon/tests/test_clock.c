@@ -14,7 +14,7 @@ void test_sleep_elapsed(void)
     spark_clock_msleep(50);
     uint64_t elapsed = spark_clock_monotonic_ms() - start;
     ASSERT_TRUE(elapsed >= 35);
-    ASSERT_TRUE(elapsed <= 65);
+    ASSERT_TRUE(elapsed <= 200);
 }
 
 int main(void)

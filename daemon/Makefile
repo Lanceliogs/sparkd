@@ -18,7 +18,7 @@ endif
 TARGET := $(BUILDDIR)/sparkd$(EXE)
 
 # Source files (add as modules are implemented)
-SRCS := src/main.c src/log.c src/clock.c
+SRCS := src/main.c src/log.c src/clock.c src/dmx/dmx.c src/dmx/dmx_dummy.c
 OBJS := $(SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
 # Test files
@@ -33,17 +33,13 @@ LIB_OBJS := $(LIB_SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS) | $(BUILDDIR)
+$(TARGET): $(OBJS)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/daemon/%.o: src/%.c | $(BUILDDIR)/daemon
+$(BUILDDIR)/daemon/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILDDIR):
-	mkdir -p $(BUILDDIR)
-
-$(BUILDDIR)/daemon:
-	mkdir -p $(BUILDDIR)/daemon
 
 test: $(TEST_BINS)
 	@for t in $(TEST_BINS); do \
@@ -51,11 +47,9 @@ test: $(TEST_BINS)
 		$$t || exit 1; \
 	done
 
-$(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS) | $(BUILDDIR)/tests
+$(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Itests -o $@ $< $(LIB_OBJS) $(LDFLAGS)
-
-$(BUILDDIR)/tests:
-	mkdir -p $(BUILDDIR)/tests
 
 clean:
 	rm -rf $(BUILDDIR)/daemon $(BUILDDIR)/tests $(TARGET)

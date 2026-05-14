@@ -1,5 +1,6 @@
 #include "log.h"
 #include "stage.h"
+#include "clock.h"
 #include "dmx/dmx.h"
 
 #include <string.h>
@@ -7,6 +8,8 @@
 #include <signal.h>
 
 #define SPARKD_VERSION "0.0.0"
+
+#define PERIOD_MS (uint32_t)(1000 / 40)
 
 static volatile uint8_t should_keep_running = 1;
 
@@ -67,13 +70,18 @@ int main(int argc, char **argv)
 
     spark_log_init(args.log_level);
 
+    uint8_t frame[SPARK_DMX_UNIVERSE_SIZE];
+
     spark_stage_t stage;
     spark_stage_init(&stage);
     spark_log_debug("Stage initialized!");
 
-    spark_dmx_backend_t backend;
-    spark_dmx_dummy_init(&backend);
+    spark_dmx_backend_t dmx_backend;
+    spark_dmx_dummy_init(&dmx_backend);
     spark_log_debug("Dummy DMX backend initialized!");
+
+    dmx_backend.ops->open(&dmx_backend);
+    spark_log_debug("DMX backend opened!");
     
     signal(SIGINT, signal_handler);   /* Ctrl+C */
     signal(SIGTERM, signal_handler);  /* kill command */
@@ -81,11 +89,22 @@ int main(int argc, char **argv)
     spark_log_info("Ctrl+C to stop...");
     while (should_keep_running)
     {
+        uint64_t start = spark_clock_monotonic_ms();
 
+        spark_stage_render(&stage, frame);
+
+        dmx_backend.ops->send_frame(&dmx_backend, frame);
+
+        uint32_t elapsed = spark_clock_monotonic_ms() - start;
+        if (elapsed < PERIOD_MS)
+            spark_clock_msleep(PERIOD_MS - (uint32_t)elapsed);
     }
 
     spark_log_info("Shutting down");
-    
+
+    dmx_backend.ops->close(&dmx_backend);
+    spark_log_debug("DMX backend closed!");
+
     spark_stage_destroy(&stage);
     spark_log_debug("Stage destroyed!");
 

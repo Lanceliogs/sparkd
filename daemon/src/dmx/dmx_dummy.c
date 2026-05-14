@@ -14,6 +14,8 @@ static void spark_dmx_dummy_close(spark_dmx_backend_t *backend)
 static int spark_dmx_dummy_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_DMX_UNIVERSE_SIZE])
 {
     (void)frame;
+    if (backend->state != SPARK_DMX_CONNECTED)
+        return -1;
     backend->frames_sent++;
     return 0;
 }

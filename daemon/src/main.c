@@ -4,14 +4,15 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <signal.h>
 
 #define SPARKD_VERSION "0.0.0"
 
 static volatile uint8_t should_keep_running = 1;
 
-void signal_callback(void)
+void signal_handler(int signum)
 {
-    /* Catch SIGINT and SIGTERM */
+    (void)signum;
     should_keep_running = 0;
 }
 
@@ -65,15 +66,28 @@ int main(int argc, char **argv)
     }
 
     spark_log_init(args.log_level);
-    spark_log_level_t level = spark_log_get_level();
-    spark_log_info("sparkd log init with log level %s", spark_log_level_to_string(level));
 
-    /* Init the signal callback */
+    spark_stage_t stage;
+    spark_stage_init(&stage);
+    spark_log_debug("Stage initialized!");
 
+    spark_dmx_backend_t backend;
+    spark_dmx_dummy_init(&backend);
+    spark_log_debug("Dummy DMX backend initialized!");
+    
+    signal(SIGINT, signal_handler);   /* Ctrl+C */
+    signal(SIGTERM, signal_handler);  /* kill command */
+
+    spark_log_info("Ctrl+C to stop...");
     while (should_keep_running)
     {
 
     }
+
+    spark_log_info("Shutting down");
+    
+    spark_stage_destroy(&stage);
+    spark_log_debug("Stage destroyed!");
 
     return 0;
 }

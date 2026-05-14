@@ -18,7 +18,7 @@ endif
 TARGET := $(BUILDDIR)/sparkd$(EXE)
 
 # Source files (add as modules are implemented)
-SRCS := src/main.c src/log.c src/clock.c src/dmx/dmx.c src/dmx/dmx_dummy.c
+SRCS := src/main.c src/log.c src/clock.c src/dmx/dmx.c src/dmx/dmx_dummy.c src/stage.c
 OBJS := $(SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
 # Test files

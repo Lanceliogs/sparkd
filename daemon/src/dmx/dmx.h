@@ -1,6 +1,8 @@
 #ifndef SPARK_DMX_H
 #define SPARK_DMX_H
 
+#include "consts.h"
+
 #include <stdint.h>
 
 typedef enum
@@ -13,16 +15,14 @@ typedef enum
 
 typedef struct spark_dmx_backend spark_dmx_backend_t;
 
-typedef struct
-{
+typedef struct {
     int  (*open)(spark_dmx_backend_t *backend);
     void (*close)(spark_dmx_backend_t *backend);
-    int  (*send_frame)(spark_dmx_backend_t *backend, const uint8_t frame[512]);
+    int  (*send_frame)(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_DMX_UNIVERSE_SIZE]);
     int  (*is_connected)(spark_dmx_backend_t *backend);
 } spark_dmx_ops_t;
 
-struct spark_dmx_backend
-{
+struct spark_dmx_backend {
     const spark_dmx_ops_t *ops; /* pointer to the vtable */
     spark_dmx_state_t state; /* current connection state */
     /* stats */

@@ -14,8 +14,8 @@ void test_dummy_lifecycle(void)
     ASSERT_EQ(backend.ops->open(&backend), 0);
     ASSERT_TRUE(backend.ops->is_connected(&backend));
 
-    uint8_t frame[512];
-    memset(frame, 0, sizeof(frame));
+    uint8_t frame[SPARK_DMX_UNIVERSE_SIZE];
+    memset(frame, 0, SPARK_DMX_UNIVERSE_SIZE);
     
     backend.ops->send_frame(&backend, frame);
     backend.ops->send_frame(&backend, frame);

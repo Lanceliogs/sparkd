@@ -3,15 +3,13 @@
 
 #include <stdint.h>
 
-typedef enum
-{
+typedef enum {
     SPARK_MIDI_NOTE_ON,
     SPARK_MIDI_NOTE_OFF,
     SPARK_MIDI_CC,
 } midi_event_type_t;
 
-typedef struct
-{
+typedef struct {
     midi_event_type_t type;
     uint8_t channel;
     uint8_t note;

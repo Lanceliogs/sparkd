@@ -1,8 +1,7 @@
 #ifndef SPARK_LOG_H
 #define SPARK_LOG_H
 
-typedef enum
-{
+typedef enum {
     SPARK_LOG_DEBUG,
     SPARK_LOG_INFO,
     SPARK_LOG_WARN,

@@ -1,0 +1,6 @@
+#ifndef SPARK_CONSTS_H
+#define SPARK_CONSTS_H
+
+#define SPARK_DMX_UNIVERSE_SIZE 512
+
+#endif

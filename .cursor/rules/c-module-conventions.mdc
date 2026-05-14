@@ -1,0 +1,68 @@
+---
+description: C module conventions for sparkd daemon code
+globs: daemon/src/**/*.{c,h}
+alwaysApply: false
+---
+
+# C Module Conventions
+
+Every module is a `.h` + `.c` pair in `daemon/src/`.
+
+## Header guard
+
+Use `SPARK_` prefix:
+
+```c
+#ifndef SPARK_LOG_H
+#define SPARK_LOG_H
+
+/* declarations */
+
+#endif
+```
+
+## Include order
+
+1. Own header (in `.c` file)
+2. Standard library headers
+3. Project headers
+
+## Naming
+
+- Functions: `spark_log_init`, `spark_log_info` (prefix with `spark_<module>_`)
+- Types: `spark_log_level_t` (typedef with `_t` suffix)
+- Enums: `SPARK_LOG_DEBUG` (uppercase with `SPARK_` prefix)
+- Macros: `SPARK_LOG_H` (uppercase with `SPARK_` prefix)
+- Internal/static functions: no prefix required
+
+## Style
+
+- C17 standard (`-std=c17`)
+- Braces on own line for functions, same line for control flow
+- 4-space indent, no tabs
+- `snake_case` for all C identifiers
+- Keep functions short and focused
+
+## Module template
+
+```c
+/* log.h */
+#ifndef SPARK_LOG_H
+#define SPARK_LOG_H
+
+void spark_log_init(void);
+
+#endif
+```
+
+```c
+/* log.c */
+#include "log.h"
+
+#include <stdio.h>
+
+void spark_log_init(void)
+{
+    /* ... */
+}
+```

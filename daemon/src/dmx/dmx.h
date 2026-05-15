@@ -4,6 +4,7 @@
 #include "consts.h"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef enum
 {
@@ -19,7 +20,7 @@ typedef struct {
     int  (*open)(spark_dmx_backend_t *backend);
     void (*close)(spark_dmx_backend_t *backend);
     int  (*send_frame)(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_DMX_UNIVERSE_SIZE]);
-    int  (*is_connected)(spark_dmx_backend_t *backend);
+    bool  (*is_connected)(spark_dmx_backend_t *backend);
 } spark_dmx_ops_t;
 
 struct spark_dmx_backend {
@@ -36,6 +37,12 @@ struct spark_dmx_backend {
 /* Common functions */
 
 void spark_dmx_reset_stats(spark_dmx_backend_t *backend);
+
+/* Less verbose aliases */
+int spark_dmx_open(spark_dmx_backend_t *backend);
+void spark_dmx_close(spark_dmx_backend_t *backend);
+int spark_dmx_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_DMX_UNIVERSE_SIZE]);
+bool spark_dmx_is_connected(spark_dmx_backend_t *backend);
 
 /* Specific backends below */
 

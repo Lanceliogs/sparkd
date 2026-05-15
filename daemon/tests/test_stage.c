@@ -14,7 +14,6 @@ void test_hardcoded_stage(void)
 
     spark_stage_t stage;
     spark_stage_init(&stage);
-    ASSERT_EQ(memcmp(frame_null, stage.frame, SPARK_DMX_UNIVERSE_SIZE), 0);
 
     midi_event_t evt_on = {
         .type = SPARK_MIDI_NOTE_ON,

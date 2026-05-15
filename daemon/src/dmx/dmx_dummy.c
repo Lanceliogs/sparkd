@@ -3,6 +3,7 @@
 static int spark_dmx_dummy_open(spark_dmx_backend_t *backend)
 {
     backend->state = SPARK_DMX_CONNECTED;
+    backend->reconnects++;
     return 0;
 }
 
@@ -20,7 +21,7 @@ static int spark_dmx_dummy_send_frame(spark_dmx_backend_t *backend, const uint8_
     return 0;
 }
 
-static int spark_dmx_dummy_is_connected(spark_dmx_backend_t *backend)
+static bool spark_dmx_dummy_is_connected(spark_dmx_backend_t *backend)
 {
     return backend->state == SPARK_DMX_CONNECTED;
 }

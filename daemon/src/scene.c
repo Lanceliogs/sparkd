@@ -48,7 +48,8 @@ void spark_scene_deactivate(spark_scene_t *scene)
     if (!scene->active)
         return;
     scene->active = false;
-    for (int i = 0; i < active_scene_count; i++) {
+    for (int i = 0; i < active_scene_count; i++)
+    {
         if (active_scenes[i] == scene) {
             active_scenes[i] = active_scenes[--active_scene_count];
             break;

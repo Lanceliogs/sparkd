@@ -50,6 +50,7 @@ bool spark_dmx_is_connected(spark_dmx_backend_t *backend);
 void spark_dmx_dummy_init(spark_dmx_backend_t *backend);
 
 /* Open DMX */
+void spark_dmx_open_init(spark_dmx_backend_t *backend, const char *port);
 
 /* Pro DMX */
 

@@ -2,6 +2,7 @@
 #include "log.h"
 
 #include <string.h>
+#include <stdio.h>
 
 void spark_serial_configure(spark_serial_t *serial, const char *port,
                             uint32_t baudrate, spark_serial_data_bits_t data_bits,

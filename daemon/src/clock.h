@@ -7,5 +7,6 @@ uint64_t spark_clock_monotonic_ms(void);
 uint64_t spark_clock_monotonic_us(void);
 
 void spark_clock_msleep(uint32_t ms);
+void spark_clock_usleep(uint32_t us);
 
 #endif

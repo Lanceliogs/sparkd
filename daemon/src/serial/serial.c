@@ -3,6 +3,17 @@
 
 #include <string.h>
 
+void spark_serial_configure(spark_serial_t *serial, const char *port,
+                            uint32_t baudrate, spark_serial_data_bits_t data_bits,
+                            spark_serial_stop_bit_t stop_bit, spark_serial_parity_t parity)
+{
+    strncpy(serial->port, port, SPARK_SERIAL_PORT_STRLEN - 1);
+    serial->baudrate = baudrate;
+    serial->data_bits = data_bits;
+    serial->stop_bit = stop_bit;
+    serial->parity = parity;
+}
+
 #ifdef _WIN32
 
 #include <windows.h>

@@ -2,10 +2,11 @@
 #define SPARK_LOG_H
 
 typedef enum {
+    SPARK_LOG_SILENT,
     SPARK_LOG_DEBUG,
     SPARK_LOG_INFO,
     SPARK_LOG_WARN,
-    SPARK_LOG_ERROR
+    SPARK_LOG_ERROR,
 } spark_log_level_t;
 
 void spark_log_init(spark_log_level_t level);

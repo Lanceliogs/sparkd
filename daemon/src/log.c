@@ -10,6 +10,7 @@
 
 static spark_log_level_t current_level = SPARK_LOG_INFO;
 
+static const char* SPARK_LOG_SILENT_STR = "SILENT";
 static const char* SPARK_LOG_DEBUG_STR = "DEBUG";
 static const char* SPARK_LOG_INFO_STR = "INFO";
 static const char* SPARK_LOG_WARN_STR = "WARN";
@@ -32,6 +33,11 @@ spark_log_level_t spark_log_get_level(void)
 
 int spark_log_level_from_string(const char *str, spark_log_level_t *out)
 {
+    if (strcasecmp(str, SPARK_LOG_SILENT_STR) == 0)
+    {
+        *out = SPARK_LOG_SILENT;
+        return 0;     
+    }
     if (strcasecmp(str, SPARK_LOG_DEBUG_STR) == 0)
     {
         *out = SPARK_LOG_DEBUG;
@@ -59,22 +65,18 @@ const char *spark_log_level_to_string(spark_log_level_t level)
 {
     switch (level)
     {
-        case SPARK_LOG_DEBUG:
-            return SPARK_LOG_DEBUG_STR;
-        case SPARK_LOG_INFO:
-            return SPARK_LOG_INFO_STR;
-        case SPARK_LOG_WARN:
-            return SPARK_LOG_WARN_STR;
-        case SPARK_LOG_ERROR:
-            return SPARK_LOG_ERROR_STR;
-        default:
-            return "UNKNOWN";
+        case SPARK_LOG_SILENT: return SPARK_LOG_SILENT_STR;
+        case SPARK_LOG_DEBUG: return SPARK_LOG_DEBUG_STR;
+        case SPARK_LOG_INFO: return SPARK_LOG_INFO_STR;
+        case SPARK_LOG_WARN: return SPARK_LOG_WARN_STR;
+        case SPARK_LOG_ERROR: return SPARK_LOG_ERROR_STR;
+        default: return "UNKNOWN";
     }
 }
 
 void spark_log_write(spark_log_level_t level, const char *fmt, ...)
 {
-    if (level < current_level)
+    if (current_level == SPARK_LOG_SILENT || level < current_level)
         return;
     fprintf(stderr, "[%s] ", spark_log_level_to_string(level));
     va_list args;

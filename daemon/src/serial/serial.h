@@ -2,6 +2,7 @@
 #define SPARK_SERIAL_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 
 #ifdef _WIN32
@@ -51,6 +52,10 @@ typedef struct {
 
 /* init to safe defaults (call before open) */
 void spark_serial_init(spark_serial_t *serial);
+
+void spark_serial_configure(spark_serial_t *serial, const char *port,
+                            uint32_t baudrate, spark_serial_data_bits_t data_bits,
+                            spark_serial_stop_bit_t stop_bit, spark_serial_parity_t parity);
 
 /* open and configure */
 int  spark_serial_open(spark_serial_t *serial);

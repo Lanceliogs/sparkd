@@ -12,6 +12,7 @@ ifeq ($(OS),Windows_NT)
   EXE      := .exe
   LDFLAGS  += -lws2_32 -lwinmm
 else
+  CFLAGS   += -D_DEFAULT_SOURCE
   LDFLAGS  += -lpthread
 endif
 

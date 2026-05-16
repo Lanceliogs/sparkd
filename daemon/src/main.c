@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <signal.h>
 
-#define SPARKD_VERSION "0.0.0"
+#define SPARKD_VERSION "0.1.0"
 
 #define PERIOD_MS (uint32_t)(500)
 

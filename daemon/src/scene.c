@@ -1,5 +1,6 @@
 #include "scene.h"
 #include "clock.h"
+#include "log.h"
 
 #include <string.h>
 
@@ -38,6 +39,8 @@ void spark_scene_activate(spark_scene_t *scene, uint8_t velocity)
     scene->velocity = velocity;
     scene->start_time_ms = spark_clock_monotonic_ms();
     active_scenes[active_scene_count++] = scene;
+    spark_log_debug("scene:activate: '%s' velocity=%u active_count=%u",
+                    scene->id, velocity, active_scene_count);
 }
 
 void spark_scene_deactivate(spark_scene_t *scene)
@@ -51,6 +54,8 @@ void spark_scene_deactivate(spark_scene_t *scene)
             break;
         }
     }
+    spark_log_debug("scene:deactivate: '%s' active_count=%u",
+                    scene->id, active_scene_count);
 }
 
 void spark_scene_toggle(spark_scene_t *scene, uint8_t velocity)

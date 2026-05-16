@@ -60,6 +60,7 @@ void spark_stage_render(spark_stage_t *stage, uint8_t out[SPARK_DMX_UNIVERSE_SIZ
 
     uint16_t count;
     spark_scene_t **active = spark_scene_get_active(&count);
+    spark_log_debug("stage:render: %u active scene(s)", count);
     for (uint16_t i = 0; i < count; i++)
     {
         spark_scene_t *scene = active[i];
@@ -72,6 +73,7 @@ void spark_stage_render(spark_stage_t *stage, uint8_t out[SPARK_DMX_UNIVERSE_SIZ
                 if (val->velocity_scaling)
                     dmx_val = (val->value * scene->velocity) / 127;
                 out[val->dmx_index] = dmx_val;
+                spark_log_debug("stage:render: dmx[%u] = %u", val->dmx_index, dmx_val);
             }
         }
     }

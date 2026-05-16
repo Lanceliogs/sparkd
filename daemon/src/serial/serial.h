@@ -14,6 +14,8 @@
 #ifndef SPARK_SERIAL_H
 #define SPARK_SERIAL_H
 
+#include "consts.h"
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -21,8 +23,6 @@
 #ifdef _WIN32
 #include <windef.h>
 #endif
-
-#define SPARK_SERIAL_PORT_STRLEN 256
 
 #define SPARK_SERIAL_BAUDRATE_250000 250000
 

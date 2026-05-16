@@ -20,6 +20,7 @@ static int spark_dmx_open_open(spark_dmx_backend_t *backend)
         spark_log_warn("dmx_open:open: Serial port already opened");
         return -1;
     }
+    spark_log_debug("dmx_open:open: Opening port '%s'", priv->serial.port);
     if (spark_serial_open(&priv->serial) != 0)
     {
         spark_log_warn("dmx_open:open: Can't open serial port");
@@ -27,6 +28,7 @@ static int spark_dmx_open_open(spark_dmx_backend_t *backend)
     }
     backend->state = SPARK_DMX_CONNECTED;
     backend->reconnects++;
+    spark_log_debug("dmx_open:open: Connected (reconnects=%llu)", backend->reconnects);
     return 0;
 }
 
@@ -58,10 +60,16 @@ static int spark_dmx_open_send_frame(spark_dmx_backend_t *backend, const uint8_t
     if (written < 0)
     {
         backend->write_errors++;
+        spark_log_debug("dmx_open:send_frame: write failed, errors=%llu", backend->write_errors);
         return -1;
     }
 
     backend->frames_sent++;
+    if (backend->frames_sent % 40 == 1)
+        spark_log_debug("dmx_open:send_frame: frame #%llu, wrote %d bytes, first 8 ch: [%u %u %u %u %u %u %u %u]",
+                        backend->frames_sent, written,
+                        frame[0], frame[1], frame[2], frame[3],
+                        frame[4], frame[5], frame[6], frame[7]);
     return 0;
 }
 

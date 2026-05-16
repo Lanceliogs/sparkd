@@ -76,10 +76,22 @@ static void set_flow_control(DCB *conf, spark_serial_flow_control_t flow_control
     } 
 }
 
+static void ensure_device_prefix(const char *port, char *out, size_t out_len)
+{
+    const char *prefix = "\\\\.\\";
+    if (strncmp(port, prefix, strlen(prefix)) == 0)
+        snprintf(out, out_len, "%s", port);
+    else
+        snprintf(out, out_len, "\\\\.\\%s", port);
+}
+
 int  spark_serial_open(spark_serial_t *serial)
 {
+    char prefixed_port[SPARK_SERIAL_PORT_STRLEN] = {0};
+    ensure_device_prefix(serial->port, prefixed_port, SPARK_SERIAL_PORT_STRLEN);
+
     serial->hdl = CreateFileA(
-        serial->port, GENERIC_READ | GENERIC_WRITE,
+        prefixed_port, GENERIC_READ | GENERIC_WRITE,
         0, NULL, OPEN_EXISTING, 0, NULL
     );
     if (serial->hdl == INVALID_HANDLE_VALUE) {

@@ -1,3 +1,4 @@
+#include "consts.h"
 #include "log.h"
 #include "stage.h"
 #include "clock.h"
@@ -42,6 +43,7 @@ static void parse_cmdline_args(int argc, char **argv, spark_args_t *args)
         }
     }
 }
+
 
 int main(int argc, char **argv)
 {

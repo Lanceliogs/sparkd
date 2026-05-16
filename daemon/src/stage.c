@@ -1,27 +1,13 @@
 #include "stage.h"
+#include "log.h"
 
 #include <string.h>
-
-typedef struct {
-    bool active;
-    uint8_t midi_channel;
-    uint8_t midi_note;
-    uint16_t dmx_channel;
-    uint8_t dmx_value;
-} hardcoded_scene_t;
-
-static hardcoded_scene_t scene = {
-    .active = false,
-    .midi_channel = 0,
-    .midi_note = 60,
-    .dmx_channel = 0,
-    .dmx_value = 0,
-};
 
 void spark_stage_init(spark_stage_t *stage)
 {
     stage->blackout = false;
-    pthread_mutex_init(&stage->mutex, NULL); // For now, I guess it's enough
+    spark_scene_reset();
+    pthread_mutex_init(&stage->mutex, NULL);
 }
 
 void spark_stage_destroy(spark_stage_t *stage)
@@ -33,40 +19,62 @@ void spark_stage_apply_midi(spark_stage_t *stage, const midi_event_t *event)
 {
     pthread_mutex_lock(&stage->mutex);
 
-    /* Check event against the event registry or something */
-    /* Enable or disable scenes */
-    /* Hardcoded mapping for now */
-
-    if (event->type == SPARK_MIDI_NOTE_ON &&
-        event->channel == scene.midi_channel &&
-        event->note == scene.midi_note)
+    spark_scene_t *scene = spark_scene_get(event->channel, event->note);
+    if (!scene->enabled)
     {
-        if (event->velocity == 0)
-            scene.active = false;
-        else
-        {
-            scene.dmx_value = (event->velocity * 255) / 127; 
-            scene.active = true; 
-        }
+        pthread_mutex_unlock(&stage->mutex);
+        return;
     }
-    else if (event->type == SPARK_MIDI_NOTE_OFF &&
-        event->channel == scene.midi_channel &&
-        event->note == scene.midi_note)
+
+    switch (scene->trigger.trigger_mode)
     {
-        scene.active = false;
+        case SPARK_SCENE_GATE:
+            if (event->type == SPARK_MIDI_NOTE_ON && event->velocity > 0)
+                spark_scene_activate(scene, event->velocity);
+            else if (event->type == SPARK_MIDI_NOTE_OFF || (event->type == SPARK_MIDI_NOTE_ON && event->velocity == 0))
+                spark_scene_deactivate(scene);
+            break;
+        case SPARK_SCENE_TOGGLE:
+            if (event->type == SPARK_MIDI_NOTE_ON && event->velocity > 0)
+                spark_scene_toggle(scene, event->velocity);
+            break;
+        default:
+            spark_log_warn("stage:apply_midi: Unknown scene trigger mode");
+            break;
     }
 
     pthread_mutex_unlock(&stage->mutex);
 }
 
-/* For now we go the easy way, we just lock as soon as possible and render */
 void spark_stage_render(spark_stage_t *stage, uint8_t out[SPARK_DMX_UNIVERSE_SIZE])
 {
     pthread_mutex_lock(&stage->mutex);
 
     memset(out, 0, SPARK_DMX_UNIVERSE_SIZE);
-    if (!stage->blackout && scene.active)
-        out[scene.dmx_channel] = scene.dmx_value;
+
+    if (stage->blackout)
+    {
+        pthread_mutex_unlock(&stage->mutex);
+        return;
+    }
+
+    uint16_t count;
+    spark_scene_t **active = spark_scene_get_active(&count);
+    for (uint16_t i = 0; i < count; i++)
+    {
+        spark_scene_t *scene = active[i];
+        if (scene->output.mode == SPARK_SCENE_STATIC)
+        {
+            for (uint8_t v = 0; v < scene->output.value_count; v++)
+            {
+                spark_scene_value_t *val = &scene->output.values[v];
+                uint8_t dmx_val = val->value;
+                if (val->velocity_scaling)
+                    dmx_val = (val->value * scene->velocity) / 127;
+                out[val->dmx_index] = dmx_val;
+            }
+        }
+    }
 
     pthread_mutex_unlock(&stage->mutex);
 }

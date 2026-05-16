@@ -2,6 +2,7 @@
 #define SPARK_STAGE_H
 
 #include "midi_event.h"
+#include "scene.h"
 #include "consts.h"
 
 #include <stdbool.h>

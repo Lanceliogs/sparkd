@@ -3,6 +3,8 @@
 #include "clock.h"
 #include "serial/serial.h"
 
+#include <string.h>
+
 /* Open DMX backend implementation */
 typedef struct {
     spark_serial_t serial;

@@ -1,3 +1,10 @@
+/*
+ * clock.h - Cross-platform monotonic time and sleep
+ *
+ * Provides monotonic timestamps (ms and us) and sleep functions.
+ * Uses clock_gettime/nanosleep on POSIX, QueryPerformanceCounter/Sleep on MSVC.
+ * MinGW uses the POSIX path (nanosleep available via winpthreads).
+ */
 #ifndef SPARK_CLOCK_H
 #define SPARK_CLOCK_H
 

@@ -26,7 +26,7 @@ void spark_stage_apply_midi(spark_stage_t *stage, const midi_event_t *event)
         return;
     }
 
-    switch (scene->trigger.trigger_mode)
+    switch (scene->trigger_mode)
     {
         case SPARK_SCENE_GATE:
             if (event->type == SPARK_MIDI_NOTE_ON && event->velocity > 0)

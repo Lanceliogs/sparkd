@@ -1,3 +1,17 @@
+/*
+ * dmx.h - DMX backend interface and state machine
+ *
+ * Defines a vtable-based DMX backend abstraction. All backends (dummy,
+ * Open DMX, Pro Packet Serial) implement the same ops: open, close,
+ * send_frame, is_connected.
+ *
+ * The backend struct tracks connection state (disconnected/connecting/
+ * connected/error) and output statistics (frames sent, write errors,
+ * reconnect count).
+ *
+ * Backend-specific data lives behind the void *priv pointer.
+ * The DMX output thread drives the reconnect state machine.
+ */
 #ifndef SPARK_DMX_H
 #define SPARK_DMX_H
 

@@ -1,3 +1,10 @@
+/*
+ * log.h - Level-based logging to stderr
+ *
+ * Simple logging with compile-time macros for each level.
+ * Output goes to stderr so it doesn't interfere with stdout.
+ * Set level to SPARK_LOG_SILENT to suppress all output (useful in tests).
+ */
 #ifndef SPARK_LOG_H
 #define SPARK_LOG_H
 

@@ -1,3 +1,10 @@
+/*
+ * midi_event.h - Normalized MIDI event representation
+ *
+ * Backend-independent MIDI event used throughout the engine.
+ * Channel is 0-15 internally (user-facing 1-16).
+ * Note-on with velocity 0 is treated as note-off by the stage.
+ */
 #ifndef SPARK_MIDI_EVENT_H
 #define SPARK_MIDI_EVENT_H
 

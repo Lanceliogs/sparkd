@@ -1,3 +1,15 @@
+/*
+ * fixture.h - Fixture and channel definitions
+ *
+ * A fixture represents one physical light with a start address and a set
+ * of named channels at offsets within that address range.
+ *
+ * Target resolution: DMX index = (start_address - 1) + channel.offset
+ * This conversion maps user-facing 1-based addresses to 0-based frame indexes.
+ *
+ * Fixtures are used at configuration time to resolve scene targets.
+ * At runtime, scenes hold pre-resolved DMX indexes directly.
+ */
 #ifndef SPARK_FIXTURE_H
 #define SPARK_FIXTURE_H
 

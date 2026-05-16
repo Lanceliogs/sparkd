@@ -1,3 +1,31 @@
+/*
+ * scene.h - Scene management for sparkd
+ *
+ * Scenes are the primary unit of lighting output. Each scene maps to a unique
+ * slot in a [16 channels][128 notes] lookup table, addressed by MIDI channel
+ * and note number. The position in the table IS the trigger address — no
+ * separate trigger channel/note fields are needed.
+ *
+ * Trigger modes:
+ *   GATE   - note-on activates, note-off (or velocity 0) deactivates
+ *   TOGGLE - note-on toggles active/inactive, note-off ignored
+ *
+ * Output modes:
+ *   STATIC   - fixed DMX values applied while active
+ *   SEQUENCE - timed steps with per-step values and durations
+ *
+ * Velocity scaling: individual values can be scaled by the triggering
+ * note's velocity (0-127 mapped to 0-255). The velocity is captured at
+ * activation time and held until release.
+ *
+ * Lifecycle: scenes are stored in a module-level static array (BSS).
+ * An active scene list (pointer array) tracks which scenes are currently
+ * contributing to the DMX frame, enabling O(active_count) rendering
+ * instead of scanning all 2048 slots.
+ *
+ * Thread safety: scene functions are NOT self-synchronized. The stage
+ * module holds a mutex and calls into scene functions under lock.
+ */
 #ifndef SPARK_SCENE_H
 #define SPARK_SCENE_H
 
@@ -15,12 +43,6 @@ typedef enum {
     SPARK_SCENE_STATIC,
     SPARK_SCENE_SEQUENCE,
 } spark_scene_output_mode_t;
-
-typedef struct {
-    spark_scene_trigger_mode_t trigger_mode;
-    uint8_t channel;
-    uint8_t note; /* note mode for gate and toggle */
-} spark_scene_trigger_t;
 
 // A single target/value (for static)
 typedef struct {
@@ -55,7 +77,7 @@ typedef struct {
     const char *name;
     const char *comment;
     /* Trigger */
-    spark_scene_trigger_t trigger;
+    spark_scene_trigger_mode_t trigger_mode;
     /* Output */
     spark_scene_output_t output;
 

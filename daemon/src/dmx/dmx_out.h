@@ -1,3 +1,13 @@
+/*
+ * dmx_out.h - DMX output thread
+ *
+ * Runs a dedicated thread that continuously renders the stage into a
+ * 512-byte frame and sends it through the DMX backend at the configured
+ * refresh rate (default 40 Hz / 25 ms period).
+ *
+ * Handles reconnection with exponential backoff when the backend
+ * disconnects. On shutdown, sends a blackout frame before stopping.
+ */
 #ifndef SPARK_DMX_OUT_H
 #define SPARK_DMX_OUT_H
 

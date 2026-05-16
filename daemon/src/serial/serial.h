@@ -1,3 +1,16 @@
+/*
+ * serial.h - Cross-platform serial port abstraction
+ *
+ * Thin wrapper over POSIX termios (Linux) and Win32 CreateFile (Windows).
+ * Provides open/close/write/break operations needed by DMX backends.
+ *
+ * Usage: call spark_serial_init, then spark_serial_configure with port
+ * and parameters, then spark_serial_open. On Windows, the \\.\  device
+ * prefix is automatically prepended if missing.
+ *
+ * The break control (spark_serial_set_break) is used by the Open DMX
+ * backend to generate the DMX512 break/mark-after-break timing.
+ */
 #ifndef SPARK_SERIAL_H
 #define SPARK_SERIAL_H
 

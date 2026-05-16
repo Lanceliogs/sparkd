@@ -1,3 +1,18 @@
+/*
+ * stage.h - Show state and DMX frame rendering
+ *
+ * The stage is the central runtime state of the lighting engine. It owns
+ * a mutex that protects scene state from concurrent access between the
+ * main thread (MIDI input, HTTP) and the DMX output thread (rendering).
+ *
+ * Responsibilities:
+ *   - Dispatch incoming MIDI events to scene activate/deactivate logic
+ *   - Render the current 512-byte DMX frame from active scenes
+ *   - Manage blackout state (output zeroed, scenes stay active internally)
+ *
+ * The mutex is held only for short CPU work (event dispatch, frame render).
+ * No I/O occurs while holding the lock.
+ */
 #ifndef SPARK_STAGE_H
 #define SPARK_STAGE_H
 

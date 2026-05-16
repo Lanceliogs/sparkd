@@ -18,9 +18,7 @@ void test_scene_gate(void)
     scene->id = "test";
     scene->name = "Test Scene";
     scene->enabled = true;
-    scene->trigger.trigger_mode = SPARK_SCENE_GATE;
-    scene->trigger.channel = 0;
-    scene->trigger.note = 60;
+    scene->trigger_mode = SPARK_SCENE_GATE;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;
@@ -64,9 +62,7 @@ void test_scene_toggle(void)
     scene->id = "toggle-test";
     scene->name = "Toggle Test";
     scene->enabled = true;
-    scene->trigger.trigger_mode = SPARK_SCENE_TOGGLE;
-    scene->trigger.channel = 0;
-    scene->trigger.note = 61;
+    scene->trigger_mode = SPARK_SCENE_TOGGLE;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;
@@ -104,9 +100,7 @@ void test_scene_blackout(void)
     scene->id = "blackout-test";
     scene->name = "Blackout Test";
     scene->enabled = true;
-    scene->trigger.trigger_mode = SPARK_SCENE_GATE;
-    scene->trigger.channel = 0;
-    scene->trigger.note = 62;
+    scene->trigger_mode = SPARK_SCENE_GATE;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;
@@ -145,9 +139,7 @@ void test_scene_disabled(void)
     scene->id = "disabled-test";
     scene->name = "Disabled Test";
     scene->enabled = false;
-    scene->trigger.trigger_mode = SPARK_SCENE_GATE;
-    scene->trigger.channel = 0;
-    scene->trigger.note = 63;
+    scene->trigger_mode = SPARK_SCENE_GATE;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;

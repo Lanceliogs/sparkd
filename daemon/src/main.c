@@ -1,5 +1,6 @@
 #include "consts.h"
 #include "log.h"
+#include "midi.h"
 #include "stage.h"
 #include "clock.h"
 #include "dmx/dmx.h"
@@ -12,7 +13,7 @@
 
 #define SPARKD_VERSION "0.1.0"
 
-#define PERIOD_MS (uint32_t)(500)
+#define MAIN_LOOP_PERIOD_MS 5
 
 static volatile uint8_t should_keep_running = 1;
 
@@ -25,6 +26,7 @@ void signal_handler(int signum)
 typedef struct {
     spark_log_level_t log_level;
     char port[SPARK_SERIAL_PORT_STRLEN];
+    char midi_device[SPARK_MIDI_PORT_STRLEN];
     bool print_help;
     bool print_version;
 } spark_args_t;
@@ -47,6 +49,11 @@ static void parse_cmdline_args(int argc, char **argv, spark_args_t *args)
             strcpy(args->port, argv[i + 1]);
             i++;
         }
+        else if (strcmp("--midi", argv[i]) == 0 && i + 1 < argc)
+        {
+            strcpy(args->midi_device, argv[i + 1]);
+            i++;
+        }
     }
 }
 
@@ -57,7 +64,8 @@ int main(int argc, char **argv)
         .print_help = false,
         .print_version = false,
         .log_level = SPARK_LOG_INFO,
-        .port = "COM3"
+        .port = "COM3",
+        .midi_device = ""
     };
     parse_cmdline_args(argc, argv, &args);
 
@@ -71,7 +79,7 @@ int main(int argc, char **argv)
     {
         printf("sparkd\n");
         printf("---\n");
-        printf("Usage: sparkd [--log-level LEVEL]\n");
+        printf("Usage: sparkd [--log-level LEVEL] [--port PORT] [--midi DEVICE]\n");
         printf("\n");
         printf("  sparkd --help        Print this help\n");
         printf("  sparkd --version     Print the version\n");
@@ -83,10 +91,50 @@ int main(int argc, char **argv)
 
     spark_log_init(args.log_level);
 
+    /* MIDI init */
+    rc = spark_midi_init();
+    if (rc != 0)
+    {
+        spark_log_error("MIDI init failed (%d)", rc);
+        return rc;
+    }
+    spark_log_debug("MIDI initialized!");
+
+    if (args.midi_device[0] != '\0')
+    {
+        int midi_id = spark_midi_find_device(args.midi_device);
+        if (midi_id >= 0)
+        {
+            rc = spark_midi_open(midi_id);
+            if (rc == 0)
+                spark_log_info("MIDI device opened: %s (id=%d)", args.midi_device, midi_id);
+            else
+                spark_log_error("MIDI device open failed: %s", args.midi_device);
+        }
+    }
+
+    /* Stage init */
     spark_stage_t stage;
     spark_stage_init(&stage);
     spark_log_debug("Stage initialized!");
 
+    /* Scene setup */
+    spark_scene_value_t scene_values[] = {
+        { .dmx_index = 0, .value = 255, .velocity_scaling = false },
+        { .dmx_index = 1, .value = 255, .velocity_scaling = false },
+        { .dmx_index = 5, .value = 0,   .velocity_scaling = false },
+    };
+
+    spark_scene_t *scene = spark_scene_get(0, 60);
+    scene->enabled = true;
+    scene->name = "Red Light District";
+    scene->id = "red-light-district";
+    scene->trigger_mode = SPARK_SCENE_GATE;
+    scene->output.mode = SPARK_SCENE_STATIC;
+    scene->output.values = scene_values;
+    scene->output.value_count = 3;
+
+    /* DMX init */
     spark_dmx_backend_t dmx_backend;
     spark_dmx_open_init(&dmx_backend, args.port);
     spark_log_debug("DMX backend initialized!");
@@ -101,53 +149,24 @@ int main(int argc, char **argv)
     }
     spark_log_debug("DMX thread started!");
     
-    signal(SIGINT, signal_handler);   /* Ctrl+C */
-    signal(SIGTERM, signal_handler);  /* kill command */
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
-    bool toggle = false;
+    spark_log_info("sparkd running. Ctrl+C to stop...");
 
-    midi_event_t evt_on = {
-        .channel = 0,
-        .note = 60,
-        .type = SPARK_MIDI_NOTE_ON,
-        .velocity = 127
-    };
-    midi_event_t evt_off = {
-        .channel = 0,
-        .note = 60,
-        .type = SPARK_MIDI_NOTE_OFF
-    };
-
-    spark_scene_value_t scene_values[] = {
-        { .dmx_index = 0, .value = 255, .velocity_scaling = false }, // par.dimmer
-        { .dmx_index = 1, .value = 255, .velocity_scaling = false }, // par.red
-        { .dmx_index = 5, .value = 0,   .velocity_scaling = false }, // par.mode
-    };
-
-    spark_scene_t *scene = spark_scene_get(0, 60);
-    scene->enabled = true;
-    scene->name = "Red Light Disctrict";
-    scene->id = "red-light-disctrict";
-    scene->trigger_mode = SPARK_SCENE_GATE;
-    scene->output.mode = SPARK_SCENE_STATIC;
-    scene->output.values = scene_values;
-    scene->output.value_count = 3;
-
-    spark_log_info("Ctrl+C to stop...");
+    midi_event_t midi_events[SPARK_MIDI_BUFFER_SIZE];
     while (should_keep_running)
     {
-        if (toggle)
+        int n = spark_midi_poll(midi_events, SPARK_MIDI_BUFFER_SIZE);
+        for (int i = 0; i < n; i++)
         {
-            spark_log_debug("main: sending NOTE_ON ch=0 note=60 vel=127");
-            spark_stage_apply_midi(&stage, &evt_on);
+            spark_log_debug("main: MIDI ch=%d type=%d note=%d vel=%d cc=%d val=%d",
+                midi_events[i].channel, midi_events[i].type,
+                midi_events[i].note, midi_events[i].velocity,
+                midi_events[i].cc, midi_events[i].value);
+            spark_stage_apply_midi(&stage, &midi_events[i]);
         }
-        else
-        {
-            spark_log_debug("main: sending NOTE_OFF ch=0 note=60");
-            spark_stage_apply_midi(&stage, &evt_off);
-        }
-        toggle = !toggle;
-        spark_clock_msleep(PERIOD_MS);
+        spark_clock_msleep(MAIN_LOOP_PERIOD_MS);
     }
 
     spark_log_info("Shutting down");
@@ -160,6 +179,9 @@ int main(int argc, char **argv)
 
     spark_dmx_close(&dmx_backend);
     spark_log_debug("DMX backend closed!");
+
+    spark_midi_destroy();
+    spark_log_debug("MIDI destroyed!");
 
     spark_stage_destroy(&stage);
     spark_log_debug("Stage destroyed!");

@@ -23,7 +23,7 @@ void test_scene_gate(void)
     scene->output.values = values;
     scene->output.value_count = 1;
 
-    midi_event_t evt_on = {
+    spark_midi_event_t evt_on = {
         .type = SPARK_MIDI_NOTE_ON,
         .channel = 0,
         .note = 60,
@@ -37,7 +37,7 @@ void test_scene_gate(void)
     uint8_t expected = (255 * TEST_VELOCITY) / 127;
     ASSERT_EQ(frame[0], expected);
 
-    midi_event_t evt_off = {
+    spark_midi_event_t evt_off = {
         .type = SPARK_MIDI_NOTE_OFF,
         .channel = 0,
         .note = 60,
@@ -67,7 +67,7 @@ void test_scene_toggle(void)
     scene->output.values = values;
     scene->output.value_count = 1;
 
-    midi_event_t evt_on = {
+    spark_midi_event_t evt_on = {
         .type = SPARK_MIDI_NOTE_ON,
         .channel = 0,
         .note = 61,
@@ -105,7 +105,7 @@ void test_scene_blackout(void)
     scene->output.values = values;
     scene->output.value_count = 1;
 
-    midi_event_t evt_on = {
+    spark_midi_event_t evt_on = {
         .type = SPARK_MIDI_NOTE_ON,
         .channel = 0,
         .note = 62,
@@ -144,7 +144,7 @@ void test_scene_disabled(void)
     scene->output.values = values;
     scene->output.value_count = 1;
 
-    midi_event_t evt_on = {
+    spark_midi_event_t evt_on = {
         .type = SPARK_MIDI_NOTE_ON,
         .channel = 0,
         .note = 63,

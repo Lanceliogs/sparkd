@@ -1,59 +1,65 @@
 #include "midi.h"
 #include "portmidi.h"
 #include "log.h"
+#include "clock.h"
 
 #include <string.h>
 
 typedef struct {
+    char pattern[SPARK_MIDI_PORT_STRLEN];
     int device_id;
     PortMidiStream *stream;
-} midi_stream_t;
+    uint32_t activity_timeout_ms;
+    uint64_t last_activity_ms;
+} midi_input_t;
 
-static midi_stream_t streams[SPARK_MIDI_MAX_DEVICES];
-static uint8_t stream_count = 0;
+static midi_input_t inputs[SPARK_MIDI_MAX_DEVICES];
+static uint8_t input_count = 0;
 
-static midi_stream_t *find_stream(int device_id)
+static midi_input_t *find_input_by_id(int device_id)
 {
-    for (uint8_t i = 0; i < stream_count; i++)
+    for (uint8_t i = 0; i < input_count; i++)
     {
-        if (streams[i].device_id == device_id)
-            return &streams[i];
+        if (inputs[i].device_id == device_id)
+            return &inputs[i];
     }
     return NULL;
 }
 
-static int add_stream(int device_id, PortMidiStream *stream)
+static midi_input_t *find_input_by_pattern(const char *pattern)
 {
-    if (stream_count >= SPARK_MIDI_MAX_DEVICES)
+    for (uint8_t i = 0; i < input_count; i++)
     {
-        spark_log_error("midi:add_stream: max streams reached (%d)", SPARK_MIDI_MAX_DEVICES);
+        if (strcmp(inputs[i].pattern, pattern) == 0)
+            return &inputs[i];
+    }
+    return NULL;
+}
+
+static int add_input(const char *pattern, int device_id, PortMidiStream *stream)
+{
+    if (input_count >= SPARK_MIDI_MAX_DEVICES)
+    {
+        spark_log_error("midi: max inputs reached (%d)", SPARK_MIDI_MAX_DEVICES);
         return -1;
     }
-    if (find_stream(device_id))
-    {
-        spark_log_warn("midi:add_stream: device %d already open", device_id);
-        return -1;
-    }
-    streams[stream_count].device_id = device_id;
-    streams[stream_count].stream = stream;
-    stream_count++;
-    spark_log_debug("midi:add_stream: added device %d (%d open)", device_id, stream_count);
+    midi_input_t *input = &inputs[input_count++];
+    strncpy(input->pattern, pattern, SPARK_MIDI_PORT_STRLEN - 1);
+    input->pattern[SPARK_MIDI_PORT_STRLEN - 1] = '\0';
+    input->device_id = device_id;
+    input->stream = stream;
+    input->activity_timeout_ms = 0;
+    input->last_activity_ms = spark_clock_monotonic_ms();
+    spark_log_debug("midi: input added '%s' device=%d (%d inputs)", pattern, device_id, input_count);
     return 0;
 }
 
-static int remove_stream(int device_id)
+static void remove_input(uint8_t index)
 {
-    for (uint8_t i = 0; i < stream_count; i++)
+    if (index < input_count)
     {
-        if (streams[i].device_id == device_id)
-        {
-            streams[i] = streams[--stream_count];
-            spark_log_debug("midi:remove_stream: removed device %d (%d open)", device_id, stream_count);
-            return 0;
-        }
+        inputs[index] = inputs[--input_count];
     }
-    spark_log_warn("midi:remove_stream: device %d not found", device_id);
-    return -1;
 }
 
 int spark_midi_init(void)
@@ -87,19 +93,19 @@ int spark_midi_list_devices(spark_midi_device_t *out, int max)
     int input_device_count = 0;
 
     int count = Pm_CountDevices();
-    for (int i=0 ; i<count ; i++)
+    for (int i = 0; i < count; i++)
     {
         const PmDeviceInfo *d = Pm_GetDeviceInfo(i);
         if (!d->input)
             continue;
-        
+
         out[input_device_count].id = i;
         strncpy(out[input_device_count].name, d->name, SPARK_MIDI_PORT_STRLEN - 1);
-        
+
         input_device_count++;
         if (input_device_count >= max)
         {
-            spark_log_warn("midi:list_devices: max number of input devices reached (%d)", max);
+            spark_log_warn("midi:list_devices: max reached (%d)", max);
             break;
         }
     }
@@ -108,28 +114,84 @@ int spark_midi_list_devices(spark_midi_device_t *out, int max)
 
 int spark_midi_find_device(const char *pattern)
 {
-    PmDeviceID id = Pm_FindDevice((char*)pattern, 1);
+    PmDeviceID id = Pm_FindDevice((char *)pattern, 1);
     if (id == pmNoDevice)
-        spark_log_warn("midi:find_device: no device found for pattern: %s", pattern);
+        spark_log_warn("midi:find_device: not found: %s", pattern);
     return (int)id;
 }
 
 int spark_midi_open(int device_id)
 {
+    if (find_input_by_id(device_id))
+    {
+        spark_log_warn("midi:open: device %d already open", device_id);
+        return -1;
+    }
+
     PortMidiStream *stream;
     PmError rc = Pm_OpenInput(&stream, device_id, NULL, SPARK_MIDI_BUFFER_SIZE, NULL, NULL);
-    if (rc != pmNoError) {
+    if (rc != pmNoError)
+    {
         const char *errstr = Pm_GetErrorText(rc);
-        spark_log_error("midi:open: Can't open device %d: %s", device_id, errstr);
+        spark_log_error("midi:open: device %d: %s", device_id, errstr);
         return rc;
     }
-    return add_stream(device_id, stream);
+
+    const PmDeviceInfo *info = Pm_GetDeviceInfo(device_id);
+    const char *name = info ? info->name : "";
+    return add_input(name, device_id, stream);
+}
+
+int spark_midi_open_by_name(const char *pattern)
+{
+    midi_input_t *existing = find_input_by_pattern(pattern);
+    if (existing && existing->stream)
+    {
+        spark_log_warn("midi:open_by_name: '%s' already open", pattern);
+        return -1;
+    }
+
+    int id = spark_midi_find_device(pattern);
+    if (id < 0)
+        return -1;
+
+    if (existing)
+    {
+        PortMidiStream *stream;
+        PmError rc = Pm_OpenInput(&stream, id, NULL, SPARK_MIDI_BUFFER_SIZE, NULL, NULL);
+        if (rc != pmNoError)
+        {
+            spark_log_error("midi:open_by_name: '%s': %s", pattern, Pm_GetErrorText(rc));
+            return rc;
+        }
+        existing->device_id = id;
+        existing->stream = stream;
+        existing->last_activity_ms = spark_clock_monotonic_ms();
+        spark_log_info("midi: reconnected '%s' (device=%d)", pattern, id);
+        return 0;
+    }
+
+    if (input_count >= SPARK_MIDI_MAX_DEVICES)
+    {
+        spark_log_error("midi: max inputs reached");
+        return -1;
+    }
+
+    PortMidiStream *stream;
+    PmError rc = Pm_OpenInput(&stream, id, NULL, SPARK_MIDI_BUFFER_SIZE, NULL, NULL);
+    if (rc != pmNoError)
+    {
+        spark_log_error("midi:open_by_name: '%s': %s", pattern, Pm_GetErrorText(rc));
+        return rc;
+    }
+    return add_input(pattern, id, stream);
 }
 
 int spark_midi_create_virtual(const char *name)
 {
     PmDeviceID id = Pm_CreateVirtualInput(name, NULL, NULL);
-    if (id < 0) {
+    if (id < 0)
+    {
         spark_log_error("midi:create_virtual: failed for '%s'", name);
         return id;
     }
@@ -138,23 +200,131 @@ int spark_midi_create_virtual(const char *name)
 
 void spark_midi_close(int device_id)
 {
-    midi_stream_t *entry = find_stream(device_id);
-    if (!entry)
-        return;
-    Pm_Close(entry->stream);
-    remove_stream(device_id);
+    for (uint8_t i = 0; i < input_count; i++)
+    {
+        if (inputs[i].device_id == device_id)
+        {
+            if (inputs[i].stream)
+                Pm_Close(inputs[i].stream);
+            remove_input(i);
+            return;
+        }
+    }
 }
 
 void spark_midi_close_all(void)
 {
-    while (stream_count > 0)
+    for (uint8_t i = 0; i < input_count; i++)
     {
-        Pm_Close(streams[stream_count - 1].stream);
-        stream_count--;
+        if (inputs[i].stream)
+            Pm_Close(inputs[i].stream);
     }
+    input_count = 0;
 }
 
-void spark_midi_decode_pm_event(PmEvent *event, midi_event_t *out)
+void spark_midi_set_heartbeat(const char *pattern, uint32_t timeout_ms)
+{
+    midi_input_t *input = find_input_by_pattern(pattern);
+    if (!input)
+    {
+        spark_log_warn("midi:set_heartbeat: input '%s' not found", pattern);
+        return;
+    }
+    input->activity_timeout_ms = timeout_ms;
+    input->last_activity_ms = spark_clock_monotonic_ms();
+    spark_log_info("midi: activity timeout on '%s' set to %ums", pattern, timeout_ms);
+}
+
+void spark_midi_disable_heartbeat(const char *pattern)
+{
+    midi_input_t *input = find_input_by_pattern(pattern);
+    if (!input)
+    {
+        spark_log_warn("midi:disable_heartbeat: input '%s' not found", pattern);
+        return;
+    }
+    input->activity_timeout_ms = 0;
+    spark_log_info("midi: activity timeout disabled on '%s'", pattern);
+}
+
+int spark_midi_check_heartbeat(void)
+{
+    uint64_t now = spark_clock_monotonic_ms();
+    int dead_count = 0;
+
+    for (uint8_t i = 0; i < input_count; i++)
+    {
+        if (inputs[i].activity_timeout_ms == 0)
+            continue;
+
+        if (!inputs[i].stream)
+        {
+            dead_count++;
+            continue;
+        }
+
+        if (now - inputs[i].last_activity_ms > inputs[i].activity_timeout_ms)
+        {
+            spark_log_warn("midi: activity timeout on '%s' (device=%d)", inputs[i].pattern, inputs[i].device_id);
+            Pm_Close(inputs[i].stream);
+            inputs[i].stream = NULL;
+            inputs[i].device_id = -1;
+            dead_count++;
+        }
+    }
+    return dead_count;
+}
+
+int spark_midi_reconnect(void)
+{
+    for (uint8_t i = 0; i < input_count; i++)
+    {
+        if (inputs[i].stream)
+        {
+            Pm_Close(inputs[i].stream);
+            inputs[i].stream = NULL;
+        }
+    }
+
+    Pm_Terminate();
+    PmError rc = Pm_Initialize();
+    if (rc != pmNoError)
+    {
+        spark_log_error("midi:reconnect: Pm_Initialize failed: %s", Pm_GetErrorText(rc));
+        return 0;
+    }
+
+    int reconnected = 0;
+    uint64_t now = spark_clock_monotonic_ms();
+
+    for (uint8_t i = 0; i < input_count; i++)
+    {
+        int id = Pm_FindDevice((char *)inputs[i].pattern, 1);
+        if (id < 0)
+        {
+            spark_log_debug("midi:reconnect: '%s' not found", inputs[i].pattern);
+            continue;
+        }
+
+        PortMidiStream *stream;
+        rc = Pm_OpenInput(&stream, id, NULL, SPARK_MIDI_BUFFER_SIZE, NULL, NULL);
+        if (rc != pmNoError)
+        {
+            spark_log_error("midi:reconnect: open '%s' failed: %s", inputs[i].pattern, Pm_GetErrorText(rc));
+            continue;
+        }
+
+        inputs[i].device_id = id;
+        inputs[i].stream = stream;
+        inputs[i].last_activity_ms = now;
+        reconnected++;
+        spark_log_info("midi: reconnected '%s' (device=%d)", inputs[i].pattern, id);
+    }
+
+    return reconnected;
+}
+
+void spark_midi_decode_pm_event(PmEvent *event, spark_midi_event_t *out)
 {
     uint8_t status  = Pm_MessageStatus(event->message);
     uint8_t type    = status & 0xF0;
@@ -187,22 +357,34 @@ void spark_midi_decode_pm_event(PmEvent *event, midi_event_t *out)
     }
 }
 
-int spark_midi_poll(midi_event_t *out, int max)
+int spark_midi_poll(spark_midi_event_t *out, int max)
 {
     int count = 0;
     PmEvent events[SPARK_MIDI_BUFFER_SIZE];
-    for (uint8_t s = 0; s < stream_count && count < max; s++)
+
+    for (uint8_t s = 0; s < input_count && count < max; s++)
     {
-        int rc = Pm_Read(streams[s].stream, events, SPARK_MIDI_BUFFER_SIZE);
-        if (rc < 0) {
-            spark_log_error("midi:poll: read error on device %d", streams[s].device_id);
+        if (!inputs[s].stream)
+            continue;
+
+        int rc = Pm_Read(inputs[s].stream, events, SPARK_MIDI_BUFFER_SIZE);
+        if (rc < 0)
+        {
+            spark_log_error("midi:poll: read error on '%s'", inputs[s].pattern);
+            Pm_Close(inputs[s].stream);
+            inputs[s].stream = NULL;
+            inputs[s].device_id = -1;
             continue;
         }
+
         for (int i = 0; i < rc && count < max; i++)
         {
             spark_midi_decode_pm_event(&events[i], &out[count]);
             count++;
         }
+
+        if (rc > 0)
+            inputs[s].last_activity_ms = spark_clock_monotonic_ms();
     }
     return count;
 }

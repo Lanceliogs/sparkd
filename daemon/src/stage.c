@@ -15,7 +15,7 @@ void spark_stage_destroy(spark_stage_t *stage)
     pthread_mutex_destroy(&stage->mutex);
 }
 
-void spark_stage_apply_midi(spark_stage_t *stage, const midi_event_t *event)
+void spark_stage_apply_midi(spark_stage_t *stage, const spark_midi_event_t *event)
 {
     pthread_mutex_lock(&stage->mutex);
 

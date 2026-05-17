@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 /* Defined in midi.c — not part of public API, tested here for coverage */
-extern void spark_midi_decode_pm_event(PmEvent *event, midi_event_t *out);
+extern void spark_midi_decode_pm_event(PmEvent *event, spark_midi_event_t *out);
 
 static int portmidi_available = 0;
 
@@ -75,7 +75,7 @@ void test_poll_no_streams(void)
 {
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     if (spark_midi_init() != 0) { ASSERT_TRUE(1); return; }
-    midi_event_t events[8];
+    spark_midi_event_t events[8];
     int count = spark_midi_poll(events, 8);
     ASSERT_EQ(count, 0);
     spark_midi_destroy();
@@ -84,7 +84,7 @@ void test_poll_no_streams(void)
 void test_decode_note_on(void)
 {
     PmEvent ev = { .message = Pm_Message(0x93, 60, 100), .timestamp = 0 };
-    midi_event_t out = {0};
+    spark_midi_event_t out = {0};
     spark_midi_decode_pm_event(&ev, &out);
     ASSERT_EQ(out.type, SPARK_MIDI_NOTE_ON);
     ASSERT_EQ(out.channel, 3);
@@ -95,7 +95,7 @@ void test_decode_note_on(void)
 void test_decode_note_on_velocity_zero(void)
 {
     PmEvent ev = { .message = Pm_Message(0x90, 64, 0), .timestamp = 0 };
-    midi_event_t out = {0};
+    spark_midi_event_t out = {0};
     spark_midi_decode_pm_event(&ev, &out);
     ASSERT_EQ(out.type, SPARK_MIDI_NOTE_OFF);
     ASSERT_EQ(out.channel, 0);
@@ -106,7 +106,7 @@ void test_decode_note_on_velocity_zero(void)
 void test_decode_note_off(void)
 {
     PmEvent ev = { .message = Pm_Message(0x85, 48, 64), .timestamp = 0 };
-    midi_event_t out = {0};
+    spark_midi_event_t out = {0};
     spark_midi_decode_pm_event(&ev, &out);
     ASSERT_EQ(out.type, SPARK_MIDI_NOTE_OFF);
     ASSERT_EQ(out.channel, 5);
@@ -117,7 +117,7 @@ void test_decode_note_off(void)
 void test_decode_cc(void)
 {
     PmEvent ev = { .message = Pm_Message(0xB2, 7, 112), .timestamp = 0 };
-    midi_event_t out = {0};
+    spark_midi_event_t out = {0};
     spark_midi_decode_pm_event(&ev, &out);
     ASSERT_EQ(out.type, SPARK_MIDI_CC);
     ASSERT_EQ(out.channel, 2);
@@ -128,7 +128,7 @@ void test_decode_cc(void)
 void test_decode_unknown_status(void)
 {
     PmEvent ev = { .message = Pm_Message(0xF2, 0, 0), .timestamp = 0 };
-    midi_event_t out = {0};
+    spark_midi_event_t out = {0};
     spark_midi_decode_pm_event(&ev, &out);
     ASSERT_EQ(out.type, SPARK_MIDI_NOTE_OFF);
 }

@@ -16,7 +16,7 @@ static void on_signal(int sig)
     running = 0;
 }
 
-static const char *event_type_str(midi_event_type_t type)
+static const char *event_type_str(spark_midi_event_type_t type)
 {
     switch (type)
     {
@@ -76,13 +76,13 @@ int main(int argc, char **argv)
 
     printf("--- Ctrl+C to stop ---\n");
 
-    midi_event_t events[64];
+    spark_midi_event_t events[64];
     while (running)
     {
         int n = spark_midi_poll(events, 64);
         for (int i = 0; i < n; i++)
         {
-            midi_event_t *e = &events[i];
+            spark_midi_event_t *e = &events[i];
             if (e->type == SPARK_MIDI_CC)
                 printf("  %s  ch=%2d  cc=%3d  val=%3d\n",
                        event_type_str(e->type), e->channel, e->cc, e->value);

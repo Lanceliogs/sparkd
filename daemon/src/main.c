@@ -102,15 +102,14 @@ int main(int argc, char **argv)
 
     if (args.midi_device[0] != '\0')
     {
-        int midi_id = spark_midi_find_device(args.midi_device);
-        if (midi_id >= 0)
+        rc = spark_midi_open_by_name(args.midi_device);
+        if (rc == 0)
         {
-            rc = spark_midi_open(midi_id);
-            if (rc == 0)
-                spark_log_info("MIDI device opened: %s (id=%d)", args.midi_device, midi_id);
-            else
-                spark_log_error("MIDI device open failed: %s", args.midi_device);
+            spark_log_info("MIDI device opened: %s", args.midi_device);
+            spark_midi_set_heartbeat(args.midi_device, 5000);
         }
+        else
+            spark_log_error("MIDI device open failed: %s", args.midi_device);
     }
 
     /* Stage init */
@@ -154,7 +153,7 @@ int main(int argc, char **argv)
 
     spark_log_info("sparkd running. Ctrl+C to stop...");
 
-    midi_event_t midi_events[SPARK_MIDI_BUFFER_SIZE];
+    spark_midi_event_t midi_events[SPARK_MIDI_BUFFER_SIZE];
     while (should_keep_running)
     {
         int n = spark_midi_poll(midi_events, SPARK_MIDI_BUFFER_SIZE);
@@ -166,6 +165,13 @@ int main(int argc, char **argv)
                 midi_events[i].cc, midi_events[i].value);
             spark_stage_apply_midi(&stage, &midi_events[i]);
         }
+
+        if (spark_midi_check_heartbeat() > 0)
+        {
+            spark_log_warn("MIDI heartbeat lost, reconnecting...");
+            spark_midi_reconnect();
+        }
+
         spark_clock_msleep(MAIN_LOOP_PERIOD_MS);
     }
 

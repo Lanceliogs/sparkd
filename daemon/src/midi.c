@@ -154,7 +154,7 @@ void spark_midi_close_all(void)
     }
 }
 
-static void decode_pm_event(PmEvent *event, midi_event_t *out)
+void spark_midi_decode_pm_event(PmEvent *event, midi_event_t *out)
 {
     uint8_t status  = Pm_MessageStatus(event->message);
     uint8_t type    = status & 0xF0;
@@ -200,7 +200,7 @@ int spark_midi_poll(midi_event_t *out, int max)
         }
         for (int i = 0; i < rc && count < max; i++)
         {
-            decode_pm_event(&events[i], &out[count]);
+            spark_midi_decode_pm_event(&events[i], &out[count]);
             count++;
         }
     }

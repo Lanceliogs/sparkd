@@ -1,16 +1,13 @@
 #include "consts.h"
 #include "log.h"
 #include "engine.h"
+#include "http.h"
 #include "scene.h"
 
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
 #include <signal.h>
-
-#include "clock.h"
-
-#define SPARKD_VERSION "0.1.0"
 
 #define MAIN_LOOP_PERIOD_MS 5
 
@@ -22,10 +19,14 @@ void signal_handler(int signum)
     should_keep_running = 0;
 }
 
+#define SPARK_HTTP_ADDR_STRLEN 128
+#define SPARK_HTTP_DEFAULT_ADDR "http://127.0.0.1:7600"
+
 typedef struct {
     spark_log_level_t log_level;
     char port[SPARK_SERIAL_PORT_STRLEN];
     char midi_device[SPARK_MIDI_PORT_STRLEN];
+    char http_addr[SPARK_HTTP_ADDR_STRLEN];
     bool print_help;
     bool print_version;
 } spark_args_t;
@@ -53,6 +54,11 @@ static void parse_cmdline_args(int argc, char **argv, spark_args_t *args)
             strcpy(args->midi_device, argv[i + 1]);
             i++;
         }
+        else if (strcmp("--http", argv[i]) == 0 && i + 1 < argc)
+        {
+            strcpy(args->http_addr, argv[i + 1]);
+            i++;
+        }
     }
 }
 
@@ -64,7 +70,8 @@ int main(int argc, char **argv)
         .print_version = false,
         .log_level = SPARK_LOG_INFO,
         .port = "COM3",
-        .midi_device = ""
+        .midi_device = "",
+        .http_addr = SPARK_HTTP_DEFAULT_ADDR
     };
     parse_cmdline_args(argc, argv, &args);
 
@@ -78,10 +85,11 @@ int main(int argc, char **argv)
     {
         printf("sparkd\n");
         printf("---\n");
-        printf("Usage: sparkd [--log-level LEVEL] [--port PORT] [--midi DEVICE]\n");
+        printf("Usage: sparkd [--log-level LEVEL] [--port PORT] [--midi DEVICE] [--http ADDR]\n");
         printf("\n");
         printf("  sparkd --help        Print this help\n");
         printf("  sparkd --version     Print the version\n");
+        printf("  --http ADDR          HTTP listen address (default: %s)\n", SPARK_HTTP_DEFAULT_ADDR);
         printf("\n");
         return 0;
     }
@@ -120,6 +128,14 @@ int main(int argc, char **argv)
     scene->output.values = scene_values;
     scene->output.value_count = 3;
 
+    rc = spark_http_init(args.http_addr);
+    if (rc != 0)
+    {
+        spark_engine_stop();
+        spark_engine_destroy();
+        return rc;
+    }
+
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
@@ -127,11 +143,12 @@ int main(int argc, char **argv)
 
     while (should_keep_running)
     {
+        spark_http_process_events(MAIN_LOOP_PERIOD_MS);
         spark_engine_process_events();
-        spark_clock_msleep(MAIN_LOOP_PERIOD_MS);
     }
 
     spark_log_info("Shutting down");
+    spark_http_destroy();
     spark_engine_stop();
     spark_engine_destroy();
 

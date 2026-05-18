@@ -1,12 +1,13 @@
 # sparkd daemon Makefile
 
 CC      ?= gcc
-CFLAGS  := -Wall -Wextra -pedantic -std=c17 -g -Isrc -I../vendor/portmidi
+CFLAGS  := -Wall -Wextra -pedantic -std=c17 -g -Isrc -I../vendor/portmidi -I../vendor/mongoose
 LDFLAGS :=
 
 BUILDDIR := ../build
 EXE      :=
-VENDORDIR := ../vendor/portmidi
+VENDORDIR  := ../vendor/portmidi
+MONGOOSEDIR := ../vendor/mongoose
 
 # Platform detection
 ifeq ($(OS),Windows_NT)
@@ -37,6 +38,9 @@ OBJS := $(SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 # PortMidi objects
 PM_OBJS := $(PM_SRCS:$(VENDORDIR)/%.c=$(BUILDDIR)/vendor/portmidi/%.o)
 
+# Mongoose object
+MG_OBJ := $(BUILDDIR)/vendor/mongoose/mongoose.o
+
 # Test files
 TEST_SRCS := $(wildcard tests/test_*.c)
 TEST_BINS := $(TEST_SRCS:tests/test_%.c=$(BUILDDIR)/tests/test_%$(EXE))
@@ -55,9 +59,9 @@ all: $(TARGET)
 
 tools: $(TOOL_BINS)
 
-$(TARGET): $(OBJS) $(PM_OBJS)
+$(TARGET): $(OBJS) $(PM_OBJS) $(MG_OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(PM_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(PM_OBJS) $(MG_OBJ) $(LDFLAGS)
 
 $(BUILDDIR)/daemon/%.o: src/%.c
 	@mkdir -p $(dir $@)
@@ -67,19 +71,23 @@ $(BUILDDIR)/vendor/portmidi/%.o: $(VENDORDIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) -std=c17 -g -D_DEFAULT_SOURCE -I$(VENDORDIR) $(PM_CFLAGS) -c $< -o $@
 
+$(MG_OBJ): $(MONGOOSEDIR)/mongoose.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c17 -g -D_DEFAULT_SOURCE -DMG_ENABLE_LINES=0 -I$(MONGOOSEDIR) -w -c $< -o $@
+
 test: $(TEST_BINS)
 	@for t in $(TEST_BINS); do \
 		echo "--- $$t ---"; \
 		$$t || exit 1; \
 	done
 
-$(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS) $(PM_OBJS)
+$(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Itests -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -Itests -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(LDFLAGS)
 
-$(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS)
+$(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILDDIR)/daemon $(BUILDDIR)/tests $(BUILDDIR)/tools $(BUILDDIR)/vendor $(TARGET)

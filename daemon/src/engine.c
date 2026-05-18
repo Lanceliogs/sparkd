@@ -200,3 +200,13 @@ int spark_engine_midi_reconnect(void)
     spark_log_info("engine: MIDI reconnect requested");
     return spark_midi_reconnect();
 }
+
+bool spark_engine_is_running(void)
+{
+    return running;
+}
+
+const spark_engine_config_t *spark_engine_get_config(void)
+{
+    return running ? &config : NULL;
+}

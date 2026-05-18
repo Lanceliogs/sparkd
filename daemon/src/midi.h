@@ -1,3 +1,26 @@
+/*
+ * midi.h - MIDI input management
+ *
+ * Wraps PortMidi to provide a multi-device MIDI input layer. Multiple
+ * physical or virtual MIDI inputs can be opened simultaneously; polling
+ * drains all open streams into a single event buffer.
+ *
+ * Device lifecycle:
+ *   init     - call once at startup (initializes PortMidi)
+ *   open     - open a device by ID or name pattern (substring match)
+ *   poll     - drain all open streams into a spark_midi_event_t buffer
+ *   close    - close a single device, close_all for bulk teardown
+ *   destroy  - call once at shutdown (terminates PortMidi)
+ *
+ * Reconnection:
+ *   reconnect performs a full Pm_Terminate / Pm_Initialize cycle and
+ *   reopens all previously registered devices by their stored name
+ *   patterns. This handles USB hot-unplug/replug on platforms where
+ *   PortMidi does not report read errors on dead streams.
+ *
+ * Events are normalized into spark_midi_event_t (note-on, note-off, CC).
+ * Velocity-zero note-on is automatically converted to note-off.
+ */
 #ifndef SPARK_MIDI_H
 #define SPARK_MIDI_H
 

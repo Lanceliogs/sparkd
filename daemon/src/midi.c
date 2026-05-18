@@ -9,7 +9,6 @@ typedef struct {
     char pattern[SPARK_MIDI_PORT_STRLEN];
     int device_id;
     PortMidiStream *stream;
-    uint32_t activity_timeout_ms;
     uint64_t last_activity_ms;
 } midi_input_t;
 
@@ -48,7 +47,6 @@ static int add_input(const char *pattern, int device_id, PortMidiStream *stream)
     input->pattern[SPARK_MIDI_PORT_STRLEN - 1] = '\0';
     input->device_id = device_id;
     input->stream = stream;
-    input->activity_timeout_ms = 0;
     input->last_activity_ms = spark_clock_monotonic_ms();
     spark_log_debug("midi: input added '%s' device=%d (%d inputs)", pattern, device_id, input_count);
     return 0;
@@ -220,59 +218,6 @@ void spark_midi_close_all(void)
             Pm_Close(inputs[i].stream);
     }
     input_count = 0;
-}
-
-void spark_midi_set_heartbeat(const char *pattern, uint32_t timeout_ms)
-{
-    midi_input_t *input = find_input_by_pattern(pattern);
-    if (!input)
-    {
-        spark_log_warn("midi:set_heartbeat: input '%s' not found", pattern);
-        return;
-    }
-    input->activity_timeout_ms = timeout_ms;
-    input->last_activity_ms = spark_clock_monotonic_ms();
-    spark_log_info("midi: activity timeout on '%s' set to %ums", pattern, timeout_ms);
-}
-
-void spark_midi_disable_heartbeat(const char *pattern)
-{
-    midi_input_t *input = find_input_by_pattern(pattern);
-    if (!input)
-    {
-        spark_log_warn("midi:disable_heartbeat: input '%s' not found", pattern);
-        return;
-    }
-    input->activity_timeout_ms = 0;
-    spark_log_info("midi: activity timeout disabled on '%s'", pattern);
-}
-
-int spark_midi_check_heartbeat(void)
-{
-    uint64_t now = spark_clock_monotonic_ms();
-    int dead_count = 0;
-
-    for (uint8_t i = 0; i < input_count; i++)
-    {
-        if (inputs[i].activity_timeout_ms == 0)
-            continue;
-
-        if (!inputs[i].stream)
-        {
-            dead_count++;
-            continue;
-        }
-
-        if (now - inputs[i].last_activity_ms > inputs[i].activity_timeout_ms)
-        {
-            spark_log_warn("midi: activity timeout on '%s' (device=%d)", inputs[i].pattern, inputs[i].device_id);
-            Pm_Close(inputs[i].stream);
-            inputs[i].stream = NULL;
-            inputs[i].device_id = -1;
-            dead_count++;
-        }
-    }
-    return dead_count;
 }
 
 int spark_midi_reconnect(void)

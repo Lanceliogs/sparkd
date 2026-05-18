@@ -1,15 +1,14 @@
 #include "consts.h"
 #include "log.h"
-#include "midi.h"
-#include "stage.h"
-#include "clock.h"
-#include "dmx/dmx.h"
-#include "dmx/dmx_out.h"
+#include "engine.h"
+#include "scene.h"
 
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
 #include <signal.h>
+
+#include "clock.h"
 
 #define SPARKD_VERSION "0.1.0"
 
@@ -87,37 +86,25 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    int rc;
-
     spark_log_init(args.log_level);
 
-    /* MIDI init */
-    rc = spark_midi_init();
+    int rc = spark_engine_init();
+    if (rc != 0)
+        return rc;
+
+    spark_engine_config_t cfg = {0};
+    strncpy(cfg.dmx_port, args.port, SPARK_SERIAL_PORT_STRLEN - 1);
+    strncpy(cfg.midi_device, args.midi_device, SPARK_MIDI_PORT_STRLEN - 1);
+    cfg.dmx_backend_type = SPARK_DMX_BACKEND_OPEN;
+
+    rc = spark_engine_start(&cfg);
     if (rc != 0)
     {
-        spark_log_error("MIDI init failed (%d)", rc);
+        spark_engine_destroy();
         return rc;
     }
-    spark_log_debug("MIDI initialized!");
 
-    if (args.midi_device[0] != '\0')
-    {
-        rc = spark_midi_open_by_name(args.midi_device);
-        if (rc == 0)
-        {
-            spark_log_info("MIDI device opened: %s", args.midi_device);
-            spark_midi_set_heartbeat(args.midi_device, 5000);
-        }
-        else
-            spark_log_error("MIDI device open failed: %s", args.midi_device);
-    }
-
-    /* Stage init */
-    spark_stage_t stage;
-    spark_stage_init(&stage);
-    spark_log_debug("Stage initialized!");
-
-    /* Scene setup */
+    /* Temporary hardcoded scene */
     spark_scene_value_t scene_values[] = {
         { .dmx_index = 0, .value = 255, .velocity_scaling = false },
         { .dmx_index = 1, .value = 255, .velocity_scaling = false },
@@ -133,64 +120,20 @@ int main(int argc, char **argv)
     scene->output.values = scene_values;
     scene->output.value_count = 3;
 
-    /* DMX init */
-    spark_dmx_backend_t dmx_backend;
-    spark_dmx_open_init(&dmx_backend, args.port);
-    spark_log_debug("DMX backend initialized!");
-
-    spark_dmx_out_t dmx_out;
-    spark_dmx_out_init(&dmx_out, &dmx_backend, &stage);
-    rc = spark_dmx_out_start(&dmx_out);
-    if (rc != 0)
-    {
-        spark_log_error("DMX output thread failed to start (%d)", rc);
-        return rc;
-    }
-    spark_log_debug("DMX thread started!");
-    
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
     spark_log_info("sparkd running. Ctrl+C to stop...");
 
-    spark_midi_event_t midi_events[SPARK_MIDI_BUFFER_SIZE];
     while (should_keep_running)
     {
-        int n = spark_midi_poll(midi_events, SPARK_MIDI_BUFFER_SIZE);
-        for (int i = 0; i < n; i++)
-        {
-            spark_log_debug("main: MIDI ch=%d type=%d note=%d vel=%d cc=%d val=%d",
-                midi_events[i].channel, midi_events[i].type,
-                midi_events[i].note, midi_events[i].velocity,
-                midi_events[i].cc, midi_events[i].value);
-            spark_stage_apply_midi(&stage, &midi_events[i]);
-        }
-
-        if (spark_midi_check_heartbeat() > 0)
-        {
-            spark_log_warn("MIDI heartbeat lost, reconnecting...");
-            spark_midi_reconnect();
-        }
-
+        spark_engine_process_events();
         spark_clock_msleep(MAIN_LOOP_PERIOD_MS);
     }
 
     spark_log_info("Shutting down");
-
-    rc = spark_dmx_out_stop(&dmx_out);
-    if (rc != 0)
-        spark_log_error("DMX out thread stop error (%d)", rc);
-    else
-        spark_log_debug("DMX out thread stopped!");
-
-    spark_dmx_close(&dmx_backend);
-    spark_log_debug("DMX backend closed!");
-
-    spark_midi_destroy();
-    spark_log_debug("MIDI destroyed!");
-
-    spark_stage_destroy(&stage);
-    spark_log_debug("Stage destroyed!");
+    spark_engine_stop();
+    spark_engine_destroy();
 
     return 0;
 }

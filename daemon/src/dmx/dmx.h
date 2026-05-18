@@ -20,6 +20,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef enum {
+    SPARK_DMX_BACKEND_DUMMY,
+    SPARK_DMX_BACKEND_OPEN,
+} spark_dmx_backend_type_t;
+
 typedef enum
 {
     SPARK_DMX_DISCONNECTED,

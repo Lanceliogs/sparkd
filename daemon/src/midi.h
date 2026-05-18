@@ -26,9 +26,6 @@ void spark_midi_close_all(void);
 
 int spark_midi_poll(spark_midi_event_t *out, int max);
 
-void spark_midi_set_heartbeat(const char *pattern, uint32_t timeout_ms);
-void spark_midi_disable_heartbeat(const char *pattern);
-int spark_midi_check_heartbeat(void);
 int spark_midi_reconnect(void);
 
 #endif

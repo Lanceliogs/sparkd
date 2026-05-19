@@ -100,6 +100,24 @@ int main(int argc, char **argv)
     if (rc != 0)
         return rc;
 
+    /* Temporary hardcoded scene */
+    spark_scene_value_def_t scene_values[] = {
+        { .dmx_index = 0, .value = 255, .velocity_scaling = false },
+        { .dmx_index = 1, .value = 255, .velocity_scaling = false },
+        { .dmx_index = 5, .value = 0,   .velocity_scaling = false },
+    };
+
+    spark_scene_def_t scene_def = {
+        .channel = 0, .note = 60,
+        .id = "red-light-district", .name = "Red Light District",
+        .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = scene_values, .value_count = 3,
+    };
+
+    spark_scene_add_def(&scene_def);
+
     spark_engine_config_t cfg = {0};
     strncpy(cfg.dmx_port, args.port, SPARK_SERIAL_PORT_STRLEN - 1);
     strncpy(cfg.midi_device, args.midi_device, SPARK_MIDI_PORT_STRLEN - 1);
@@ -111,22 +129,6 @@ int main(int argc, char **argv)
         spark_engine_destroy();
         return rc;
     }
-
-    /* Temporary hardcoded scene */
-    spark_scene_value_t scene_values[] = {
-        { .dmx_index = 0, .value = 255, .velocity_scaling = false },
-        { .dmx_index = 1, .value = 255, .velocity_scaling = false },
-        { .dmx_index = 5, .value = 0,   .velocity_scaling = false },
-    };
-
-    spark_scene_t *scene = spark_scene_get(0, 60);
-    scene->enabled = true;
-    scene->name = "Red Light District";
-    scene->id = "red-light-district";
-    scene->trigger_mode = SPARK_SCENE_GATE;
-    scene->output.mode = SPARK_SCENE_STATIC;
-    scene->output.values = scene_values;
-    scene->output.value_count = 3;
 
     rc = spark_http_init(args.http_addr);
     if (rc != 0)

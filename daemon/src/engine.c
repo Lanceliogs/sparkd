@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "midi.h"
+#include "scene.h"
 #include "stage.h"
 #include "clock.h"
 #include "dmx/dmx.h"
@@ -31,13 +32,6 @@ static int s_init_midi(void)
         return rc;
     }
     spark_log_info("engine: MIDI device opened '%s'", s_config.midi_device);
-    return 0;
-}
-
-static int s_init_stage(void)
-{
-    spark_stage_init(&s_stage);
-    spark_log_debug("engine: stage initialized");
     return 0;
 }
 
@@ -92,6 +86,15 @@ static void s_shutdown_stage(void)
     spark_log_debug("engine: stage destroyed");
 }
 
+static int s_resolve_scenes(void)
+{
+    int rc = spark_scene_resolve();
+    if (rc != 0)
+        return rc;
+    spark_log_debug("engine: scenes resolved");
+    return 0;
+}
+
 int spark_engine_init(void)
 {
     if (s_initialized)
@@ -104,6 +107,8 @@ int spark_engine_init(void)
     memset(&s_dmx_backend, 0, sizeof(s_dmx_backend));
     memset(&s_dmx_out, 0, sizeof(s_dmx_out));
     memset(&s_config, 0, sizeof(s_config));
+
+    spark_stage_init(&s_stage);
 
     int rc = spark_midi_init();
     if (rc != 0)
@@ -138,7 +143,7 @@ int spark_engine_start(const spark_engine_config_t *cfg)
     if (rc != 0)
         spark_log_warn("engine: MIDI init failed, continuing without MIDI");
 
-    rc = s_init_stage();
+    rc = s_resolve_scenes();
     if (rc != 0)
         return rc;
 
@@ -158,7 +163,6 @@ void spark_engine_stop(void)
 
     s_shutdown_dmx();
     s_shutdown_midi();
-    s_shutdown_stage();
 
     s_running = false;
     spark_log_info("engine: stopped");
@@ -169,6 +173,7 @@ void spark_engine_destroy(void)
     if (s_running)
         spark_engine_stop();
 
+    s_shutdown_stage();
     spark_midi_destroy();
     s_initialized = false;
     spark_log_debug("engine: destroyed");

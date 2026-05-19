@@ -131,8 +131,11 @@ typedef struct {
     bool loop;
 } spark_scene_def_t;
 
-/* Resolver: resolve defs into scene table using arenas */
-int spark_scene_resolve(spark_scene_def_t *defs, uint16_t count);
+/* Def storage: deep-copies def + values into static arrays */
+int spark_scene_add_def(const spark_scene_def_t *def);
+
+/* Resolver: resolve internal defs into scene table using arenas */
+int spark_scene_resolve(void);
 
 /* Scene storage access */
 spark_scene_t *spark_scene_get_all(void);

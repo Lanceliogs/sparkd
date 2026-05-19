@@ -5,17 +5,63 @@
 
 #include <string.h>
 
-/* Scene container and active scenes refs at runtime  */
-static spark_scene_t s_scenes[SPARK_SCENES_MAX_COUNT] = {0};
-static spark_scene_t *s_active_scenes[SPARK_ACTIVE_SCENES_MAX] = {0};
-static uint16_t s_active_scene_count = 0;
+/* ---- Static storage ---- */
 
-/* Scene values and steps memory allocators */
+static spark_scene_def_t s_defs[SPARK_SCENE_DEFS_MAX];
+static uint16_t s_def_count = 0;
+
+static spark_scene_value_def_t s_value_def_arena[SPARK_SCENE_VALUE_DEF_ARENA_SIZE];
+static uint16_t s_value_def_arena_used = 0;
+
+static spark_scene_t s_scenes[SPARK_SCENES_MAX_COUNT] = {0};
+
 static spark_scene_value_t s_value_arena[SPARK_SCENE_VALUE_ARENA_SIZE];
 static uint16_t s_value_arena_used = 0;
 
 static spark_scene_step_t s_step_arena[SPARK_SCENE_STEP_ARENA_SIZE];
 static uint16_t s_step_arena_used = 0;
+
+static spark_scene_t *s_active_scenes[SPARK_ACTIVE_SCENES_MAX] = {0};
+static uint16_t s_active_scene_count = 0;
+
+/* ---- Scene defs ---- */
+
+static spark_scene_value_def_t *s_value_def_arena_alloc(uint8_t count)
+{
+    if (s_value_def_arena_used + count > SPARK_SCENE_VALUE_DEF_ARENA_SIZE)
+        return NULL;
+    spark_scene_value_def_t *ptr = &s_value_def_arena[s_value_def_arena_used];
+    s_value_def_arena_used += count;
+    return ptr;
+}
+
+int spark_scene_add_def(const spark_scene_def_t *def)
+{
+    if (s_def_count >= SPARK_SCENE_DEFS_MAX)
+    {
+        spark_log_error("scene: max scene defs reached (%d)", SPARK_SCENE_DEFS_MAX);
+        return -1;
+    }
+
+    spark_scene_value_def_t *vals = s_value_def_arena_alloc(def->value_count);
+    if (!vals)
+    {
+        spark_log_error("scene: value def arena exhausted");
+        return -1;
+    }
+
+    memcpy(vals, def->values, def->value_count * sizeof(spark_scene_value_def_t));
+
+    spark_scene_def_t *dst = &s_defs[s_def_count++];
+    *dst = *def;
+    dst->values = vals;
+
+    spark_log_debug("scene: added def '%s' ch=%u note=%u values=%u",
+        dst->id, dst->channel, dst->note, dst->value_count);
+    return 0;
+}
+
+/* ---- Resolution ---- */
 
 static spark_scene_value_t *s_value_arena_alloc(uint16_t count)
 {
@@ -97,11 +143,11 @@ static int s_resolve_static(spark_scene_def_t *def, spark_scene_t *scene)
     return 0;
 }
 
-int spark_scene_resolve(spark_scene_def_t *defs, uint16_t count)
+int spark_scene_resolve(void)
 {
-    for (uint16_t i = 0; i < count; i++)
+    for (uint16_t i = 0; i < s_def_count; i++)
     {
-        spark_scene_def_t *def = &defs[i];
+        spark_scene_def_t *def = &s_defs[i];
         spark_scene_t *scene = spark_scene_get(def->channel, def->note);
 
         scene->id = def->id;
@@ -122,6 +168,8 @@ int spark_scene_resolve(spark_scene_def_t *defs, uint16_t count)
     return 0;
 }
 
+/* ---- Runtime ---- */
+
 spark_scene_t *spark_scene_get_all(void)
 {
     return s_scenes;
@@ -134,6 +182,8 @@ spark_scene_t *spark_scene_get(uint8_t channel, uint8_t note)
 
 void spark_scene_reset(void)
 {
+    s_def_count = 0;
+    s_value_def_arena_used = 0;
     memset(s_scenes, 0, sizeof(s_scenes));
     memset(s_active_scenes, 0, sizeof(s_active_scenes));
     s_active_scene_count = 0;

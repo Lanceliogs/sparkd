@@ -149,18 +149,17 @@ void test_resolve_static_raw(void)
         { .dmx_index = 3, .value = 128, .velocity_scaling = true },
     };
 
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 60,
-            .id = "test-raw", .name = "Test Raw",
-            .enabled = true,
-            .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals, .value_count = 2,
-        },
+    spark_scene_def_t def = {
+        .channel = 0, .note = 60,
+        .id = "test-raw", .name = "Test Raw",
+        .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals, .value_count = 2,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 60);
     ASSERT_STR_EQ(scene->id, "test-raw");
@@ -188,22 +187,22 @@ void test_resolve_multiple_scenes(void)
         { .dmx_index = 6, .value = 50 },
     };
 
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 60, .id = "a", .name = "A",
-            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals_a, .value_count = 1,
-        },
-        {
-            .channel = 1, .note = 48, .id = "b", .name = "B",
-            .enabled = true, .trigger_mode = SPARK_SCENE_TOGGLE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals_b, .value_count = 2,
-        },
+    spark_scene_def_t def_a = {
+        .channel = 0, .note = 60, .id = "a", .name = "A",
+        .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals_a, .value_count = 1,
+    };
+    spark_scene_def_t def_b = {
+        .channel = 1, .note = 48, .id = "b", .name = "B",
+        .enabled = true, .trigger_mode = SPARK_SCENE_TOGGLE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals_b, .value_count = 2,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 2), 0);
+    ASSERT_EQ(spark_scene_add_def(&def_a), 0);
+    ASSERT_EQ(spark_scene_add_def(&def_b), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *sa = spark_scene_get(0, 60);
     ASSERT_STR_EQ(sa->id, "a");
@@ -226,16 +225,15 @@ void test_resolve_unresolved_skipped(void)
         { .dmx_index = 2, .value = 64 },
     };
 
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 70, .id = "partial", .name = "Partial",
-            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals, .value_count = 3,
-        },
+    spark_scene_def_t def = {
+        .channel = 0, .note = 70, .id = "partial", .name = "Partial",
+        .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals, .value_count = 3,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 70);
     ASSERT_EQ(scene->output.value_count, 2);
@@ -246,7 +244,7 @@ void test_resolve_unresolved_skipped(void)
 void test_resolve_empty_defs(void)
 {
     spark_scene_reset();
-    ASSERT_EQ(spark_scene_resolve(NULL, 0), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 }
 
 void test_resolve_reset_clears_arena(void)
@@ -256,16 +254,15 @@ void test_resolve_reset_clears_arena(void)
     spark_scene_value_def_t vals[] = {
         { .dmx_index = 0, .value = 255 },
     };
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 60, .id = "x", .name = "X",
-            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals, .value_count = 1,
-        },
+    spark_scene_def_t def = {
+        .channel = 0, .note = 60, .id = "x", .name = "X",
+        .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals, .value_count = 1,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
     spark_scene_t *scene = spark_scene_get(0, 60);
     ASSERT_EQ(scene->output.value_count, 1);
 
@@ -273,7 +270,8 @@ void test_resolve_reset_clears_arena(void)
     scene = spark_scene_get(0, 60);
     ASSERT_EQ(scene->output.value_count, 0);
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
     scene = spark_scene_get(0, 60);
     ASSERT_EQ(scene->output.value_count, 1);
 }
@@ -300,16 +298,15 @@ void test_resolve_fixture_channel(void)
         { .fixture = "par1", .channel = "blue",  .value = 128 },
     };
 
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 60, .id = "fix-test", .name = "Fixture Test",
-            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals, .value_count = 2,
-        },
+    spark_scene_def_t def = {
+        .channel = 0, .note = 60, .id = "fix-test", .name = "Fixture Test",
+        .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals, .value_count = 2,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 60);
     ASSERT_EQ(scene->output.value_count, 2);
@@ -328,16 +325,15 @@ void test_resolve_fixture_not_found(void)
         { .fixture = "nope", .channel = "red", .value = 255 },
     };
 
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 61, .id = "miss", .name = "Miss",
-            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals, .value_count = 1,
-        },
+    spark_scene_def_t def = {
+        .channel = 0, .note = 61, .id = "miss", .name = "Miss",
+        .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals, .value_count = 1,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 61);
     ASSERT_EQ(scene->output.value_count, 0);
@@ -361,16 +357,15 @@ void test_resolve_channel_not_found(void)
         { .fixture = "par1", .channel = "fog", .value = 255 },
     };
 
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 62, .id = "bad-ch", .name = "Bad Ch",
-            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals, .value_count = 1,
-        },
+    spark_scene_def_t def = {
+        .channel = 0, .note = 62, .id = "bad-ch", .name = "Bad Ch",
+        .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals, .value_count = 1,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 62);
     ASSERT_EQ(scene->output.value_count, 0);
@@ -397,16 +392,15 @@ void test_resolve_mixed_raw_and_fixture(void)
         { .dmx_index = 5, .value = 50 },
     };
 
-    spark_scene_def_t defs[] = {
-        {
-            .channel = 0, .note = 63, .id = "mixed", .name = "Mixed",
-            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
-            .output_mode = SPARK_SCENE_STATIC,
-            .values = vals, .value_count = 3,
-        },
+    spark_scene_def_t def = {
+        .channel = 0, .note = 63, .id = "mixed", .name = "Mixed",
+        .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_STATIC,
+        .values = vals, .value_count = 3,
     };
 
-    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 63);
     ASSERT_EQ(scene->output.value_count, 3);

@@ -1,4 +1,5 @@
 #include "scene.h"
+#include "fixture.h"
 #include "clock.h"
 #include "log.h"
 
@@ -47,9 +48,24 @@ static int s_resolve_static(spark_scene_def_t *def, spark_scene_t *scene)
         }
         else
         {
-            spark_log_warn("scene:resolve: fixture lookup not yet implemented for '%s.%s'",
-                vd->fixture, vd->channel);
-            vd->resolved = false;
+            const spark_fixture_t *fix = spark_fixture_find(vd->fixture);
+            if (!fix)
+            {
+                spark_log_warn("scene:resolve: fixture '%s' not found", vd->fixture);
+                vd->resolved = false;
+                continue;
+            }
+            const spark_channel_def_t *ch = spark_fixture_find_channel(fix, vd->channel);
+            if (!ch)
+            {
+                spark_log_warn("scene:resolve: channel '%s' not found in fixture '%s'",
+                    vd->channel, vd->fixture);
+                vd->resolved = false;
+                continue;
+            }
+            vd->dmx_index = spark_fixture_resolve_channel(fix, ch->offset);
+            vd->resolved = true;
+            resolved_count++;
         }
     }
 

@@ -1,5 +1,6 @@
 #include "test.h"
 #include "scene.h"
+#include "fixture.h"
 #include "log.h"
 
 void test_scene_activate_basic(void)
@@ -277,6 +278,146 @@ void test_resolve_reset_clears_arena(void)
     ASSERT_EQ(scene->output.value_count, 1);
 }
 
+void test_resolve_fixture_channel(void)
+{
+    spark_scene_reset();
+    spark_fixture_reset();
+
+    spark_channel_def_t channels[] = {
+        { .name = "dimmer", .offset = 0 },
+        { .name = "red",    .offset = 1 },
+        { .name = "green",  .offset = 2 },
+        { .name = "blue",   .offset = 3 },
+    };
+    spark_fixture_t fix = {
+        .id = "par1", .name = "Par",
+        .start_address = 10, .channel_count = 4, .channels = channels,
+    };
+    spark_fixture_add(&fix);
+
+    spark_scene_value_def_t vals[] = {
+        { .fixture = "par1", .channel = "red",   .value = 255 },
+        { .fixture = "par1", .channel = "blue",  .value = 128 },
+    };
+
+    spark_scene_def_t defs[] = {
+        {
+            .channel = 0, .note = 60, .id = "fix-test", .name = "Fixture Test",
+            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+            .output_mode = SPARK_SCENE_STATIC,
+            .values = vals, .value_count = 2,
+        },
+    };
+
+    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+
+    spark_scene_t *scene = spark_scene_get(0, 60);
+    ASSERT_EQ(scene->output.value_count, 2);
+    ASSERT_EQ(scene->output.values[0].dmx_index, 10);
+    ASSERT_EQ(scene->output.values[0].value, 255);
+    ASSERT_EQ(scene->output.values[1].dmx_index, 12);
+    ASSERT_EQ(scene->output.values[1].value, 128);
+}
+
+void test_resolve_fixture_not_found(void)
+{
+    spark_scene_reset();
+    spark_fixture_reset();
+
+    spark_scene_value_def_t vals[] = {
+        { .fixture = "nope", .channel = "red", .value = 255 },
+    };
+
+    spark_scene_def_t defs[] = {
+        {
+            .channel = 0, .note = 61, .id = "miss", .name = "Miss",
+            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+            .output_mode = SPARK_SCENE_STATIC,
+            .values = vals, .value_count = 1,
+        },
+    };
+
+    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+
+    spark_scene_t *scene = spark_scene_get(0, 61);
+    ASSERT_EQ(scene->output.value_count, 0);
+}
+
+void test_resolve_channel_not_found(void)
+{
+    spark_scene_reset();
+    spark_fixture_reset();
+
+    spark_channel_def_t channels[] = {
+        { .name = "dimmer", .offset = 0 },
+    };
+    spark_fixture_t fix = {
+        .id = "par1", .name = "Par",
+        .start_address = 1, .channel_count = 1, .channels = channels,
+    };
+    spark_fixture_add(&fix);
+
+    spark_scene_value_def_t vals[] = {
+        { .fixture = "par1", .channel = "fog", .value = 255 },
+    };
+
+    spark_scene_def_t defs[] = {
+        {
+            .channel = 0, .note = 62, .id = "bad-ch", .name = "Bad Ch",
+            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+            .output_mode = SPARK_SCENE_STATIC,
+            .values = vals, .value_count = 1,
+        },
+    };
+
+    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+
+    spark_scene_t *scene = spark_scene_get(0, 62);
+    ASSERT_EQ(scene->output.value_count, 0);
+}
+
+void test_resolve_mixed_raw_and_fixture(void)
+{
+    spark_scene_reset();
+    spark_fixture_reset();
+
+    spark_channel_def_t channels[] = {
+        { .name = "dimmer", .offset = 0 },
+        { .name = "red",    .offset = 1 },
+    };
+    spark_fixture_t fix = {
+        .id = "par1", .name = "Par",
+        .start_address = 20, .channel_count = 2, .channels = channels,
+    };
+    spark_fixture_add(&fix);
+
+    spark_scene_value_def_t vals[] = {
+        { .dmx_index = 0, .value = 100 },
+        { .fixture = "par1", .channel = "red", .value = 200 },
+        { .dmx_index = 5, .value = 50 },
+    };
+
+    spark_scene_def_t defs[] = {
+        {
+            .channel = 0, .note = 63, .id = "mixed", .name = "Mixed",
+            .enabled = true, .trigger_mode = SPARK_SCENE_GATE,
+            .output_mode = SPARK_SCENE_STATIC,
+            .values = vals, .value_count = 3,
+        },
+    };
+
+    ASSERT_EQ(spark_scene_resolve(defs, 1), 0);
+
+    spark_scene_t *scene = spark_scene_get(0, 63);
+    ASSERT_EQ(scene->output.value_count, 3);
+    ASSERT_EQ(scene->output.values[0].dmx_index, 0);
+    ASSERT_EQ(scene->output.values[0].value, 100);
+    ASSERT_EQ(scene->output.values[1].dmx_index, 20);
+    ASSERT_EQ(scene->output.values[1].value, 200);
+    ASSERT_EQ(scene->output.values[2].dmx_index, 5);
+    ASSERT_EQ(scene->output.values[2].value, 50);
+}
+
 int main(void)
 {
     spark_log_init(SPARK_LOG_SILENT);
@@ -293,5 +434,9 @@ int main(void)
     RUN_TEST(test_resolve_unresolved_skipped);
     RUN_TEST(test_resolve_empty_defs);
     RUN_TEST(test_resolve_reset_clears_arena);
+    RUN_TEST(test_resolve_fixture_channel);
+    RUN_TEST(test_resolve_fixture_not_found);
+    RUN_TEST(test_resolve_channel_not_found);
+    RUN_TEST(test_resolve_mixed_raw_and_fixture);
     TEST_END();
 }

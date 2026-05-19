@@ -44,5 +44,6 @@ int  spark_engine_midi_reconnect(void);
 
 bool spark_engine_is_running(void);
 const spark_engine_config_t *spark_engine_get_config(void);
+const spark_engine_config_t *spark_engine_get_last_config(void);
 
 #endif

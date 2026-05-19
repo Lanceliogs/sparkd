@@ -210,3 +210,8 @@ const spark_engine_config_t *spark_engine_get_config(void)
 {
     return running ? &config : NULL;
 }
+
+const spark_engine_config_t *spark_engine_get_last_config(void)
+{
+    return initialized ? &config : NULL;
+}

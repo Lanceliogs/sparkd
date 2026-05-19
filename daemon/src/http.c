@@ -67,8 +67,12 @@ static void handle_engine_start(struct mg_connection *c, struct mg_http_message 
         return;
     }
 
-    spark_engine_config_t cfg = {0};
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
+    spark_engine_config_t cfg;
+    const spark_engine_config_t *last = spark_engine_get_last_config();
+    if (last)
+        memcpy(&cfg, last, sizeof(cfg));
+    else
+        memset(&cfg, 0, sizeof(cfg));
 
     if (hm->body.len > 0)
     {
@@ -93,6 +97,8 @@ static void handle_engine_start(struct mg_connection *c, struct mg_http_message 
         {
             if (strcmp(val, "open") == 0)
                 cfg.dmx_backend_type = SPARK_DMX_BACKEND_OPEN;
+            else
+                cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
             free(val);
         }
     }

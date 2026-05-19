@@ -1,13 +1,18 @@
 #include "dmx_out.h"
 #include "clock.h"
 
+#include <string.h>
+
 #define DMX_OUT_DEFAULT_REFRESH_RATE 40
 
 void spark_dmx_out_init(spark_dmx_out_t *out, spark_dmx_backend_t *backend, spark_stage_t *stage)
 {
+    memset(out, 0, sizeof(*out));
     out->backend = backend;
     out->stage = stage;
     out->refresh_rate_hz = DMX_OUT_DEFAULT_REFRESH_RATE;
+    out->retry_ms_current = 1000 / DMX_OUT_DEFAULT_REFRESH_RATE;
+    out->retry_ms_max = 5000;
 }
 
 static void handle_reconnect(spark_dmx_out_t *out)

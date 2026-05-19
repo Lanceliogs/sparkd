@@ -4,10 +4,12 @@
 
 #include <string.h>
 
+/* Scene container and active scenes refs at runtime  */
 static spark_scene_t s_scenes[SPARK_SCENES_MAX_COUNT] = {0};
 static spark_scene_t *s_active_scenes[SPARK_ACTIVE_SCENES_MAX] = {0};
 static uint16_t s_active_scene_count = 0;
 
+/* Scene values and steps memory allocators */
 static spark_scene_value_t s_value_arena[SPARK_SCENE_VALUE_ARENA_SIZE];
 static uint16_t s_value_arena_used = 0;
 
@@ -30,6 +32,78 @@ static spark_scene_step_t *s_step_arena_alloc(uint16_t count)
     spark_scene_step_t *ptr = &s_step_arena[s_step_arena_used];
     s_step_arena_used += count;
     return ptr;
+}
+
+static int s_resolve_static(spark_scene_def_t *def, spark_scene_t *scene)
+{
+    uint8_t resolved_count = 0;
+    for (uint8_t i = 0; i < def->value_count; i++)
+    {
+        spark_scene_value_def_t *vd = &def->values[i];
+        if (vd->fixture[0] == '\0')
+        {
+            vd->resolved = true;
+            resolved_count++;
+        }
+        else
+        {
+            spark_log_warn("scene:resolve: fixture lookup not yet implemented for '%s.%s'",
+                vd->fixture, vd->channel);
+            vd->resolved = false;
+        }
+    }
+
+    if (resolved_count == 0)
+        return 0;
+
+    spark_scene_value_t *vals = s_value_arena_alloc(resolved_count);
+    if (!vals)
+    {
+        spark_log_error("scene:resolve: value arena exhausted");
+        return -1;
+    }
+
+    uint8_t idx = 0;
+    for (uint8_t i = 0; i < def->value_count; i++)
+    {
+        spark_scene_value_def_t *vd = &def->values[i];
+        if (!vd->resolved)
+            continue;
+        vals[idx].dmx_index = vd->dmx_index;
+        vals[idx].value = vd->value;
+        vals[idx].velocity_scaling = vd->velocity_scaling;
+        idx++;
+    }
+
+    scene->output.mode = def->output_mode;
+    scene->output.values = vals;
+    scene->output.value_count = resolved_count;
+    return 0;
+}
+
+int spark_scene_resolve(spark_scene_def_t *defs, uint16_t count)
+{
+    for (uint16_t i = 0; i < count; i++)
+    {
+        spark_scene_def_t *def = &defs[i];
+        spark_scene_t *scene = spark_scene_get(def->channel, def->note);
+
+        scene->id = def->id;
+        scene->name = def->name;
+        scene->enabled = def->enabled;
+        scene->trigger_mode = def->trigger_mode;
+
+        int rc = 0;
+        if (def->output_mode == SPARK_SCENE_STATIC)
+            rc = s_resolve_static(def, scene);
+
+        if (rc != 0)
+            return rc;
+
+        spark_log_debug("scene:resolve: [%u] '%s' ch=%u note=%u values=%u",
+            i, def->id, def->channel, def->note, scene->output.value_count);
+    }
+    return 0;
 }
 
 spark_scene_t *spark_scene_get_all(void)

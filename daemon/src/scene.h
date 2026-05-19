@@ -86,7 +86,6 @@ typedef struct {
     /* Metadata */
     const char *id;
     const char *name;
-    const char *comment;
     /* Trigger */
     spark_scene_trigger_mode_t trigger_mode;
     /* Output */
@@ -103,8 +102,8 @@ typedef struct {
 
 typedef struct {
     uint16_t dmx_index;
-    const char *fixture;
-    const char *channel;
+    char fixture[SPARK_MAX_ID_SIZE];
+    char channel[SPARK_MAX_NAME_SIZE];
     uint8_t value;
     bool velocity_scaling;
     bool resolved;
@@ -119,8 +118,10 @@ typedef struct {
 typedef struct {
     uint8_t channel;
     uint8_t note;
-    const char *id;
-    const char *name;
+    char id[SPARK_MAX_ID_SIZE];
+    char name[SPARK_MAX_NAME_SIZE];
+    char comment[SPARK_MAX_COMMENT_SIZE];
+    bool enabled;
     spark_scene_trigger_mode_t trigger_mode;
     spark_scene_output_mode_t output_mode;
     spark_scene_value_def_t *values;
@@ -129,6 +130,9 @@ typedef struct {
     uint8_t step_count;
     bool loop;
 } spark_scene_def_t;
+
+/* Resolver: resolve defs into scene table using arenas */
+int spark_scene_resolve(spark_scene_def_t *defs, uint16_t count);
 
 /* Scene storage access */
 spark_scene_t *spark_scene_get_all(void);

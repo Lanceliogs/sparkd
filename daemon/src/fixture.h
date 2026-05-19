@@ -18,16 +18,19 @@
 #ifndef SPARK_FIXTURE_H
 #define SPARK_FIXTURE_H
 
+#include "consts.h"
+
 #include <stdint.h>
 
 typedef struct {
-    const char *name;
+    char name[SPARK_MAX_NAME_SIZE];
     uint8_t offset;
 } spark_channel_def_t;
 
 typedef struct {
-    const char *id;
-    const char *name;
+    char id[SPARK_MAX_ID_SIZE];
+    char name[SPARK_MAX_NAME_SIZE];
+    char comment[SPARK_MAX_COMMENT_SIZE];
     uint16_t start_address;
     uint8_t channel_count;
     spark_channel_def_t *channels;

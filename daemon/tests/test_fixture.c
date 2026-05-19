@@ -1,6 +1,9 @@
 #include "test.h"
 #include "log.h"
 #include "fixture.h"
+#include "consts.h"
+
+#include <string.h>
 
 static spark_channel_def_t par_channels[] = {
     { .name = "dimmer", .offset = 0 },
@@ -97,7 +100,7 @@ void test_resolve_channel_offset_address(void)
     spark_fixture_reset();
 
     spark_fixture_t fixture_at_10 = par_fixture;
-    fixture_at_10.id = "par_at_10";
+    strncpy(fixture_at_10.id, "par_at_10", SPARK_MAX_ID_SIZE - 1);
     fixture_at_10.start_address = 10;
     spark_fixture_add(&fixture_at_10);
 

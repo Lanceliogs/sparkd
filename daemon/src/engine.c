@@ -9,56 +9,56 @@
 #include <stdbool.h>
 #include <string.h>
 
-static spark_stage_t stage;
-static spark_dmx_backend_t dmx_backend;
-static spark_dmx_out_t dmx_out;
-static spark_engine_config_t config;
-static bool initialized = false;
-static bool running = false;
+static spark_stage_t s_stage;
+static spark_dmx_backend_t s_dmx_backend;
+static spark_dmx_out_t s_dmx_out;
+static spark_engine_config_t s_config;
+static bool s_initialized = false;
+static bool s_running = false;
 
-static int init_midi(void)
+static int s_init_midi(void)
 {
-    if (config.midi_device[0] == '\0')
+    if (s_config.midi_device[0] == '\0')
     {
         spark_log_debug("engine: no MIDI device configured");
         return 0;
     }
 
-    int rc = spark_midi_open_by_name(config.midi_device);
+    int rc = spark_midi_open_by_name(s_config.midi_device);
     if (rc != 0)
     {
-        spark_log_error("engine: failed to open MIDI device '%s'", config.midi_device);
+        spark_log_error("engine: failed to open MIDI device '%s'", s_config.midi_device);
         return rc;
     }
-    spark_log_info("engine: MIDI device opened '%s'", config.midi_device);
+    spark_log_info("engine: MIDI device opened '%s'", s_config.midi_device);
     return 0;
 }
 
-static int init_stage(void)
+static int s_init_stage(void)
 {
-    spark_stage_init(&stage);
+    spark_stage_init(&s_stage);
     spark_log_debug("engine: stage initialized");
     return 0;
 }
 
-static int init_dmx(void)
+static int s_init_dmx(void)
 {
-    switch (config.dmx_backend_type)
+    switch (s_config.dmx_backend_type)
     {
     case SPARK_DMX_BACKEND_OPEN:
-        spark_dmx_open_init(&dmx_backend, config.dmx_port);
-        spark_log_info("engine: DMX backend Open DMX on '%s'", config.dmx_port);
+        spark_dmx_open_init(&s_dmx_backend, s_config.dmx_port);
+        spark_log_info("engine: DMX backend Open DMX on '%s'", s_config.dmx_port);
         break;
     case SPARK_DMX_BACKEND_DUMMY:
     default:
-        spark_dmx_dummy_init(&dmx_backend);
+        spark_dmx_dummy_init(&s_dmx_backend);
         spark_log_info("engine: DMX backend dummy");
         break;
     }
 
-    spark_dmx_out_init(&dmx_out, &dmx_backend, &stage);
+    spark_dmx_out_init(&s_dmx_out, &s_dmx_backend, &s_stage);
 
-    int rc = spark_dmx_out_start(&dmx_out);
+    int rc = spark_dmx_out_start(&s_dmx_out);
     if (rc != 0)
     {
         spark_log_error("engine: DMX output thread failed to start (%d)", rc);
@@ -68,42 +68,42 @@ static int init_dmx(void)
     return 0;
 }
 
-static void shutdown_dmx(void)
+static void s_shutdown_dmx(void)
 {
-    int rc = spark_dmx_out_stop(&dmx_out);
+    int rc = spark_dmx_out_stop(&s_dmx_out);
     if (rc != 0)
         spark_log_error("engine: DMX thread stop error (%d)", rc);
     else
         spark_log_debug("engine: DMX thread stopped");
 
-    spark_dmx_close(&dmx_backend);
+    spark_dmx_close(&s_dmx_backend);
     spark_log_debug("engine: DMX backend closed");
 }
 
-static void shutdown_midi(void)
+static void s_shutdown_midi(void)
 {
     spark_midi_close_all();
     spark_log_debug("engine: MIDI streams closed");
 }
 
-static void shutdown_stage(void)
+static void s_shutdown_stage(void)
 {
-    spark_stage_destroy(&stage);
+    spark_stage_destroy(&s_stage);
     spark_log_debug("engine: stage destroyed");
 }
 
 int spark_engine_init(void)
 {
-    if (initialized)
+    if (s_initialized)
     {
         spark_log_warn("engine: already initialized");
         return 0;
     }
 
-    memset(&stage, 0, sizeof(stage));
-    memset(&dmx_backend, 0, sizeof(dmx_backend));
-    memset(&dmx_out, 0, sizeof(dmx_out));
-    memset(&config, 0, sizeof(config));
+    memset(&s_stage, 0, sizeof(s_stage));
+    memset(&s_dmx_backend, 0, sizeof(s_dmx_backend));
+    memset(&s_dmx_out, 0, sizeof(s_dmx_out));
+    memset(&s_config, 0, sizeof(s_config));
 
     int rc = spark_midi_init();
     if (rc != 0)
@@ -112,71 +112,71 @@ int spark_engine_init(void)
         return rc;
     }
 
-    initialized = true;
+    s_initialized = true;
     spark_log_debug("engine: initialized");
     return 0;
 }
 
 int spark_engine_start(const spark_engine_config_t *cfg)
 {
-    if (!initialized)
+    if (!s_initialized)
     {
         spark_log_error("engine: not initialized");
         return -1;
     }
-    if (running)
+    if (s_running)
     {
         spark_log_warn("engine: already running");
         return 0;
     }
 
-    memcpy(&config, cfg, sizeof(config));
+    memcpy(&s_config, cfg, sizeof(s_config));
 
     int rc;
 
-    rc = init_midi();
+    rc = s_init_midi();
     if (rc != 0)
         spark_log_warn("engine: MIDI init failed, continuing without MIDI");
 
-    rc = init_stage();
+    rc = s_init_stage();
     if (rc != 0)
         return rc;
 
-    rc = init_dmx();
+    rc = s_init_dmx();
     if (rc != 0)
         return rc;
 
-    running = true;
+    s_running = true;
     spark_log_info("engine: started");
     return 0;
 }
 
 void spark_engine_stop(void)
 {
-    if (!running)
+    if (!s_running)
         return;
 
-    shutdown_dmx();
-    shutdown_midi();
-    shutdown_stage();
+    s_shutdown_dmx();
+    s_shutdown_midi();
+    s_shutdown_stage();
 
-    running = false;
+    s_running = false;
     spark_log_info("engine: stopped");
 }
 
 void spark_engine_destroy(void)
 {
-    if (running)
+    if (s_running)
         spark_engine_stop();
 
     spark_midi_destroy();
-    initialized = false;
+    s_initialized = false;
     spark_log_debug("engine: destroyed");
 }
 
 void spark_engine_process_events(void)
 {
-    if (!running)
+    if (!s_running)
         return;
 
     spark_midi_event_t events[SPARK_MIDI_BUFFER_SIZE];
@@ -188,13 +188,13 @@ void spark_engine_process_events(void)
             events[i].channel, events[i].type,
             events[i].note, events[i].velocity,
             events[i].cc, events[i].value);
-        spark_stage_apply_midi(&stage, &events[i]);
+        spark_stage_apply_midi(&s_stage, &events[i]);
     }
 }
 
 int spark_engine_midi_reconnect(void)
 {
-    if (!initialized)
+    if (!s_initialized)
         return -1;
 
     spark_log_info("engine: MIDI reconnect requested");
@@ -203,15 +203,15 @@ int spark_engine_midi_reconnect(void)
 
 bool spark_engine_is_running(void)
 {
-    return running;
+    return s_running;
 }
 
 const spark_engine_config_t *spark_engine_get_config(void)
 {
-    return running ? &config : NULL;
+    return s_running ? &s_config : NULL;
 }
 
 const spark_engine_config_t *spark_engine_get_last_config(void)
 {
-    return initialized ? &config : NULL;
+    return s_initialized ? &s_config : NULL;
 }

@@ -27,7 +27,7 @@ void spark_serial_init(spark_serial_t *serial)
     serial->hdl = INVALID_HANDLE_VALUE;
 }
 
-static void set_data_bits(DCB *conf, spark_serial_data_bits_t data_bits)
+static void s_set_data_bits(DCB *conf, spark_serial_data_bits_t data_bits)
 {
     switch (data_bits)
     {
@@ -35,33 +35,33 @@ static void set_data_bits(DCB *conf, spark_serial_data_bits_t data_bits)
         case SPARK_SERIAL_DATA_BITS_6: conf->ByteSize = 6; break;
         case SPARK_SERIAL_DATA_BITS_7: conf->ByteSize = 7; break;
         case SPARK_SERIAL_DATA_BITS_8: conf->ByteSize = 8;  break;
-        default: spark_log_warn("serial:set_data_bits: Unknown data_bits value"); break;
+        default: spark_log_warn("serial:s_set_data_bits: Unknown data_bits value"); break;
     }
 }
 
-static void set_stop_bit(DCB *conf, spark_serial_stop_bit_t stop_bit)
+static void s_set_stop_bit(DCB *conf, spark_serial_stop_bit_t stop_bit)
 {
     switch (stop_bit)
     {
         case SPARK_SERIAL_STOP_BIT_1: conf->StopBits = ONESTOPBIT; break;
         case SPARK_SERIAL_STOP_BIT_2: conf->StopBits = TWOSTOPBITS; break;
         case SPARK_SERIAL_STOP_BIT_1_5: conf->StopBits = ONE5STOPBITS; break;
-        default: spark_log_warn("serial:set_parity: Unknown stop_bit value"); break;
+        default: spark_log_warn("serial:s_set_parity: Unknown stop_bit value"); break;
     }
 }
 
-static void set_parity(DCB *conf, spark_serial_parity_t parity)
+static void s_set_parity(DCB *conf, spark_serial_parity_t parity)
 {
     switch (parity)
     {
         case SPARK_SERIAL_PARITY_NONE: conf->Parity = NOPARITY; break;
         case SPARK_SERIAL_PARITY_EVEN: conf->Parity = EVENPARITY; break;
         case SPARK_SERIAL_PARITY_ODD: conf->Parity = ODDPARITY; break;
-        default: spark_log_warn("serial:set_parity: Unknown parity value"); break;
+        default: spark_log_warn("serial:s_set_parity: Unknown parity value"); break;
     } 
 }
 
-static void set_flow_control(DCB *conf, spark_serial_flow_control_t flow_control)
+static void s_set_flow_control(DCB *conf, spark_serial_flow_control_t flow_control)
 {
     switch (flow_control)
     {
@@ -72,12 +72,12 @@ static void set_flow_control(DCB *conf, spark_serial_flow_control_t flow_control
             conf->fInX = FALSE;
             break;
         default:
-            spark_log_warn("serial:set_flow_control: Not implemented flow control value");
+            spark_log_warn("serial:s_set_flow_control: Not implemented flow control value");
             break;
     } 
 }
 
-static void ensure_device_prefix(const char *port, char *out, size_t out_len)
+static void s_ensure_device_prefix(const char *port, char *out, size_t out_len)
 {
     const char *prefix = "\\\\.\\";
     if (strncmp(port, prefix, strlen(prefix)) == 0)
@@ -89,7 +89,7 @@ static void ensure_device_prefix(const char *port, char *out, size_t out_len)
 int  spark_serial_open(spark_serial_t *serial)
 {
     char prefixed_port[SPARK_SERIAL_PORT_STRLEN] = {0};
-    ensure_device_prefix(serial->port, prefixed_port, SPARK_SERIAL_PORT_STRLEN);
+    s_ensure_device_prefix(serial->port, prefixed_port, SPARK_SERIAL_PORT_STRLEN);
 
     serial->hdl = CreateFileA(
         prefixed_port, GENERIC_READ | GENERIC_WRITE,
@@ -112,10 +112,10 @@ int  spark_serial_open(spark_serial_t *serial)
     }
 
     conf.BaudRate = serial->baudrate;
-    set_data_bits(&conf, serial->data_bits);
-    set_stop_bit(&conf, serial->stop_bit);
-    set_parity(&conf, serial->parity);
-    set_flow_control(&conf, serial->flow_control);
+    s_set_data_bits(&conf, serial->data_bits);
+    s_set_stop_bit(&conf, serial->stop_bit);
+    s_set_parity(&conf, serial->parity);
+    s_set_flow_control(&conf, serial->flow_control);
     
     if (!SetCommState(serial->hdl, &conf))
     {
@@ -172,7 +172,7 @@ void spark_serial_init(spark_serial_t *serial)
     serial->fd = -1;
 }
 
-static speed_t get_baud_constant(uint32_t baudrate)
+static speed_t s_get_baud_constant(uint32_t baudrate)
 {
     switch (baudrate)
     {
@@ -188,7 +188,7 @@ static speed_t get_baud_constant(uint32_t baudrate)
     }
 }
 
-static void set_data_bits(struct termios *tio, spark_serial_data_bits_t data_bits)
+static void s_set_data_bits(struct termios *tio, spark_serial_data_bits_t data_bits)
 {
     tio->c_cflag &= ~CSIZE;
     switch (data_bits)
@@ -201,7 +201,7 @@ static void set_data_bits(struct termios *tio, spark_serial_data_bits_t data_bit
     }
 }
 
-static void set_stop_bit(struct termios *tio, spark_serial_stop_bit_t stop_bit)
+static void s_set_stop_bit(struct termios *tio, spark_serial_stop_bit_t stop_bit)
 {
     switch (stop_bit)
     {
@@ -221,7 +221,7 @@ static void set_stop_bit(struct termios *tio, spark_serial_stop_bit_t stop_bit)
     }
 }
 
-static void set_parity(struct termios *tio, spark_serial_parity_t parity)
+static void s_set_parity(struct termios *tio, spark_serial_parity_t parity)
 {
     switch (parity)
     {
@@ -263,13 +263,13 @@ int spark_serial_open(spark_serial_t *serial)
     cfmakeraw(&tio);
     tio.c_cflag |= CLOCAL | CREAD;
 
-    speed_t baud = get_baud_constant(serial->baudrate);
+    speed_t baud = s_get_baud_constant(serial->baudrate);
     cfsetispeed(&tio, baud);
     cfsetospeed(&tio, baud);
 
-    set_data_bits(&tio, serial->data_bits);
-    set_stop_bit(&tio, serial->stop_bit);
-    set_parity(&tio, serial->parity);
+    s_set_data_bits(&tio, serial->data_bits);
+    s_set_stop_bit(&tio, serial->stop_bit);
+    s_set_parity(&tio, serial->parity);
 
     tio.c_cc[VMIN] = 0;
     tio.c_cc[VTIME] = 1;

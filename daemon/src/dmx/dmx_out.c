@@ -15,7 +15,7 @@ void spark_dmx_out_init(spark_dmx_out_t *out, spark_dmx_backend_t *backend, spar
     out->retry_ms_max = 5000;
 }
 
-static void handle_reconnect(spark_dmx_out_t *out)
+static void s_handle_reconnect(spark_dmx_out_t *out)
 {
     if (spark_dmx_open(out->backend) == 0)
                 out->retry_ms_current = 1000 / out->refresh_rate_hz;
@@ -28,7 +28,7 @@ static void handle_reconnect(spark_dmx_out_t *out)
     spark_clock_msleep(out->retry_ms_current);
 }
 
-static void wait_for_next_frame(spark_dmx_out_t *out, uint64_t start)
+static void s_wait_for_next_frame(spark_dmx_out_t *out, uint64_t start)
 {
     uint32_t period = 1000 / out->refresh_rate_hz;
     uint64_t elapsed = spark_clock_monotonic_ms() - start;
@@ -36,7 +36,7 @@ static void wait_for_next_frame(spark_dmx_out_t *out, uint64_t start)
         spark_clock_msleep(period - elapsed);
 }
 
-static void dmx_thread_loop(spark_dmx_out_t *out)
+static void s_dmx_thread_loop(spark_dmx_out_t *out)
 {
     uint64_t start;
     while (out->running)
@@ -44,13 +44,13 @@ static void dmx_thread_loop(spark_dmx_out_t *out)
         start = spark_clock_monotonic_ms();
         if (!spark_dmx_is_connected(out->backend))
         {
-            handle_reconnect(out);
+            s_handle_reconnect(out);
             continue;
         }
         spark_stage_render(out->stage, out->frame);
         if (spark_dmx_send_frame(out->backend, out->frame) != 0)
             spark_dmx_close(out->backend);
-        wait_for_next_frame(out, start);
+        s_wait_for_next_frame(out, start);
     }
 
     if (spark_dmx_is_connected(out->backend))
@@ -62,16 +62,16 @@ static void dmx_thread_loop(spark_dmx_out_t *out)
     }
 }
 
-static void *dmx_thread_loop_wrapper(void *arg)
+static void *s_dmx_thread_loop_wrapper(void *arg)
 {
-    dmx_thread_loop((spark_dmx_out_t *)arg);
+    s_dmx_thread_loop((spark_dmx_out_t *)arg);
     return NULL;
 }
 
 int spark_dmx_out_start(spark_dmx_out_t *out)
 {
     out->running = 1;
-    return pthread_create(&out->thread, NULL, dmx_thread_loop_wrapper, out);
+    return pthread_create(&out->thread, NULL, s_dmx_thread_loop_wrapper, out);
 }
 
 int spark_dmx_out_stop(spark_dmx_out_t *out)

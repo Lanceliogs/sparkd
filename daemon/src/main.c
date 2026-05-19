@@ -11,12 +11,12 @@
 
 #define MAIN_LOOP_PERIOD_MS 5
 
-static volatile uint8_t should_keep_running = 1;
+static volatile uint8_t s_should_keep_running = 1;
 
 void signal_handler(int signum)
 {
     (void)signum;
-    should_keep_running = 0;
+    s_should_keep_running = 0;
 }
 
 #define SPARK_HTTP_ADDR_STRLEN 128
@@ -31,7 +31,7 @@ typedef struct {
     bool print_version;
 } spark_args_t;
 
-static void parse_cmdline_args(int argc, char **argv, spark_args_t *args)
+static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
 {
     for (int i=0 ; i<argc ; i++)
     {
@@ -73,7 +73,7 @@ int main(int argc, char **argv)
         .midi_device = "",
         .http_addr = SPARK_HTTP_DEFAULT_ADDR
     };
-    parse_cmdline_args(argc, argv, &args);
+    s_parse_cmdline_args(argc, argv, &args);
 
     if (args.print_version)
     {
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
 
     spark_log_info("sparkd running. Ctrl+C to stop...");
 
-    while (should_keep_running)
+    while (s_should_keep_running)
     {
         spark_http_process_events(MAIN_LOOP_PERIOD_MS);
         spark_engine_process_events();

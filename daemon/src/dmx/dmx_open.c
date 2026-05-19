@@ -10,9 +10,9 @@ typedef struct {
     spark_serial_t serial;
 } dmx_open_priv_t;
 
-static dmx_open_priv_t dmx_open_priv;
+static dmx_open_priv_t s_dmx_open_priv;
 
-static int spark_dmx_open_open(spark_dmx_backend_t *backend)
+static int s_open(spark_dmx_backend_t *backend)
 {
     dmx_open_priv_t *priv = backend->priv;
     if (spark_serial_is_open(&priv->serial))
@@ -32,7 +32,7 @@ static int spark_dmx_open_open(spark_dmx_backend_t *backend)
     return 0;
 }
 
-static void spark_dmx_open_close(spark_dmx_backend_t *backend)
+static void s_close(spark_dmx_backend_t *backend)
 {
     dmx_open_priv_t *priv = backend->priv;
     if (!spark_serial_is_open(&priv->serial))
@@ -41,7 +41,7 @@ static void spark_dmx_open_close(spark_dmx_backend_t *backend)
     backend->state = SPARK_DMX_DISCONNECTED;
 }
 
-static int spark_dmx_open_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_DMX_UNIVERSE_SIZE])
+static int s_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_DMX_UNIVERSE_SIZE])
 {
     if (backend->state != SPARK_DMX_CONNECTED)
         return -1;
@@ -73,21 +73,21 @@ static int spark_dmx_open_send_frame(spark_dmx_backend_t *backend, const uint8_t
     return 0;
 }
 
-static bool spark_dmx_open_is_connected(spark_dmx_backend_t *backend)
+static bool s_is_connected(spark_dmx_backend_t *backend)
 {
     return backend->state == SPARK_DMX_CONNECTED;
 }
 
-static const spark_dmx_ops_t open_ops = {
-    .open = spark_dmx_open_open,
-    .close = spark_dmx_open_close,
-    .send_frame = spark_dmx_open_send_frame,
-    .is_connected = spark_dmx_open_is_connected,
+static const spark_dmx_ops_t s_open_ops = {
+    .open = s_open,
+    .close = s_close,
+    .send_frame = s_send_frame,
+    .is_connected = s_is_connected,
 };
 
 void spark_dmx_open_init(spark_dmx_backend_t *backend, const char *port)
 {
-    backend->priv = &dmx_open_priv;
+    backend->priv = &s_dmx_open_priv;
     dmx_open_priv_t *priv = backend->priv;
 
     spark_serial_init(&priv->serial);
@@ -102,5 +102,5 @@ void spark_dmx_open_init(spark_dmx_backend_t *backend, const char *port)
 
     backend->state = SPARK_DMX_DISCONNECTED;
     spark_dmx_reset_stats(backend);
-    backend->ops = &open_ops;
+    backend->ops = &s_open_ops;
 }

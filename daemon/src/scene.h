@@ -3,7 +3,7 @@
  *
  * Scenes are the primary unit of lighting output. Each scene maps to a unique
  * slot in a [16 channels][128 notes] lookup table, addressed by MIDI channel
- * and note number. The position in the table IS the trigger address — no
+ * and note number. The position in the table IS the trigger address -- no
  * separate trigger channel/note fields are needed.
  *
  * Trigger modes:
@@ -17,6 +17,17 @@
  * Velocity scaling: individual values can be scaled by the triggering
  * note's velocity (0-127 mapped to 0-255). The velocity is captured at
  * activation time and held until release.
+ *
+ * Configuration vs runtime:
+ *   Scene definitions (spark_scene_def_t) describe scenes at config time.
+ *   Each value def carries either a raw DMX index or an unresolved
+ *   fixture + channel name. The resolver (spark_scene_resolve) walks all
+ *   defs, resolves fixture references via the fixture module, and copies
+ *   the resolved values into a static arena. Unresolved values (fixture
+ *   not found) are skipped and flagged via a `resolved` bool.
+ *
+ * Memory: resolved values and steps are bump-allocated from static
+ * arenas in scene.c. spark_scene_reset() reclaims all arena memory.
  *
  * Lifecycle: scenes are stored in a module-level static array (BSS).
  * An active scene list (pointer array) tracks which scenes are currently
@@ -87,6 +98,37 @@ typedef struct {
     uint8_t velocity;
     uint64_t start_time_ms; // when activated, for sequence phase
 } spark_scene_t;
+
+/* ---- Configuration-time definitions (resolved at load) ---- */
+
+typedef struct {
+    uint16_t dmx_index;
+    const char *fixture;
+    const char *channel;
+    uint8_t value;
+    bool velocity_scaling;
+    bool resolved;
+} spark_scene_value_def_t;
+
+typedef struct {
+    uint32_t duration_ms;
+    spark_scene_value_def_t *values;
+    uint8_t value_count;
+} spark_scene_step_def_t;
+
+typedef struct {
+    uint8_t channel;
+    uint8_t note;
+    const char *id;
+    const char *name;
+    spark_scene_trigger_mode_t trigger_mode;
+    spark_scene_output_mode_t output_mode;
+    spark_scene_value_def_t *values;
+    uint8_t value_count;
+    spark_scene_step_def_t *steps;
+    uint8_t step_count;
+    bool loop;
+} spark_scene_def_t;
 
 /* Scene storage access */
 spark_scene_t *spark_scene_get_all(void);

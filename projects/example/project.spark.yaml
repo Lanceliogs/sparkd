@@ -1,0 +1,89 @@
+format:
+  name: spark-project
+  version: 1
+
+app:
+  name: example
+
+fixtures:
+  - id: leftpar
+    name: Left PAR
+    start-address: 1
+    channel-count: 8
+    channels:
+      - name: dimmer
+        offset: 0
+      - name: red
+        offset: 1
+      - name: green
+        offset: 2
+      - name: blue
+        offset: 3
+      - name: white
+        offset: 4
+      - name: mode
+        offset: 5
+      - name: color
+        offset: 6
+      - name: strobe
+        offset: 7
+
+scenes:
+  - id: red-wash
+    name: Red Wash
+    type: static
+    trigger:
+      channel: 1
+      note: 60
+      mode: gate
+    values:
+      leftpar.dimmer: 255
+      leftpar.red: 255
+      leftpar.green: 0
+      leftpar.blue: 0
+
+  - id: color-cycle
+    name: Color Cycle
+    type: sequence
+    trigger:
+      channel: 1
+      note: 61
+      mode: gate
+    loop: true
+    steps:
+      - duration-ms: 1000
+        transition: linear
+        values:
+          leftpar.dimmer: 255
+          leftpar.red: 255
+          leftpar.green: 0
+          leftpar.blue: 0
+      - duration-ms: 1000
+        transition: linear
+        values:
+          leftpar.dimmer: 255
+          leftpar.red: 0
+          leftpar.green: 255
+          leftpar.blue: 0
+      - duration-ms: 1000
+        transition: linear
+        values:
+          leftpar.dimmer: 255
+          leftpar.red: 0
+          leftpar.green: 0
+          leftpar.blue: 255
+
+  - id: white-strobe
+    name: White Strobe
+    type: static
+    trigger:
+      channel: 1
+      note: 62
+      mode: gate
+    values:
+      leftpar.dimmer: 255
+      leftpar.red: 0
+      leftpar.green: 0
+      leftpar.blue: 0
+      leftpar.white: 255
+      leftpar.strobe: 255

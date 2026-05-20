@@ -21,7 +21,6 @@ void signal_handler(int signum)
 
 #define SPARK_HTTP_ADDR_STRLEN 128
 #define SPARK_HTTP_DEFAULT_ADDR "http://127.0.0.1:7600"
-#define SPARK_PROJECT_PATH_STRLEN 1024
 
 typedef struct {
     spark_log_level_t log_level;
@@ -31,6 +30,8 @@ typedef struct {
     char project[SPARK_PROJECT_PATH_STRLEN];
     bool print_help;
     bool print_version;
+    bool validate_only;
+    bool auto_start;
 } spark_args_t;
 
 static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
@@ -66,6 +67,10 @@ static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
             strcpy(args->project, argv[i + 1]);
             i++;
         }
+        else if (strcmp("--validate", argv[i]) == 0)
+            args->validate_only = true;
+        else if (strcmp("--auto", argv[i]) == 0)
+            args->auto_start = true;
     }
 }
 
@@ -86,6 +91,10 @@ int main(int argc, char **argv)
     if (env_addr)
         snprintf(args.http_addr, sizeof(args.http_addr), "%s", env_addr);
 
+    const char *env_project = getenv("SPARK_PROJECT_PATH");
+    if (env_project)
+        snprintf(args.project, sizeof(args.project), "%s", env_project);
+
     s_parse_cmdline_args(argc, argv, &args);
 
     if (args.print_version)
@@ -104,11 +113,19 @@ int main(int argc, char **argv)
         printf("  sparkd --version     Print the version\n");
         printf("  --http ADDR          HTTP listen address (default: %s)\n", SPARK_HTTP_DEFAULT_ADDR);
         printf("  --project PATH       Project file to load (omit for hardcoded fallback)\n");
+        printf("  --auto               Auto-start engine after loading project\n");
+        printf("  --validate           Validate project and exit (requires --project)\n");
         printf("\n");
         return 0;
     }
 
     spark_log_init(args.log_level);
+
+    if (args.validate_only && !args.project[0])
+    {
+        spark_log_error("--validate requires --project PATH");
+        return 1;
+    }
 
     int rc = spark_engine_init();
     if (rc != 0)
@@ -122,22 +139,33 @@ int main(int argc, char **argv)
         return rc;
     }
 
-    spark_engine_config_t cfg = {0};
-    strncpy(cfg.dmx_port, args.port, SPARK_SERIAL_PORT_STRLEN - 1);
-    strncpy(cfg.midi_device, args.midi_device, SPARK_MIDI_PORT_STRLEN - 1);
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_OPEN;
-
-    rc = spark_engine_start(&cfg);
-    if (rc != 0)
+    if (args.validate_only)
     {
+        spark_log_info("project valid: %s", project_path);
         spark_engine_destroy();
-        return rc;
+        return 0;
+    }
+
+    if (args.auto_start)
+    {
+        spark_engine_config_t cfg = {0};
+        strncpy(cfg.dmx_port, args.port, SPARK_SERIAL_PORT_STRLEN - 1);
+        strncpy(cfg.midi_device, args.midi_device, SPARK_MIDI_PORT_STRLEN - 1);
+        cfg.dmx_backend_type = SPARK_DMX_BACKEND_OPEN;
+
+        rc = spark_engine_start(&cfg);
+        if (rc != 0)
+        {
+            spark_engine_destroy();
+            return rc;
+        }
     }
 
     rc = spark_http_init(args.http_addr);
     if (rc != 0)
     {
-        spark_engine_stop();
+        if (args.auto_start)
+            spark_engine_stop();
         spark_engine_destroy();
         return rc;
     }

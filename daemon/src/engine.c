@@ -9,6 +9,7 @@
 #include "log.h"
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 static spark_stage_t s_stage;
@@ -18,6 +19,7 @@ static spark_engine_config_t s_config;
 static bool s_initialized = false;
 static bool s_running = false;
 static bool s_mapping_loaded = false;
+static char s_project_path[SPARK_PROJECT_PATH_STRLEN] = "";
 
 static int s_init_midi(void)
 {
@@ -104,6 +106,11 @@ int spark_engine_load_project(const char *path)
     int rc = spark_project_load(path);
     if (rc != 0)
         return rc;
+
+    if (path)
+        snprintf(s_project_path, sizeof(s_project_path), "%s", path);
+    else
+        s_project_path[0] = '\0';
 
     s_mapping_loaded = true;
     spark_log_info("engine: project loaded");
@@ -235,4 +242,9 @@ const spark_engine_config_t *spark_engine_get_config(void)
 const spark_engine_config_t *spark_engine_get_last_config(void)
 {
     return s_initialized ? &s_config : NULL;
+}
+
+const char *spark_engine_get_project_path(void)
+{
+    return s_project_path[0] ? s_project_path : NULL;
 }

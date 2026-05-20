@@ -6,8 +6,8 @@ app:
   name: example
 
 fixtures:
-  - id: leftpar
-    name: Left PAR
+  - id: par
+    name: Stairville PAR
     start-address: 1
     channel-count: 8
     channels:
@@ -37,10 +37,10 @@ scenes:
       note: 60
       mode: gate
     values:
-      leftpar.dimmer: 255
-      leftpar.red: 255
-      leftpar.green: 0
-      leftpar.blue: 0
+      par.dimmer: 255
+      par.red: 255
+      par.green: 0
+      par.blue: 0
 
   - id: color-cycle
     name: Color Cycle
@@ -54,24 +54,24 @@ scenes:
       - duration-ms: 1000
         transition: linear
         values:
-          leftpar.dimmer: 255
-          leftpar.red: 255
-          leftpar.green: 0
-          leftpar.blue: 0
+          par.dimmer: 255
+          par.red: 255
+          par.green: 0
+          par.blue: 0
       - duration-ms: 1000
         transition: linear
         values:
-          leftpar.dimmer: 255
-          leftpar.red: 0
-          leftpar.green: 255
-          leftpar.blue: 0
+          par.dimmer: 255
+          par.red: 0
+          par.green: 255
+          par.blue: 0
       - duration-ms: 1000
         transition: linear
         values:
-          leftpar.dimmer: 255
-          leftpar.red: 0
-          leftpar.green: 0
-          leftpar.blue: 255
+          par.dimmer: 255
+          par.red: 0
+          par.green: 0
+          par.blue: 255
 
   - id: white-strobe
     name: White Strobe
@@ -81,9 +81,9 @@ scenes:
       note: 62
       mode: gate
     values:
-      leftpar.dimmer: 255
-      leftpar.red: 0
-      leftpar.green: 0
-      leftpar.blue: 0
-      leftpar.white: 255
-      leftpar.strobe: 255
+      par.dimmer: 255
+      par.red: 0
+      par.green: 0
+      par.blue: 0
+      par.white: 255
+      par.strobe: 255

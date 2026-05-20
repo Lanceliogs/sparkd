@@ -154,6 +154,52 @@ static void s_handle_engine_stop(struct mg_connection *c)
         MG_ESC("status"), MG_ESC("stopped"));
 }
 
+static void s_handle_project_reload(struct mg_connection *c, struct mg_http_message *hm)
+{
+    if (spark_engine_is_running())
+    {
+        mg_http_reply(c, 409, s_json_content_type,
+            "{%m:%m}\n",
+            MG_ESC("error"), MG_ESC("engine must be stopped before reload"));
+        return;
+    }
+
+    char *path = NULL;
+    if (hm->body.len > 0)
+        path = mg_json_get_str(hm->body, "$.path");
+
+    const char *load_path = path;
+    if (!load_path || load_path[0] == '\0')
+    {
+        free(path);
+        path = NULL;
+        load_path = spark_engine_get_project_path();
+    }
+
+    if (!load_path)
+    {
+        mg_http_reply(c, 400, s_json_content_type,
+            "{%m:%m}\n",
+            MG_ESC("error"), MG_ESC("no path given and no previous project loaded"));
+        return;
+    }
+
+    int rc = spark_engine_load_project(load_path);
+    free(path);
+
+    if (rc != 0)
+    {
+        mg_http_reply(c, 422, s_json_content_type,
+            "{%m:%m}\n",
+            MG_ESC("error"), MG_ESC("project load failed"));
+        return;
+    }
+
+    mg_http_reply(c, 200, s_json_content_type,
+        "{%m:%m}\n",
+        MG_ESC("status"), MG_ESC("reloaded"));
+}
+
 static void s_handle_midi_reconnect(struct mg_connection *c)
 {
     if (!spark_engine_is_running())
@@ -203,6 +249,9 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
     else if (mg_match(hm->uri, mg_str("/api/engine/midi/reconnect"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
         s_handle_midi_reconnect(c);
+    else if (mg_match(hm->uri, mg_str("/api/project/reload"), NULL) &&
+             mg_match(hm->method, mg_str("POST"), NULL))
+        s_handle_project_reload(c, hm);
     else
     {
         spark_log_warn("http: 404 %.*s", (int)hm->uri.len, hm->uri.buf);

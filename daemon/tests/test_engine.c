@@ -37,6 +37,7 @@ void test_start_stop_dummy(void)
 {
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
+    ASSERT_EQ(spark_engine_load_project(NULL), 0);
 
     spark_engine_config_t cfg = {0};
     cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
@@ -66,6 +67,7 @@ void test_double_start(void)
 {
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
+    ASSERT_EQ(spark_engine_load_project(NULL), 0);
 
     spark_engine_config_t cfg = {0};
     cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
@@ -89,6 +91,7 @@ void test_process_events_running(void)
 {
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
+    ASSERT_EQ(spark_engine_load_project(NULL), 0);
 
     spark_engine_config_t cfg = {0};
     cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
@@ -104,6 +107,7 @@ void test_full_lifecycle(void)
 {
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
+    ASSERT_EQ(spark_engine_load_project(NULL), 0);
 
     spark_engine_config_t cfg = {0};
     cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
@@ -122,6 +126,7 @@ void test_restart(void)
 {
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
+    ASSERT_EQ(spark_engine_load_project(NULL), 0);
 
     spark_engine_config_t cfg = {0};
     cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;

@@ -36,6 +36,7 @@ typedef struct {
 } spark_engine_config_t;
 
 int  spark_engine_init(void);
+int  spark_engine_load_project(const char *path);
 int  spark_engine_start(const spark_engine_config_t *cfg);
 void spark_engine_stop(void);
 void spark_engine_destroy(void);

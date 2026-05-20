@@ -2,7 +2,6 @@
 #include "log.h"
 #include "engine.h"
 #include "http.h"
-#include "scene.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -22,12 +21,14 @@ void signal_handler(int signum)
 
 #define SPARK_HTTP_ADDR_STRLEN 128
 #define SPARK_HTTP_DEFAULT_ADDR "http://127.0.0.1:7600"
+#define SPARK_PROJECT_PATH_STRLEN 1024
 
 typedef struct {
     spark_log_level_t log_level;
     char port[SPARK_SERIAL_PORT_STRLEN];
     char midi_device[SPARK_MIDI_PORT_STRLEN];
     char http_addr[SPARK_HTTP_ADDR_STRLEN];
+    char project[SPARK_PROJECT_PATH_STRLEN];
     bool print_help;
     bool print_version;
 } spark_args_t;
@@ -60,6 +61,11 @@ static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
             strcpy(args->http_addr, argv[i + 1]);
             i++;
         }
+        else if (strcmp("--project", argv[i]) == 0 && i + 1 < argc)
+        {
+            strcpy(args->project, argv[i + 1]);
+            i++;
+        }
     }
 }
 
@@ -72,7 +78,8 @@ int main(int argc, char **argv)
         .log_level = SPARK_LOG_INFO,
         .port = "COM3",
         .midi_device = "",
-        .http_addr = SPARK_HTTP_DEFAULT_ADDR
+        .http_addr = SPARK_HTTP_DEFAULT_ADDR,
+        .project = "",
     };
 
     const char *env_addr = getenv("SPARK_HTTP_ADDR");
@@ -91,11 +98,12 @@ int main(int argc, char **argv)
     {
         printf("sparkd\n");
         printf("---\n");
-        printf("Usage: sparkd [--log-level LEVEL] [--port PORT] [--midi DEVICE] [--http ADDR]\n");
+        printf("Usage: sparkd [--log-level LEVEL] [--port PORT] [--midi DEVICE] [--http ADDR] [--project PATH]\n");
         printf("\n");
         printf("  sparkd --help        Print this help\n");
         printf("  sparkd --version     Print the version\n");
         printf("  --http ADDR          HTTP listen address (default: %s)\n", SPARK_HTTP_DEFAULT_ADDR);
+        printf("  --project PATH       Project file to load (omit for hardcoded fallback)\n");
         printf("\n");
         return 0;
     }
@@ -106,23 +114,13 @@ int main(int argc, char **argv)
     if (rc != 0)
         return rc;
 
-    /* Temporary hardcoded scene */
-    spark_scene_value_def_t scene_values[] = {
-        { .dmx_index = 0, .value = 255, .velocity_scaling = false },
-        { .dmx_index = 1, .value = 255, .velocity_scaling = false },
-        { .dmx_index = 5, .value = 0,   .velocity_scaling = false },
-    };
-
-    spark_scene_def_t scene_def = {
-        .channel = 0, .note = 60,
-        .id = "red-light-district", .name = "Red Light District",
-        .enabled = true,
-        .trigger_mode = SPARK_SCENE_GATE,
-        .output_mode = SPARK_SCENE_STATIC,
-        .values = scene_values, .value_count = 3,
-    };
-
-    spark_scene_add_def(&scene_def);
+    const char *project_path = args.project[0] ? args.project : NULL;
+    rc = spark_engine_load_project(project_path);
+    if (rc != 0)
+    {
+        spark_engine_destroy();
+        return rc;
+    }
 
     spark_engine_config_t cfg = {0};
     strncpy(cfg.dmx_port, args.port, SPARK_SERIAL_PORT_STRLEN - 1);

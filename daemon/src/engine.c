@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "project.h"
 #include "midi.h"
 #include "scene.h"
 #include "stage.h"
@@ -16,6 +17,7 @@ static spark_dmx_out_t s_dmx_out;
 static spark_engine_config_t s_config;
 static bool s_initialized = false;
 static bool s_running = false;
+static bool s_mapping_loaded = false;
 
 static int s_init_midi(void)
 {
@@ -86,12 +88,25 @@ static void s_shutdown_stage(void)
     spark_log_debug("engine: stage destroyed");
 }
 
-static int s_resolve_scenes(void)
+int spark_engine_load_project(const char *path)
 {
-    int rc = spark_scene_resolve();
+    if (!s_initialized)
+    {
+        spark_log_error("engine: not initialized");
+        return -1;
+    }
+    if (s_running)
+    {
+        spark_log_error("engine: cannot load project while running");
+        return -1;
+    }
+
+    int rc = spark_project_load(path);
     if (rc != 0)
         return rc;
-    spark_log_debug("engine: scenes resolved");
+
+    s_mapping_loaded = true;
+    spark_log_info("engine: project loaded");
     return 0;
 }
 
@@ -134,6 +149,11 @@ int spark_engine_start(const spark_engine_config_t *cfg)
         spark_log_warn("engine: already running");
         return 0;
     }
+    if (!s_mapping_loaded)
+    {
+        spark_log_error("engine: no project loaded");
+        return -1;
+    }
 
     memcpy(&s_config, cfg, sizeof(s_config));
 
@@ -142,10 +162,6 @@ int spark_engine_start(const spark_engine_config_t *cfg)
     rc = s_init_midi();
     if (rc != 0)
         spark_log_warn("engine: MIDI init failed, continuing without MIDI");
-
-    rc = s_resolve_scenes();
-    if (rc != 0)
-        return rc;
 
     rc = s_init_dmx();
     if (rc != 0)

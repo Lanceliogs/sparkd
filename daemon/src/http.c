@@ -22,6 +22,26 @@ static uint64_t s_start_time_ms;
 
 static const char *s_json_content_type = "Content-Type: application/json\r\n";
 
+/* Redirect mongoose logs through spark_log */
+static char s_mg_log_buf[256];
+static int s_mg_log_len = 0;
+
+static void s_mg_log_fn(char ch, void *param)
+{
+    (void)param;
+    if (ch == '\n' || s_mg_log_len >= (int)sizeof(s_mg_log_buf) - 1)
+    {
+        s_mg_log_buf[s_mg_log_len] = '\0';
+        if (s_mg_log_len > 0)
+            spark_log_debug("mongoose: %s", s_mg_log_buf);
+        s_mg_log_len = 0;
+    }
+    else
+    {
+        s_mg_log_buf[s_mg_log_len++] = ch;
+    }
+}
+
 static void s_handle_healthz(struct mg_connection *c)
 {
     uint64_t uptime = spark_clock_monotonic_ms() - s_start_time_ms;
@@ -165,6 +185,10 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
 
     struct mg_http_message *hm = (struct mg_http_message *)ev_data;
 
+    spark_log_info("http: %.*s %.*s",
+        (int)hm->method.len, hm->method.buf,
+        (int)hm->uri.len, hm->uri.buf);
+
     if (mg_match(hm->uri, mg_str("/healthz"), NULL))
         s_handle_healthz(c);
     else if (mg_match(hm->uri, mg_str("/api/engine/state"), NULL) &&
@@ -180,13 +204,19 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
              mg_match(hm->method, mg_str("POST"), NULL))
         s_handle_midi_reconnect(c);
     else
+    {
+        spark_log_warn("http: 404 %.*s", (int)hm->uri.len, hm->uri.buf);
         mg_http_reply(c, 404, s_json_content_type,
             "{%m:%m}\n",
             MG_ESC("error"), MG_ESC("not found"));
+    }
 }
 
 int spark_http_init(const char *listen_addr)
 {
+    mg_log_set_fn(s_mg_log_fn, NULL);
+    mg_log_set(MG_LL_INFO);
+
     mg_mgr_init(&s_mgr);
     s_start_time_ms = spark_clock_monotonic_ms();
 

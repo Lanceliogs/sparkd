@@ -49,15 +49,18 @@ TEST_BINS := $(TEST_SRCS:tests/test_%.c=$(BUILDDIR)/tests/test_%$(EXE))
 LIB_SRCS := $(filter-out src/main.c, $(SRCS))
 LIB_OBJS := $(LIB_SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
-# Tools
-TOOL_SRCS := $(wildcard tools/*.c)
+# Tools (linked against daemon libs)
+TOOL_SRCS := $(filter-out tools/sparkctl.c, $(wildcard tools/*.c))
 TOOL_BINS := $(TOOL_SRCS:tools/%.c=$(BUILDDIR)/tools/%$(EXE))
+
+# Standalone tools (no daemon deps)
+STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE)
 
 .PHONY: all clean test tools
 
 all: $(TARGET)
 
-tools: $(TOOL_BINS)
+tools: $(TOOL_BINS) $(STANDALONE_TOOLS)
 
 $(TARGET): $(OBJS) $(PM_OBJS) $(MG_OBJ)
 	@mkdir -p $(dir $@)
@@ -88,6 +91,10 @@ $(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ)
 $(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(LDFLAGS)
+
+$(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ)
+	@mkdir -p $(dir $@)
+	$(CC) -Wall -Wextra -pedantic -std=c17 -g -D_DEFAULT_SOURCE -I$(MONGOOSEDIR) -o $@ $< $(MG_OBJ) $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILDDIR)/daemon $(BUILDDIR)/tests $(BUILDDIR)/tools $(BUILDDIR)/vendor $(TARGET)

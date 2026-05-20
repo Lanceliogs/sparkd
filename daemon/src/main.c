@@ -5,6 +5,7 @@
 #include "scene.h"
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <signal.h>
@@ -73,6 +74,11 @@ int main(int argc, char **argv)
         .midi_device = "",
         .http_addr = SPARK_HTTP_DEFAULT_ADDR
     };
+
+    const char *env_addr = getenv("SPARK_HTTP_ADDR");
+    if (env_addr)
+        snprintf(args.http_addr, sizeof(args.http_addr), "%s", env_addr);
+
     s_parse_cmdline_args(argc, argv, &args);
 
     if (args.print_version)

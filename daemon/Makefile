@@ -1,29 +1,30 @@
 # sparkd daemon Makefile
 
 CC      ?= gcc
-CFLAGS  := -Wall -Wextra -pedantic -std=c17 -g -Isrc -I../vendor/portmidi -I../vendor/mongoose
+CFLAGS  := -Wall -Wextra -pedantic -std=c17 -g -Isrc -I../vendor/portmidi -I../vendor/mongoose -I../vendor/libyaml
 LDFLAGS :=
 
 BUILDDIR := ../build
 EXE      :=
-VENDORDIR  := ../vendor/portmidi
+PORTMIDIDIR   := ../vendor/portmidi
 MONGOOSEDIR := ../vendor/mongoose
+YAMLDIR     := ../vendor/libyaml
 
 # Platform detection
 ifeq ($(OS),Windows_NT)
   EXE      := .exe
   LDFLAGS  += -lws2_32 -lwinmm
   PM_CFLAGS := -DWIN32
-  PM_SRCS  := $(VENDORDIR)/portmidi.c $(VENDORDIR)/pmutil.c \
-              $(VENDORDIR)/pmwin.c $(VENDORDIR)/pmwinmm.c \
-              $(VENDORDIR)/ptwinmm.c
+  PM_SRCS  := $(PORTMIDIDIR)/portmidi.c $(PORTMIDIDIR)/pmutil.c \
+              $(PORTMIDIDIR)/pmwin.c $(PORTMIDIDIR)/pmwinmm.c \
+              $(PORTMIDIDIR)/ptwinmm.c
 else
   CFLAGS   += -D_DEFAULT_SOURCE -DPMALSA
   LDFLAGS  += -lpthread -lasound
   PM_CFLAGS := -DPMALSA 
-  PM_SRCS  := $(VENDORDIR)/portmidi.c $(VENDORDIR)/pmutil.c \
-              $(VENDORDIR)/pmlinux.c $(VENDORDIR)/pmlinuxalsa.c \
-              $(VENDORDIR)/ptlinux.c
+  PM_SRCS  := $(PORTMIDIDIR)/portmidi.c $(PORTMIDIDIR)/pmutil.c \
+              $(PORTMIDIDIR)/pmlinux.c $(PORTMIDIDIR)/pmlinuxalsa.c \
+              $(PORTMIDIDIR)/ptlinux.c
 endif
 
 TARGET := $(BUILDDIR)/sparkd$(EXE)
@@ -36,10 +37,16 @@ SRCS += src/dmx/dmx.c src/dmx/dmx_dummy.c src/dmx/dmx_open.c
 OBJS := $(SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
 # PortMidi objects
-PM_OBJS := $(PM_SRCS:$(VENDORDIR)/%.c=$(BUILDDIR)/vendor/portmidi/%.o)
+PM_OBJS := $(PM_SRCS:$(PORTMIDIDIR)/%.c=$(BUILDDIR)/vendor/portmidi/%.o)
 
 # Mongoose object
 MG_OBJ := $(BUILDDIR)/vendor/mongoose/mongoose.o
+
+# libyaml objects
+YAML_SRCS := $(YAMLDIR)/api.c $(YAMLDIR)/reader.c $(YAMLDIR)/scanner.c \
+             $(YAMLDIR)/parser.c $(YAMLDIR)/loader.c $(YAMLDIR)/writer.c \
+             $(YAMLDIR)/emitter.c $(YAMLDIR)/dumper.c
+YAML_OBJS := $(YAML_SRCS:$(YAMLDIR)/%.c=$(BUILDDIR)/vendor/libyaml/%.o)
 
 # Test files
 TEST_SRCS := $(wildcard tests/test_*.c)
@@ -62,21 +69,28 @@ all: $(TARGET)
 
 tools: $(TOOL_BINS) $(STANDALONE_TOOLS)
 
-$(TARGET): $(OBJS) $(PM_OBJS) $(MG_OBJ)
+$(TARGET): $(OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(PM_OBJS) $(MG_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
 $(BUILDDIR)/daemon/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/vendor/portmidi/%.o: $(VENDORDIR)/%.c
+$(BUILDDIR)/vendor/portmidi/%.o: $(PORTMIDIDIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) -std=c17 -g -D_DEFAULT_SOURCE -I$(VENDORDIR) $(PM_CFLAGS) -c $< -o $@
+	$(CC) -std=c17 -g -D_DEFAULT_SOURCE -I$(PORTMIDIDIR) $(PM_CFLAGS) -c $< -o $@
 
 $(MG_OBJ): $(MONGOOSEDIR)/mongoose.c
 	@mkdir -p $(dir $@)
 	$(CC) -std=c17 -g -D_DEFAULT_SOURCE -DMG_ENABLE_LINES=0 -I$(MONGOOSEDIR) -w -c $< -o $@
+
+$(BUILDDIR)/vendor/libyaml/%.o: $(YAMLDIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c17 -g -D_DEFAULT_SOURCE -DYAML_DECLARE_STATIC \
+	  -DYAML_VERSION_STRING=\"0.2.5\" -DYAML_VERSION_MAJOR=0 \
+	  -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 \
+	  -I$(YAMLDIR) -w -c $< -o $@
 
 test: $(TEST_BINS)
 	@for t in $(TEST_BINS); do \
@@ -84,13 +98,13 @@ test: $(TEST_BINS)
 		$$t || exit 1; \
 	done
 
-$(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ)
+$(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Itests -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -Itests -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ)
+$(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
 $(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ)
 	@mkdir -p $(dir $@)

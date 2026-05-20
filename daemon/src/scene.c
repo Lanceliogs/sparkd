@@ -13,6 +13,9 @@ static uint16_t s_def_count = 0;
 static spark_scene_value_def_t s_value_def_arena[SPARK_SCENE_VALUE_DEF_ARENA_SIZE];
 static uint16_t s_value_def_arena_used = 0;
 
+static spark_scene_step_def_t s_step_def_arena[SPARK_SCENE_STEP_DEF_ARENA_SIZE];
+static uint16_t s_step_def_arena_used = 0;
+
 static spark_scene_t s_scenes[SPARK_SCENES_MAX_COUNT] = {0};
 
 static spark_scene_value_t s_value_arena[SPARK_SCENE_VALUE_ARENA_SIZE];
@@ -26,12 +29,21 @@ static uint16_t s_active_scene_count = 0;
 
 /* ---- Scene defs ---- */
 
-static spark_scene_value_def_t *s_value_def_arena_alloc(uint8_t count)
+static spark_scene_value_def_t *s_value_def_arena_alloc(uint16_t count)
 {
     if (s_value_def_arena_used + count > SPARK_SCENE_VALUE_DEF_ARENA_SIZE)
         return NULL;
     spark_scene_value_def_t *ptr = &s_value_def_arena[s_value_def_arena_used];
     s_value_def_arena_used += count;
+    return ptr;
+}
+
+static spark_scene_step_def_t *s_step_def_arena_alloc(uint8_t count)
+{
+    if (s_step_def_arena_used + count > SPARK_SCENE_STEP_DEF_ARENA_SIZE)
+        return NULL;
+    spark_scene_step_def_t *ptr = &s_step_def_arena[s_step_def_arena_used];
+    s_step_def_arena_used += count;
     return ptr;
 }
 
@@ -43,21 +55,56 @@ int spark_scene_add_def(const spark_scene_def_t *def)
         return -1;
     }
 
-    spark_scene_value_def_t *vals = s_value_def_arena_alloc(def->value_count);
-    if (!vals)
-    {
-        spark_log_error("scene: value def arena exhausted");
-        return -1;
-    }
-
-    memcpy(vals, def->values, def->value_count * sizeof(spark_scene_value_def_t));
-
     spark_scene_def_t *dst = &s_defs[s_def_count++];
     *dst = *def;
-    dst->values = vals;
 
-    spark_log_debug("scene: added def '%s' ch=%u note=%u values=%u",
-        dst->id, dst->channel, dst->note, dst->value_count);
+    /* Deep-copy static values */
+    if (def->values && def->value_count > 0)
+    {
+        spark_scene_value_def_t *vals = s_value_def_arena_alloc(def->value_count);
+        if (!vals)
+        {
+            s_def_count--;
+            spark_log_error("scene: value def arena exhausted");
+            return -1;
+        }
+        memcpy(vals, def->values, def->value_count * sizeof(spark_scene_value_def_t));
+        dst->values = vals;
+    }
+
+    /* Deep-copy step defs and their value arrays */
+    if (def->steps && def->step_count > 0)
+    {
+        spark_scene_step_def_t *steps = s_step_def_arena_alloc(def->step_count);
+        if (!steps)
+        {
+            s_def_count--;
+            spark_log_error("scene: step def arena exhausted");
+            return -1;
+        }
+        memcpy(steps, def->steps, def->step_count * sizeof(spark_scene_step_def_t));
+        dst->steps = steps;
+
+        for (uint8_t i = 0; i < def->step_count; i++)
+        {
+            if (steps[i].values && steps[i].value_count > 0)
+            {
+                spark_scene_value_def_t *sv = s_value_def_arena_alloc(steps[i].value_count);
+                if (!sv)
+                {
+                    s_def_count--;
+                    spark_log_error("scene: value def arena exhausted (step %u)", i);
+                    return -1;
+                }
+                memcpy(sv, def->steps[i].values,
+                       steps[i].value_count * sizeof(spark_scene_value_def_t));
+                steps[i].values = sv;
+            }
+        }
+    }
+
+    spark_log_debug("scene: added def '%s' ch=%u note=%u values=%u steps=%u",
+        dst->id, dst->channel, dst->note, dst->value_count, dst->step_count);
     return 0;
 }
 
@@ -81,16 +128,16 @@ static spark_scene_step_t *s_step_arena_alloc(uint16_t count)
     return ptr;
 }
 
-static int s_resolve_static(spark_scene_def_t *def, spark_scene_t *scene)
+static uint8_t s_resolve_value_defs(spark_scene_value_def_t *vdefs, uint8_t count)
 {
-    uint8_t resolved_count = 0;
-    for (uint8_t i = 0; i < def->value_count; i++)
+    uint8_t resolved = 0;
+    for (uint8_t i = 0; i < count; i++)
     {
-        spark_scene_value_def_t *vd = &def->values[i];
+        spark_scene_value_def_t *vd = &vdefs[i];
         if (vd->fixture[0] == '\0')
         {
             vd->resolved = true;
-            resolved_count++;
+            resolved++;
         }
         else
         {
@@ -111,24 +158,26 @@ static int s_resolve_static(spark_scene_def_t *def, spark_scene_t *scene)
             }
             vd->dmx_index = spark_fixture_resolve_channel(fix, ch->offset);
             vd->resolved = true;
-            resolved_count++;
+            resolved++;
         }
     }
+    return resolved;
+}
 
+static spark_scene_value_t *s_copy_resolved_values(spark_scene_value_def_t *vdefs,
+                                                   uint8_t count, uint8_t resolved_count)
+{
     if (resolved_count == 0)
-        return 0;
+        return NULL;
 
     spark_scene_value_t *vals = s_value_arena_alloc(resolved_count);
     if (!vals)
-    {
-        spark_log_error("scene:resolve: value arena exhausted");
-        return -1;
-    }
+        return NULL;
 
     uint8_t idx = 0;
-    for (uint8_t i = 0; i < def->value_count; i++)
+    for (uint8_t i = 0; i < count; i++)
     {
-        spark_scene_value_def_t *vd = &def->values[i];
+        spark_scene_value_def_t *vd = &vdefs[i];
         if (!vd->resolved)
             continue;
         vals[idx].dmx_index = vd->dmx_index;
@@ -136,10 +185,62 @@ static int s_resolve_static(spark_scene_def_t *def, spark_scene_t *scene)
         vals[idx].velocity_scaling = vd->velocity_scaling;
         idx++;
     }
+    return vals;
+}
 
-    scene->output.mode = def->output_mode;
+static int s_resolve_static(spark_scene_def_t *def, spark_scene_t *scene)
+{
+    uint8_t resolved_count = s_resolve_value_defs(def->values, def->value_count);
+
+    if (resolved_count == 0)
+        return 0;
+
+    spark_scene_value_t *vals = s_copy_resolved_values(
+        def->values, def->value_count, resolved_count);
+    if (!vals)
+    {
+        spark_log_error("scene:resolve: value arena exhausted");
+        return -1;
+    }
+
+    scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = vals;
     scene->output.value_count = resolved_count;
+    return 0;
+}
+
+static int s_resolve_sequence(spark_scene_def_t *def, spark_scene_t *scene)
+{
+    spark_scene_step_t *steps = s_step_arena_alloc(def->step_count);
+    if (!steps)
+    {
+        spark_log_error("scene:resolve: step arena exhausted");
+        return -1;
+    }
+
+    for (uint8_t i = 0; i < def->step_count; i++)
+    {
+        spark_scene_step_def_t *sd = &def->steps[i];
+        uint8_t resolved_count = s_resolve_value_defs(sd->values, sd->value_count);
+
+        spark_scene_value_t *vals = s_copy_resolved_values(
+            sd->values, sd->value_count, resolved_count);
+        if (resolved_count > 0 && !vals)
+        {
+            spark_log_error("scene:resolve: value arena exhausted (step %u)", i);
+            return -1;
+        }
+
+        steps[i].duration_ms = sd->duration_ms;
+        steps[i].transition = sd->transition;
+        steps[i].values = vals;
+        steps[i].value_count = resolved_count;
+    }
+
+    scene->output.mode = SPARK_SCENE_SEQUENCE;
+    scene->output.steps = steps;
+    scene->output.step_count = def->step_count;
+    scene->output.loop = def->loop;
     return 0;
 }
 
@@ -158,12 +259,14 @@ int spark_scene_resolve(void)
         int rc = 0;
         if (def->output_mode == SPARK_SCENE_STATIC)
             rc = s_resolve_static(def, scene);
+        else if (def->output_mode == SPARK_SCENE_SEQUENCE)
+            rc = s_resolve_sequence(def, scene);
 
         if (rc != 0)
             return rc;
 
-        spark_log_debug("scene:resolve: [%u] '%s' ch=%u note=%u values=%u",
-            i, def->id, def->channel, def->note, scene->output.value_count);
+        spark_log_debug("scene:resolve: [%u] '%s' ch=%u note=%u mode=%d",
+            i, def->id, def->channel, def->note, def->output_mode);
     }
     return 0;
 }
@@ -184,6 +287,7 @@ void spark_scene_reset(void)
 {
     s_def_count = 0;
     s_value_def_arena_used = 0;
+    s_step_def_arena_used = 0;
     memset(s_scenes, 0, sizeof(s_scenes));
     memset(s_active_scenes, 0, sizeof(s_active_scenes));
     s_active_scene_count = 0;

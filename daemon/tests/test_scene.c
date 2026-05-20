@@ -412,6 +412,100 @@ void test_resolve_mixed_raw_and_fixture(void)
     ASSERT_EQ(scene->output.values[2].value, 50);
 }
 
+void test_resolve_sequence_basic(void)
+{
+    spark_scene_reset();
+
+    spark_scene_value_def_t step0_vals[] = {
+        { .dmx_index = 0, .value = 255 },
+        { .dmx_index = 1, .value = 255 },
+    };
+    spark_scene_value_def_t step1_vals[] = {
+        { .dmx_index = 0, .value = 0 },
+        { .dmx_index = 1, .value = 0 },
+    };
+
+    spark_scene_step_def_t steps[] = {
+        { .duration_ms = 80, .values = step0_vals, .value_count = 2 },
+        { .duration_ms = 80, .values = step1_vals, .value_count = 2 },
+    };
+
+    spark_scene_def_t def = {
+        .channel = 0, .note = 50,
+        .id = "blink", .name = "Blink",
+        .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_SEQUENCE,
+        .steps = steps, .step_count = 2,
+        .loop = true,
+    };
+
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
+
+    spark_scene_t *scene = spark_scene_get(0, 50);
+    ASSERT_STR_EQ(scene->id, "blink");
+    ASSERT_EQ(scene->output.mode, SPARK_SCENE_SEQUENCE);
+    ASSERT_EQ(scene->output.step_count, 2);
+    ASSERT_TRUE(scene->output.loop);
+    ASSERT_EQ(scene->output.steps[0].duration_ms, 80);
+    ASSERT_EQ(scene->output.steps[0].value_count, 2);
+    ASSERT_EQ(scene->output.steps[0].values[0].dmx_index, 0);
+    ASSERT_EQ(scene->output.steps[0].values[0].value, 255);
+    ASSERT_EQ(scene->output.steps[1].duration_ms, 80);
+    ASSERT_EQ(scene->output.steps[1].values[0].value, 0);
+}
+
+void test_resolve_sequence_fixture(void)
+{
+    spark_scene_reset();
+    spark_fixture_reset();
+
+    spark_channel_def_t channels[] = {
+        { .name = "dimmer", .offset = 0 },
+        { .name = "red",    .offset = 1 },
+    };
+    spark_fixture_t fix = {
+        .id = "par1", .name = "Par",
+        .start_address = 5, .channel_count = 2, .channels = channels,
+    };
+    spark_fixture_add(&fix);
+
+    spark_scene_value_def_t step0_vals[] = {
+        { .fixture = "par1", .channel = "dimmer", .value = 255 },
+        { .fixture = "par1", .channel = "red",    .value = 200 },
+    };
+    spark_scene_value_def_t step1_vals[] = {
+        { .fixture = "par1", .channel = "dimmer", .value = 0 },
+    };
+
+    spark_scene_step_def_t steps[] = {
+        { .duration_ms = 100, .values = step0_vals, .value_count = 2 },
+        { .duration_ms = 100, .values = step1_vals, .value_count = 1 },
+    };
+
+    spark_scene_def_t def = {
+        .channel = 0, .note = 51,
+        .id = "seq-fix", .name = "Seq Fixture",
+        .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+        .output_mode = SPARK_SCENE_SEQUENCE,
+        .steps = steps, .step_count = 2,
+        .loop = false,
+    };
+
+    ASSERT_EQ(spark_scene_add_def(&def), 0);
+    ASSERT_EQ(spark_scene_resolve(), 0);
+
+    spark_scene_t *scene = spark_scene_get(0, 51);
+    ASSERT_EQ(scene->output.step_count, 2);
+    ASSERT_EQ(scene->output.steps[0].value_count, 2);
+    ASSERT_EQ(scene->output.steps[0].values[0].dmx_index, 4);
+    ASSERT_EQ(scene->output.steps[0].values[1].dmx_index, 5);
+    ASSERT_EQ(scene->output.steps[1].value_count, 1);
+    ASSERT_EQ(scene->output.steps[1].values[0].dmx_index, 4);
+}
+
 int main(void)
 {
     spark_log_init(SPARK_LOG_SILENT);
@@ -432,5 +526,7 @@ int main(void)
     RUN_TEST(test_resolve_fixture_not_found);
     RUN_TEST(test_resolve_channel_not_found);
     RUN_TEST(test_resolve_mixed_raw_and_fixture);
+    RUN_TEST(test_resolve_sequence_basic);
+    RUN_TEST(test_resolve_sequence_fixture);
     TEST_END();
 }

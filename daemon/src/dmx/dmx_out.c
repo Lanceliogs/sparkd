@@ -38,26 +38,27 @@ static void s_wait_for_next_frame(spark_dmx_out_t *out, uint64_t start)
 
 static void s_dmx_thread_loop(spark_dmx_out_t *out)
 {
-    uint64_t start;
+    uint64_t now_ms;
     while (out->running)
     {
-        start = spark_clock_monotonic_ms();
+        now_ms = spark_clock_monotonic_ms();
         if (!spark_dmx_is_connected(out->backend))
         {
             s_handle_reconnect(out);
             continue;
         }
-        spark_stage_render(out->stage, out->frame);
+        spark_stage_render(out->stage, now_ms, out->frame);
         if (spark_dmx_send_frame(out->backend, out->frame) != 0)
             spark_dmx_close(out->backend);
-        s_wait_for_next_frame(out, start);
+        s_wait_for_next_frame(out, now_ms);
     }
 
     if (spark_dmx_is_connected(out->backend))
     {
         /* Zero the frame and render one last time */
+        now_ms = spark_clock_monotonic_ms();
         spark_stage_set_blackout(out->stage, true);
-        spark_stage_render(out->stage, out->frame);
+        spark_stage_render(out->stage, now_ms, out->frame);
         spark_dmx_send_frame(out->backend, out->frame);
     }
 }

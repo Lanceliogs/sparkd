@@ -55,6 +55,11 @@ typedef enum {
     SPARK_SCENE_SEQUENCE,
 } spark_scene_output_mode_t;
 
+typedef enum {
+    SPARK_SCENE_HOLD,
+    SPARK_SCENE_LINEAR,
+} spark_scene_transition_t;
+
 // A single target/value (for static)
 typedef struct {
     uint16_t dmx_index;
@@ -65,7 +70,7 @@ typedef struct {
 // A sequence step
 typedef struct {
     uint32_t duration_ms;
-    // transition type (hold/linear) later?
+    spark_scene_transition_t transition;
     spark_scene_value_t *values;
     uint8_t value_count;
 } spark_scene_step_t;
@@ -111,6 +116,7 @@ typedef struct {
 
 typedef struct {
     uint32_t duration_ms;
+    spark_scene_transition_t transition;
     spark_scene_value_def_t *values;
     uint8_t value_count;
 } spark_scene_step_def_t;

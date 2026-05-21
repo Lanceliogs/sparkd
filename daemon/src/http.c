@@ -58,13 +58,15 @@ static void s_handle_engine_state(struct mg_connection *c)
 {
     bool is_running = spark_engine_is_running();
     bool blackout = spark_engine_get_blackout();
+    const char *project_path = spark_engine_get_project_path();
 
     if (!is_running)
     {
         mg_http_reply(c, 200, s_json_content_type,
-            "{%m:%s,%m:%s}\n",
+            "{%m:%s,%m:%s,%m:%m}\n",
             MG_ESC("running"), "false",
-            MG_ESC("blackout"), blackout ? "true" : "false");
+            MG_ESC("blackout"), blackout ? "true" : "false",
+            MG_ESC("project"), MG_ESC(project_path ? project_path : ""));
         return;
     }
 
@@ -88,9 +90,10 @@ static void s_handle_engine_state(struct mg_connection *c)
     scenes_buf[pos] = '\0';
 
     mg_http_reply(c, 200, s_json_content_type,
-        "{%m:%s,%m:%s,%m:%m,%m:%m,%m:%m,%m:%s}\n",
+        "{%m:%s,%m:%s,%m:%m,%m:%m,%m:%m,%m:%m,%m:%s}\n",
         MG_ESC("running"), "true",
         MG_ESC("blackout"), blackout ? "true" : "false",
+        MG_ESC("project"), MG_ESC(project_path ? project_path : ""),
         MG_ESC("dmx_backend"), MG_ESC(backend),
         MG_ESC("dmx_device"), MG_ESC(cfg->dmx_device),
         MG_ESC("midi_device"), MG_ESC(cfg->midi_device),

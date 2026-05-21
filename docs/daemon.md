@@ -14,13 +14,13 @@ sparkd [OPTIONS]
 |--------|----------|---------|-------------|
 | `--project` | PATH | none | Project file to load (`.spark.yaml`) |
 | `--auto` | | off | Auto-start the engine after loading the project |
-| `--port` | PATH | `COM3` | DMX serial port path |
-| `--midi` | NAME | none | MIDI device name to open |
 | `--http` | ADDR | `http://127.0.0.1:7600` | HTTP listen address |
 | `--log-level` | LEVEL | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
 | `--validate` | | | Validate project file and exit (requires `--project`) |
 | `--version` | | | Print version and exit |
 | `--help` | | | Print usage and exit |
+
+MIDI and DMX configuration is defined in the project YAML file (not CLI args).
 
 ## Environment Variables
 
@@ -87,10 +87,14 @@ The daemon listens on the configured HTTP address (default `http://127.0.0.1:760
 |--------|------|-------------|
 | GET | `/healthz` | Health check (version, pid, uptime) |
 | GET | `/api/engine/state` | Engine status (running, backend, devices) |
-| POST | `/api/engine/start` | Start the engine |
+| POST | `/api/engine/start` | Start the engine (uses config from loaded project) |
 | POST | `/api/engine/stop` | Stop the engine |
 | POST | `/api/engine/midi/reconnect` | Reconnect MIDI device |
 | POST | `/api/project/reload` | Reload project (engine must be stopped) |
+
+### POST /api/engine/start
+
+No request body needed. Uses MIDI and DMX configuration from the loaded project.
 
 ### POST /api/project/reload
 

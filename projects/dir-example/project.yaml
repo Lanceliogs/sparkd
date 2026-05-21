@@ -1,0 +1,18 @@
+format:
+  name: spark-project
+  version: 1
+
+app:
+  name: dir-example
+
+midi:
+  device: loopIN_1A
+  mode: open-existing
+
+dmx:
+  device: COM3
+  backend: open
+
+includes:
+  fixtures: fixtures.yaml
+  scenes: scenes.yaml

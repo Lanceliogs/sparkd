@@ -5,6 +5,14 @@ format:
 app:
   name: example
 
+midi:
+  device: loopIN_1A
+  mode: open-existing
+
+dmx:
+  device: COM3
+  backend: open
+
 fixtures:
   - id: par
     name: Stairville PAR
@@ -87,3 +95,37 @@ scenes:
       par.blue: 0
       par.white: 255
       par.strobe: 255
+
+  - id: epileptic-cycle
+    name: Epileptic Cycle
+    type: sequence
+    trigger:
+      channel: 1
+      note: 63
+      mode: gate
+    loop: true
+    steps:
+      - duration-ms: 250
+        transition: linear
+        values:
+          par.dimmer: 255
+          par.red: 255
+          par.green: 0
+          par.blue: 0
+          par.strobe: 255
+      - duration-ms: 250
+        transition: linear
+        values:
+          par.dimmer: 255
+          par.red: 0
+          par.green: 255
+          par.blue: 0
+          par.strobe: 255
+      - duration-ms: 250
+        transition: linear
+        values:
+          par.dimmer: 255
+          par.red: 0
+          par.green: 0
+          par.blue: 255
+          par.strobe: 255

@@ -38,11 +38,7 @@ void test_start_stop_dummy(void)
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
     ASSERT_EQ(spark_engine_load_project(NULL), 0);
-
-    spark_engine_config_t cfg = {0};
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
-
-    ASSERT_EQ(spark_engine_start(&cfg), 0);
+    ASSERT_EQ(spark_engine_start(), 0);
     spark_engine_stop();
     spark_engine_destroy();
 }
@@ -50,9 +46,7 @@ void test_start_stop_dummy(void)
 void test_start_without_init(void)
 {
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
-    spark_engine_config_t cfg = {0};
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
-    ASSERT_EQ(spark_engine_start(&cfg), -1);
+    ASSERT_EQ(spark_engine_start(), -1);
 }
 
 void test_stop_without_start(void)
@@ -68,12 +62,8 @@ void test_double_start(void)
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
     ASSERT_EQ(spark_engine_load_project(NULL), 0);
-
-    spark_engine_config_t cfg = {0};
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
-
-    ASSERT_EQ(spark_engine_start(&cfg), 0);
-    ASSERT_EQ(spark_engine_start(&cfg), 0);
+    ASSERT_EQ(spark_engine_start(), 0);
+    ASSERT_EQ(spark_engine_start(), 0);
     spark_engine_stop();
     spark_engine_destroy();
 }
@@ -92,11 +82,7 @@ void test_process_events_running(void)
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
     ASSERT_EQ(spark_engine_load_project(NULL), 0);
-
-    spark_engine_config_t cfg = {0};
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
-
-    ASSERT_EQ(spark_engine_start(&cfg), 0);
+    ASSERT_EQ(spark_engine_start(), 0);
     spark_engine_process_events();
     spark_engine_stop();
     spark_engine_destroy();
@@ -108,11 +94,7 @@ void test_full_lifecycle(void)
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
     ASSERT_EQ(spark_engine_load_project(NULL), 0);
-
-    spark_engine_config_t cfg = {0};
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
-
-    ASSERT_EQ(spark_engine_start(&cfg), 0);
+    ASSERT_EQ(spark_engine_start(), 0);
 
     for (int i = 0; i < 5; i++)
         spark_engine_process_events();
@@ -127,15 +109,10 @@ void test_restart(void)
     if (!portmidi_available) { ASSERT_TRUE(1); return; }
     ASSERT_EQ(spark_engine_init(), 0);
     ASSERT_EQ(spark_engine_load_project(NULL), 0);
-
-    spark_engine_config_t cfg = {0};
-    cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
-
-    ASSERT_EQ(spark_engine_start(&cfg), 0);
+    ASSERT_EQ(spark_engine_start(), 0);
     spark_engine_stop();
-    ASSERT_EQ(spark_engine_start(&cfg), 0);
+    ASSERT_EQ(spark_engine_start(), 0);
     spark_engine_stop();
-
     spark_engine_destroy();
     ASSERT_TRUE(1);
 }

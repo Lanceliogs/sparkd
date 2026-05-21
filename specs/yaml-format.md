@@ -17,6 +17,14 @@ format:
 app:
   name: my-show
 
+midi:
+  mode: open-existing
+  device: "My Controller"
+
+dmx:
+  backend: open
+  device: /dev/ttyUSB0
+
 fixtures: []
 scenes: []
 ```
@@ -25,21 +33,21 @@ scenes: []
 
 | Section            | Status       | Description                         |
 |--------------------|--------------|-------------------------------------|
-| `format`           | parsed       | Format identifier and version       |
-| `app`              | parsed       | Project identity                    |
-| `fixtures`         | parsed       | Physical lights and channels        |
-| `scenes`           | parsed       | Lighting states (static + sequence) |
+| `format`           | skipped      | Format identifier and version       |
+| `app`              | skipped      | Project identity                    |
+| `midi`             | **parsed**   | MIDI input configuration            |
+| `dmx`              | **parsed**   | DMX output configuration            |
+| `fixtures`         | **parsed**   | Physical lights and channels        |
+| `scenes`           | **parsed**   | Lighting states (static + sequence) |
+| `includes`         | **parsed**   | Include files (directory mode)      |
 | `fixture-templates`| skipped      | Reusable channel layout helpers     |
 | `mappings`         | skipped      | MIDI trigger to action bindings     |
 | `http`             | skipped      | HTTP server config                  |
-| `midi`             | skipped      | MIDI input config                   |
-| `dmx`              | skipped      | DMX output config                   |
 | `safety`           | skipped      | Heartbeat surveillance config       |
 | `reaper`           | skipped      | REAPER export config                |
 | `ui`               | skipped      | UI preferences                      |
 
-Skipped sections are read without error but their content is not used yet.
-Unknown keys at the top level produce a warning and are skipped.
+Unknown keys at the top level produce a debug log and are skipped.
 
 ---
 
@@ -50,6 +58,82 @@ Unknown keys at the top level produce a warning and are skipped.
 - User-facing MIDI channels are **1-based** (1-16).
 - User-facing DMX addresses are **1-based** (1-512).
 - DMX values are 0-255.
+
+---
+
+## MIDI
+
+Configures how sparkd connects to a MIDI input.
+
+```yaml
+midi:
+  mode: open-existing       # or create-virtual
+  device: "My Controller"
+```
+
+### MIDI fields
+
+| Field    | Required | Type   | Description                                         |
+|----------|----------|--------|-----------------------------------------------------|
+| `mode`   | yes      | string | `open-existing` or `create-virtual`                 |
+| `device` | cond.    | string | Device to open or virtual port name to create       |
+
+### Modes
+
+- **open-existing**: Opens an existing MIDI device by name. `device` is the name to match.
+- **create-virtual**: Creates a virtual MIDI port named `device` (default: "spark").
+
+If the `midi` section is omitted, no MIDI input is configured.
+
+---
+
+## DMX
+
+Configures the DMX output backend.
+
+```yaml
+dmx:
+  backend: open             # or dummy
+  device: /dev/ttyUSB0
+```
+
+### DMX fields
+
+| Field     | Required | Type   | Description                        |
+|-----------|----------|--------|------------------------------------|
+| `backend` | yes      | string | `open` (Open DMX USB) or `dummy`   |
+| `device`  | cond.    | string | Serial device path (open backend)  |
+
+If the `dmx` section is omitted, defaults to the `dummy` backend.
+
+---
+
+## Includes (Directory Mode)
+
+For larger projects, fixtures and scenes can be split into separate files.
+Use the `includes` section to reference them relative to the project file.
+
+```yaml
+includes:
+  fixtures: fixtures.yaml
+  scenes: scenes.yaml
+```
+
+Include files contain a bare YAML sequence (no top-level key):
+
+```yaml
+# fixtures.yaml
+- id: par1
+  start-address: 1
+  channel-count: 4
+  channels:
+    - name: dimmer
+      offset: 0
+```
+
+Constraints:
+- A section cannot appear both inline and in includes (error).
+- Include paths are relative to the directory containing the project file.
 
 ---
 
@@ -214,6 +298,13 @@ format:
 app:
   name: my-show
 
+midi:
+  mode: create-virtual
+  device: spark
+
+dmx:
+  backend: dummy
+
 fixtures:
   - id: par1
     start-address: 1
@@ -240,4 +331,32 @@ scenes:
       par1.red: 255
       par1.green: 120
       par1.blue: 0
+```
+
+## Directory Mode Example
+
+```
+my-show/
+  project.yaml       # main manifest with includes
+  fixtures.yaml      # fixture definitions
+  scenes.yaml        # scene definitions
+```
+
+```yaml
+# project.yaml
+format:
+  name: spark-project
+  version: 1
+
+midi:
+  mode: open-existing
+  device: "Launchpad Mini"
+
+dmx:
+  backend: open
+  device: /dev/ttyUSB0
+
+includes:
+  fixtures: fixtures.yaml
+  scenes: scenes.yaml
 ```

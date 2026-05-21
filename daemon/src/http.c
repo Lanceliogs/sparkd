@@ -1,11 +1,13 @@
 #include "http.h"
 #include "engine.h"
+#include "scene.h"
 #include "consts.h"
 #include "log.h"
 #include "clock.h"
 
 #include "mongoose.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -55,29 +57,47 @@ static void s_handle_healthz(struct mg_connection *c)
 static void s_handle_engine_state(struct mg_connection *c)
 {
     bool is_running = spark_engine_is_running();
-    const spark_engine_config_t *cfg = spark_engine_get_config();
+    bool blackout = spark_engine_get_blackout();
 
-    if (!is_running || !cfg)
+    if (!is_running)
     {
         mg_http_reply(c, 200, s_json_content_type,
-            "{%m:%s}\n",
-            MG_ESC("running"), "false");
+            "{%m:%s,%m:%s}\n",
+            MG_ESC("running"), "false",
+            MG_ESC("blackout"), blackout ? "true" : "false");
         return;
     }
 
+    const spark_project_config_t *cfg = spark_engine_get_config();
     const char *backend = "dummy";
-    if (cfg->dmx_backend_type == SPARK_DMX_BACKEND_OPEN)
+    if (cfg->dmx_backend == SPARK_DMX_BACKEND_OPEN)
         backend = "open";
 
+    uint16_t active_count;
+    spark_scene_t **active = spark_scene_get_active(&active_count);
+
+    char scenes_buf[1024] = "[";
+    size_t pos = 1;
+    for (uint16_t i = 0; i < active_count && pos < sizeof(scenes_buf) - 20; i++)
+    {
+        if (i > 0) scenes_buf[pos++] = ',';
+        pos += snprintf(scenes_buf + pos, sizeof(scenes_buf) - pos,
+            "\"%s\"", active[i]->def->id);
+    }
+    scenes_buf[pos++] = ']';
+    scenes_buf[pos] = '\0';
+
     mg_http_reply(c, 200, s_json_content_type,
-        "{%m:%s,%m:%m,%m:%m,%m:%m}\n",
+        "{%m:%s,%m:%s,%m:%m,%m:%m,%m:%m,%m:%s}\n",
         MG_ESC("running"), "true",
+        MG_ESC("blackout"), blackout ? "true" : "false",
         MG_ESC("dmx_backend"), MG_ESC(backend),
-        MG_ESC("dmx_port"), MG_ESC(cfg->dmx_port),
-        MG_ESC("midi_device"), MG_ESC(cfg->midi_device));
+        MG_ESC("dmx_device"), MG_ESC(cfg->dmx_device),
+        MG_ESC("midi_device"), MG_ESC(cfg->midi_device),
+        MG_ESC("active_scenes"), scenes_buf);
 }
 
-static void s_handle_engine_start(struct mg_connection *c, struct mg_http_message *hm)
+static void s_handle_engine_start(struct mg_connection *c)
 {
     if (spark_engine_is_running())
     {
@@ -87,43 +107,7 @@ static void s_handle_engine_start(struct mg_connection *c, struct mg_http_messag
         return;
     }
 
-    spark_engine_config_t cfg;
-    const spark_engine_config_t *last = spark_engine_get_last_config();
-    if (last)
-        memcpy(&cfg, last, sizeof(cfg));
-    else
-        memset(&cfg, 0, sizeof(cfg));
-
-    if (hm->body.len > 0)
-    {
-        char *val;
-
-        val = mg_json_get_str(hm->body, "$.dmx_port");
-        if (val)
-        {
-            snprintf(cfg.dmx_port, SPARK_SERIAL_PORT_STRLEN, "%s", val);
-            free(val);
-        }
-
-        val = mg_json_get_str(hm->body, "$.midi_device");
-        if (val)
-        {
-            snprintf(cfg.midi_device, SPARK_MIDI_PORT_STRLEN, "%s", val);
-            free(val);
-        }
-
-        val = mg_json_get_str(hm->body, "$.dmx_backend");
-        if (val)
-        {
-            if (strcmp(val, "open") == 0)
-                cfg.dmx_backend_type = SPARK_DMX_BACKEND_OPEN;
-            else
-                cfg.dmx_backend_type = SPARK_DMX_BACKEND_DUMMY;
-            free(val);
-        }
-    }
-
-    int rc = spark_engine_start(&cfg);
+    int rc = spark_engine_start();
     if (rc != 0)
     {
         mg_http_reply(c, 500, s_json_content_type,
@@ -200,6 +184,26 @@ static void s_handle_project_reload(struct mg_connection *c, struct mg_http_mess
         MG_ESC("status"), MG_ESC("reloaded"));
 }
 
+static void s_handle_blackout_get(struct mg_connection *c)
+{
+    bool blackout = spark_engine_get_blackout();
+    mg_http_reply(c, 200, s_json_content_type,
+        "{%m:%s}\n",
+        MG_ESC("enabled"), blackout ? "true" : "false");
+}
+
+static void s_handle_blackout_set(struct mg_connection *c, struct mg_http_message *hm)
+{
+    bool enabled = false;
+    if (hm->body.len > 0)
+        mg_json_get_bool(hm->body, "$.enabled", &enabled);
+
+    spark_engine_set_blackout(enabled);
+    mg_http_reply(c, 200, s_json_content_type,
+        "{%m:%s}\n",
+        MG_ESC("enabled"), enabled ? "true" : "false");
+}
+
 static void s_handle_midi_reconnect(struct mg_connection *c)
 {
     if (!spark_engine_is_running())
@@ -242,10 +246,16 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
         s_handle_engine_state(c);
     else if (mg_match(hm->uri, mg_str("/api/engine/start"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
-        s_handle_engine_start(c, hm);
+        s_handle_engine_start(c);
     else if (mg_match(hm->uri, mg_str("/api/engine/stop"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
         s_handle_engine_stop(c);
+    else if (mg_match(hm->uri, mg_str("/api/engine/blackout"), NULL) &&
+             mg_match(hm->method, mg_str("GET"), NULL))
+        s_handle_blackout_get(c);
+    else if (mg_match(hm->uri, mg_str("/api/engine/blackout"), NULL) &&
+             mg_match(hm->method, mg_str("POST"), NULL))
+        s_handle_blackout_set(c, hm);
     else if (mg_match(hm->uri, mg_str("/api/engine/midi/reconnect"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
         s_handle_midi_reconnect(c);

@@ -1,16 +1,29 @@
 /*
- * project.h - Project loading and mapping orchestration
+ * project.h - Project loading and configuration
  *
- * A project defines the complete fixture patch and scene mapping.
- * spark_project_load() resets all fixture/scene state, loads definitions
- * from a project file (or hardcoded fallback), and resolves scenes.
+ * The project defines the complete fixture patch, scene mapping, and
+ * runtime configuration (MIDI mode, DMX backend).
  *
- * This is the only module that will know about YAML parsing once
- * libyaml is wired in. Fixture and scene modules remain format-agnostic.
+ * spark_project_load() resets all fixture/scene state, parses the project
+ * file, populates the config struct, and resolves scenes.
+ *
+ * The config struct is owned by the engine module. The loader writes into
+ * it via the config_out pointer.
  */
 #ifndef SPARK_PROJECT_H
 #define SPARK_PROJECT_H
 
-int spark_project_load(const char *path);
+#include "consts.h"
+#include "midi.h"
+#include "dmx/dmx.h"
+
+typedef struct {
+    spark_midi_mode_t midi_mode;
+    char midi_device[SPARK_MIDI_PORT_STRLEN];
+    spark_dmx_backend_type_t dmx_backend;
+    char dmx_device[SPARK_SERIAL_PORT_STRLEN];
+} spark_project_config_t;
+
+int spark_project_load(const char *path, spark_project_config_t *config_out);
 
 #endif

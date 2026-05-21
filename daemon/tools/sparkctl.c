@@ -1,5 +1,6 @@
 #include "mongoose.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,8 @@ static const struct { const char *name; command_t cmd; } s_commands[] = {
     { "status",         { "GET",  "/api/engine/state",          false } },
     { "start",          { "POST", "/api/engine/start",          false } },
     { "stop",           { "POST", "/api/engine/stop",           false } },
+    { "set-blackout",   { "POST", "/api/engine/blackout",       false } },
+    { "clear-blackout", { "POST", "/api/engine/blackout",       false } },
     { "reconnect-midi", { "POST", "/api/engine/midi/reconnect", false } },
     { "reload",         { "POST", "/api/project/reload",        false } },
     { "healthz",        { "GET",  "/healthz",                   false } },
@@ -33,6 +36,8 @@ static void usage(void)
     fprintf(stderr, "  status           Get engine state\n");
     fprintf(stderr, "  start            Start the engine\n");
     fprintf(stderr, "  stop             Stop the engine\n");
+    fprintf(stderr, "  set-blackout     Enable blackout\n");
+    fprintf(stderr, "  clear-blackout   Disable blackout\n");
     fprintf(stderr, "  reload [PATH]    Reload project (engine must be stopped)\n");
     fprintf(stderr, "  reconnect-midi   Reconnect MIDI device\n");
     fprintf(stderr, "  healthz          Health check\n");
@@ -106,6 +111,18 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
     }
 }
 
+static void s_print_status(const char *body)
+{
+    struct mg_str b = mg_str(body);
+    bool running = false;
+    bool blackout = false;
+    mg_json_get_bool(b, "$.running", &running);
+    mg_json_get_bool(b, "$.blackout", &blackout);
+
+    printf("running:  %s\n", running ? "yes" : "no");
+    printf("blackout: %s\n", blackout ? "yes" : "no");
+}
+
 int main(int argc, char **argv)
 {
     char addr[256];
@@ -167,7 +184,11 @@ int main(int argc, char **argv)
     snprintf(url, sizeof(url), "%s%s", addr, cmd->path);
 
     char req_body[1024] = "";
-    if (cmd_arg)
+    if (strcmp(cmd_name, "set-blackout") == 0)
+        snprintf(req_body, sizeof(req_body), "{\"enabled\":true}");
+    else if (strcmp(cmd_name, "clear-blackout") == 0)
+        snprintf(req_body, sizeof(req_body), "{\"enabled\":false}");
+    else if (cmd_arg)
         snprintf(req_body, sizeof(req_body), "{\"path\":\"%s\"}", cmd_arg);
 
     mg_log_set(0);
@@ -198,6 +219,10 @@ int main(int argc, char **argv)
     if (ctx.status < 0)
         return 1;
 
-    printf("%s", ctx.body);
+    if (strcmp(cmd_name, "status") == 0)
+        s_print_status(ctx.body);
+    else
+        printf("%s", ctx.body);
+
     return (ctx.status >= 200 && ctx.status < 300) ? 0 : 1;
 }

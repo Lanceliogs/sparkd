@@ -29,6 +29,12 @@
 
 #include <stdint.h>
 
+typedef enum {
+    SPARK_MIDI_MODE_NONE,
+    SPARK_MIDI_MODE_OPEN_EXISTING,
+    SPARK_MIDI_MODE_CREATE_VIRTUAL,
+} spark_midi_mode_t;
+
 typedef struct {
     int id;
     char name[SPARK_MIDI_PORT_STRLEN];

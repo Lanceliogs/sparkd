@@ -15,37 +15,58 @@
 static spark_stage_t s_stage;
 static spark_dmx_backend_t s_dmx_backend;
 static spark_dmx_out_t s_dmx_out;
-static spark_engine_config_t s_config;
+static spark_project_config_t s_config;
 static bool s_initialized = false;
 static bool s_running = false;
 static bool s_mapping_loaded = false;
 static char s_project_path[SPARK_PROJECT_PATH_STRLEN] = "";
 
-static int s_init_midi(void)
+static int s_start_midi(void)
 {
-    if (s_config.midi_device[0] == '\0')
+    switch (s_config.midi_mode)
     {
-        spark_log_debug("engine: no MIDI device configured");
+    case SPARK_MIDI_MODE_OPEN_EXISTING:
+        if (s_config.midi_device[0] == '\0')
+        {
+            spark_log_warn("engine: midi mode open-existing but no device configured");
+            return 0;
+        }
+        int rc = spark_midi_open_by_name(s_config.midi_device);
+        if (rc != 0)
+        {
+            spark_log_error("engine: failed to open MIDI device '%s'", s_config.midi_device);
+            return rc;
+        }
+        spark_log_info("engine: MIDI device opened '%s'", s_config.midi_device);
+        return 0;
+
+    case SPARK_MIDI_MODE_CREATE_VIRTUAL:
+    {
+        const char *name = s_config.midi_device[0] ? s_config.midi_device : "spark";
+        int vrc = spark_midi_create_virtual(name);
+        if (vrc != 0)
+        {
+            spark_log_error("engine: failed to create virtual MIDI port '%s'", name);
+            return vrc;
+        }
+        spark_log_info("engine: MIDI virtual port created '%s'", name);
         return 0;
     }
 
-    int rc = spark_midi_open_by_name(s_config.midi_device);
-    if (rc != 0)
-    {
-        spark_log_error("engine: failed to open MIDI device '%s'", s_config.midi_device);
-        return rc;
+    case SPARK_MIDI_MODE_NONE:
+    default:
+        spark_log_debug("engine: no MIDI configured");
+        return 0;
     }
-    spark_log_info("engine: MIDI device opened '%s'", s_config.midi_device);
-    return 0;
 }
 
-static int s_init_dmx(void)
+static int s_start_dmx(void)
 {
-    switch (s_config.dmx_backend_type)
+    switch (s_config.dmx_backend)
     {
     case SPARK_DMX_BACKEND_OPEN:
-        spark_dmx_open_init(&s_dmx_backend, s_config.dmx_port);
-        spark_log_info("engine: DMX backend Open DMX on '%s'", s_config.dmx_port);
+        spark_dmx_open_init(&s_dmx_backend, s_config.dmx_device);
+        spark_log_info("engine: DMX backend Open DMX on '%s'", s_config.dmx_device);
         break;
     case SPARK_DMX_BACKEND_DUMMY:
     default:
@@ -90,33 +111,6 @@ static void s_shutdown_stage(void)
     spark_log_debug("engine: stage destroyed");
 }
 
-int spark_engine_load_project(const char *path)
-{
-    if (!s_initialized)
-    {
-        spark_log_error("engine: not initialized");
-        return -1;
-    }
-    if (s_running)
-    {
-        spark_log_error("engine: cannot load project while running");
-        return -1;
-    }
-
-    int rc = spark_project_load(path);
-    if (rc != 0)
-        return rc;
-
-    if (path)
-        snprintf(s_project_path, sizeof(s_project_path), "%s", path);
-    else
-        s_project_path[0] = '\0';
-
-    s_mapping_loaded = true;
-    spark_log_info("engine: project loaded");
-    return 0;
-}
-
 int spark_engine_init(void)
 {
     if (s_initialized)
@@ -144,7 +138,34 @@ int spark_engine_init(void)
     return 0;
 }
 
-int spark_engine_start(const spark_engine_config_t *cfg)
+int spark_engine_load_project(const char *path)
+{
+    if (!s_initialized)
+    {
+        spark_log_error("engine: not initialized");
+        return -1;
+    }
+    if (s_running)
+    {
+        spark_log_error("engine: cannot load project while running");
+        return -1;
+    }
+
+    int rc = spark_project_load(path, &s_config);
+    if (rc != 0)
+        return rc;
+
+    if (path)
+        snprintf(s_project_path, sizeof(s_project_path), "%s", path);
+    else
+        s_project_path[0] = '\0';
+
+    s_mapping_loaded = true;
+    spark_log_info("engine: project loaded");
+    return 0;
+}
+
+int spark_engine_start(void)
 {
     if (!s_initialized)
     {
@@ -162,15 +183,15 @@ int spark_engine_start(const spark_engine_config_t *cfg)
         return -1;
     }
 
-    memcpy(&s_config, cfg, sizeof(s_config));
+    spark_stage_set_blackout(&s_stage, false);
 
     int rc;
 
-    rc = s_init_midi();
+    rc = s_start_midi();
     if (rc != 0)
-        spark_log_warn("engine: MIDI init failed, continuing without MIDI");
+        spark_log_warn("engine: MIDI start failed, continuing without MIDI");
 
-    rc = s_init_dmx();
+    rc = s_start_dmx();
     if (rc != 0)
         return rc;
 
@@ -234,14 +255,19 @@ bool spark_engine_is_running(void)
     return s_running;
 }
 
-const spark_engine_config_t *spark_engine_get_config(void)
+bool spark_engine_get_blackout(void)
 {
-    return s_running ? &s_config : NULL;
+    return s_stage.blackout;
 }
 
-const spark_engine_config_t *spark_engine_get_last_config(void)
+void spark_engine_set_blackout(bool enabled)
 {
-    return s_initialized ? &s_config : NULL;
+    spark_stage_set_blackout(&s_stage, enabled);
+}
+
+const spark_project_config_t *spark_engine_get_config(void)
+{
+    return &s_config;
 }
 
 const char *spark_engine_get_project_path(void)

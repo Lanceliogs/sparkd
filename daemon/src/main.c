@@ -24,8 +24,6 @@ void signal_handler(int signum)
 
 typedef struct {
     spark_log_level_t log_level;
-    char port[SPARK_SERIAL_PORT_STRLEN];
-    char midi_device[SPARK_MIDI_PORT_STRLEN];
     char http_addr[SPARK_HTTP_ADDR_STRLEN];
     char project[SPARK_PROJECT_PATH_STRLEN];
     bool print_help;
@@ -36,7 +34,7 @@ typedef struct {
 
 static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
 {
-    for (int i=0 ; i<argc ; i++)
+    for (int i = 0; i < argc; i++)
     {
         if (strcmp("--help", argv[i]) == 0)
             args->print_help = true;
@@ -45,16 +43,6 @@ static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
         else if (strcmp("--log-level", argv[i]) == 0 && i + 1 < argc)
         {
             spark_log_level_from_string(argv[i + 1], &args->log_level);
-            i++;
-        }
-        else if (strcmp("--port", argv[i]) == 0 && i + 1 < argc)
-        {
-            strcpy(args->port, argv[i + 1]);
-            i++;
-        }
-        else if (strcmp("--midi", argv[i]) == 0 && i + 1 < argc)
-        {
-            strcpy(args->midi_device, argv[i + 1]);
             i++;
         }
         else if (strcmp("--http", argv[i]) == 0 && i + 1 < argc)
@@ -81,8 +69,6 @@ int main(int argc, char **argv)
         .print_help = false,
         .print_version = false,
         .log_level = SPARK_LOG_INFO,
-        .port = "COM3",
-        .midi_device = "",
         .http_addr = SPARK_HTTP_DEFAULT_ADDR,
         .project = "",
     };
@@ -107,7 +93,7 @@ int main(int argc, char **argv)
     {
         printf("sparkd\n");
         printf("---\n");
-        printf("Usage: sparkd [--log-level LEVEL] [--port PORT] [--midi DEVICE] [--http ADDR] [--project PATH]\n");
+        printf("Usage: sparkd [--log-level LEVEL] [--http ADDR] [--project PATH] [--auto] [--validate]\n");
         printf("\n");
         printf("  sparkd --help        Print this help\n");
         printf("  sparkd --version     Print the version\n");
@@ -148,12 +134,7 @@ int main(int argc, char **argv)
 
     if (args.auto_start)
     {
-        spark_engine_config_t cfg = {0};
-        strncpy(cfg.dmx_port, args.port, SPARK_SERIAL_PORT_STRLEN - 1);
-        strncpy(cfg.midi_device, args.midi_device, SPARK_MIDI_PORT_STRLEN - 1);
-        cfg.dmx_backend_type = SPARK_DMX_BACKEND_OPEN;
-
-        rc = spark_engine_start(&cfg);
+        rc = spark_engine_start();
         if (rc != 0)
         {
             spark_engine_destroy();

@@ -1,4 +1,4 @@
-#include "yaml.h"
+#include "project_yaml.h"
 #include "../fixture.h"
 #include "../scene.h"
 #include "../consts.h"
@@ -772,9 +772,233 @@ static int s_parse_scenes(yaml_parser_t *p)
     }
 }
 
+/* ---- MIDI section ---- */
+
+static int s_parse_midi(yaml_parser_t *p, spark_project_config_t *cfg)
+{
+    yaml_event_t ev;
+
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
+
+        if (ev.type != YAML_SCALAR_EVENT)
+        {
+            spark_log_error("project: expected midi key at line %zu", ev.start_mark.line + 1);
+            yaml_event_delete(&ev);
+            return -1;
+        }
+
+        const char *key = s_scalar(&ev);
+
+        if (strcmp(key, "mode") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            const char *v = s_scalar(&ev);
+            if (strcmp(v, "open-existing") == 0)
+                cfg->midi_mode = SPARK_MIDI_MODE_OPEN_EXISTING;
+            else if (strcmp(v, "create-virtual") == 0)
+                cfg->midi_mode = SPARK_MIDI_MODE_CREATE_VIRTUAL;
+            else
+            {
+                spark_log_error("project: unknown midi mode '%s' at line %zu",
+                    v, ev.start_mark.line + 1);
+                yaml_event_delete(&ev);
+                return -1;
+            }
+            yaml_event_delete(&ev);
+        }
+        else if (strcmp(key, "device") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            strncpy(cfg->midi_device, s_scalar(&ev), SPARK_MIDI_PORT_STRLEN - 1);
+            yaml_event_delete(&ev);
+        }
+        else
+        {
+            yaml_event_delete(&ev);
+            s_skip_value(p);
+        }
+    }
+}
+
+/* ---- DMX section ---- */
+
+static int s_parse_dmx(yaml_parser_t *p, spark_project_config_t *cfg)
+{
+    yaml_event_t ev;
+
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
+
+        if (ev.type != YAML_SCALAR_EVENT)
+        {
+            spark_log_error("project: expected dmx key at line %zu", ev.start_mark.line + 1);
+            yaml_event_delete(&ev);
+            return -1;
+        }
+
+        const char *key = s_scalar(&ev);
+
+        if (strcmp(key, "backend") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            const char *v = s_scalar(&ev);
+            if (strcmp(v, "open") == 0)
+                cfg->dmx_backend = SPARK_DMX_BACKEND_OPEN;
+            else if (strcmp(v, "dummy") == 0)
+                cfg->dmx_backend = SPARK_DMX_BACKEND_DUMMY;
+            else
+            {
+                spark_log_error("project: unknown dmx backend '%s' at line %zu",
+                    v, ev.start_mark.line + 1);
+                yaml_event_delete(&ev);
+                return -1;
+            }
+            yaml_event_delete(&ev);
+        }
+        else if (strcmp(key, "device") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            strncpy(cfg->dmx_device, s_scalar(&ev), SPARK_SERIAL_PORT_STRLEN - 1);
+            yaml_event_delete(&ev);
+        }
+        else
+        {
+            yaml_event_delete(&ev);
+            s_skip_value(p);
+        }
+    }
+}
+
+/* ---- Includes (directory mode) ---- */
+
+static int s_parse_include_file(const char *base_dir, const char *filename,
+                                int (*parse_fn)(yaml_parser_t *))
+{
+    char filepath[SPARK_PROJECT_PATH_STRLEN];
+    snprintf(filepath, sizeof(filepath), "%s/%s", base_dir, filename);
+
+    FILE *f = fopen(filepath, "rb");
+    if (!f)
+    {
+        spark_log_error("project: cannot open include '%s'", filepath);
+        return -1;
+    }
+
+    yaml_parser_t parser;
+    if (!yaml_parser_initialize(&parser))
+    {
+        spark_log_error("project: failed to initialize YAML parser for '%s'", filepath);
+        fclose(f);
+        return -1;
+    }
+
+    yaml_parser_set_input_file(&parser, f);
+
+    yaml_event_t ev;
+    int rc = -1;
+
+    if (s_expect(&parser, &ev, YAML_STREAM_START_EVENT) != 0) goto done;
+    yaml_event_delete(&ev);
+    if (s_expect(&parser, &ev, YAML_DOCUMENT_START_EVENT) != 0) goto done;
+    yaml_event_delete(&ev);
+    if (s_expect(&parser, &ev, YAML_SEQUENCE_START_EVENT) != 0) goto done;
+    yaml_event_delete(&ev);
+
+    if (parse_fn(&parser) != 0) goto done;
+    rc = 0;
+
+done:
+    yaml_parser_delete(&parser);
+    fclose(f);
+    return rc;
+}
+
+static int s_parse_includes(yaml_parser_t *p, const char *base_dir,
+                            bool *has_fixtures, bool *has_scenes)
+{
+    yaml_event_t ev;
+
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
+
+        if (ev.type != YAML_SCALAR_EVENT)
+        {
+            spark_log_error("project: expected includes key at line %zu",
+                ev.start_mark.line + 1);
+            yaml_event_delete(&ev);
+            return -1;
+        }
+
+        char key[SPARK_MAX_ID_SIZE];
+        strncpy(key, s_scalar(&ev), SPARK_MAX_ID_SIZE - 1);
+        key[SPARK_MAX_ID_SIZE - 1] = '\0';
+        yaml_event_delete(&ev);
+
+        if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+
+        char filename[SPARK_PROJECT_PATH_STRLEN];
+        strncpy(filename, s_scalar(&ev), SPARK_PROJECT_PATH_STRLEN - 1);
+        filename[SPARK_PROJECT_PATH_STRLEN - 1] = '\0';
+        yaml_event_delete(&ev);
+
+        if (strcmp(key, "fixtures") == 0)
+        {
+            if (*has_fixtures)
+            {
+                spark_log_error("project: 'fixtures' defined both inline and in includes");
+                return -1;
+            }
+            if (s_parse_include_file(base_dir, filename, s_parse_fixtures) != 0)
+                return -1;
+            *has_fixtures = true;
+        }
+        else if (strcmp(key, "scenes") == 0)
+        {
+            if (*has_scenes)
+            {
+                spark_log_error("project: 'scenes' defined both inline and in includes");
+                return -1;
+            }
+            if (s_parse_include_file(base_dir, filename, s_parse_scenes) != 0)
+                return -1;
+            *has_scenes = true;
+        }
+        else
+        {
+            spark_log_debug("project: skipping unknown include '%s'", key);
+        }
+    }
+}
+
 /* ---- Top-level parser ---- */
 
-int spark_project_parse_yaml(const char *path)
+static void s_get_base_dir(const char *path, char *out, size_t out_size)
+{
+    strncpy(out, path, out_size - 1);
+    out[out_size - 1] = '\0';
+    char *last_sep = strrchr(out, '/');
+#ifdef _WIN32
+    char *last_bsep = strrchr(out, '\\');
+    if (last_bsep > last_sep) last_sep = last_bsep;
+#endif
+    if (last_sep)
+        *last_sep = '\0';
+    else
+        strcpy(out, ".");
+}
+
+int spark_project_parse_yaml(const char *path, spark_project_config_t *cfg)
 {
     FILE *f = fopen(path, "rb");
     if (!f)
@@ -793,8 +1017,13 @@ int spark_project_parse_yaml(const char *path)
 
     yaml_parser_set_input_file(&parser, f);
 
+    char base_dir[SPARK_PROJECT_PATH_STRLEN];
+    s_get_base_dir(path, base_dir, sizeof(base_dir));
+
     yaml_event_t ev;
     int rc = -1;
+    bool has_fixtures = false;
+    bool has_scenes = false;
 
     if (s_expect(&parser, &ev, YAML_STREAM_START_EVENT) != 0) goto done;
     yaml_event_delete(&ev);
@@ -827,17 +1056,53 @@ int spark_project_parse_yaml(const char *path)
 
         if (strcmp(key, "fixtures") == 0)
         {
+            if (has_fixtures)
+            {
+                spark_log_error("project: 'fixtures' defined both inline and in includes");
+                yaml_event_delete(&ev);
+                goto done;
+            }
             yaml_event_delete(&ev);
             if (s_expect(&parser, &ev, YAML_SEQUENCE_START_EVENT) != 0) goto done;
             yaml_event_delete(&ev);
             if (s_parse_fixtures(&parser) != 0) goto done;
+            has_fixtures = true;
         }
         else if (strcmp(key, "scenes") == 0)
         {
+            if (has_scenes)
+            {
+                spark_log_error("project: 'scenes' defined both inline and in includes");
+                yaml_event_delete(&ev);
+                goto done;
+            }
             yaml_event_delete(&ev);
             if (s_expect(&parser, &ev, YAML_SEQUENCE_START_EVENT) != 0) goto done;
             yaml_event_delete(&ev);
             if (s_parse_scenes(&parser) != 0) goto done;
+            has_scenes = true;
+        }
+        else if (strcmp(key, "midi") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(&parser, &ev, YAML_MAPPING_START_EVENT) != 0) goto done;
+            yaml_event_delete(&ev);
+            if (s_parse_midi(&parser, cfg) != 0) goto done;
+        }
+        else if (strcmp(key, "dmx") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(&parser, &ev, YAML_MAPPING_START_EVENT) != 0) goto done;
+            yaml_event_delete(&ev);
+            if (s_parse_dmx(&parser, cfg) != 0) goto done;
+        }
+        else if (strcmp(key, "includes") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(&parser, &ev, YAML_MAPPING_START_EVENT) != 0) goto done;
+            yaml_event_delete(&ev);
+            if (s_parse_includes(&parser, base_dir, &has_fixtures, &has_scenes) != 0)
+                goto done;
         }
         else
         {

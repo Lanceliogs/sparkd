@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import {
     getEngineState,
     getScenes,
@@ -12,10 +13,11 @@
     type SceneDef,
   } from '../lib/api';
 
-  let state: EngineState = $state({ running: false, blackout: false, project: '' });
-  let scenes: SceneDef[] = $state([]);
-  let activeScenes: Set<string> = $state(new Set());
-  let connected = $state(false);
+  let state: EngineState = { running: false, blackout: false, project: '' };
+  let scenes: SceneDef[] = [];
+  let activeScenes: Set<string> = new Set();
+  let connected = false;
+  let interval: ReturnType<typeof setInterval>;
 
   async function refresh() {
     try {
@@ -28,10 +30,13 @@
     }
   }
 
-  $effect(() => {
+  onMount(() => {
     refresh();
-    const interval = setInterval(refresh, 1000);
-    return () => clearInterval(interval);
+    interval = setInterval(refresh, 1000);
+  });
+
+  onDestroy(() => {
+    clearInterval(interval);
   });
 
   async function handleStart() {
@@ -101,15 +106,15 @@
 <section class="controls">
   {#if connected}
     {#if !state.running}
-      <button class="btn-start" onclick={handleStart}>Start</button>
+      <button class="btn-start" on:click={handleStart}>Start</button>
     {:else}
-      <button class="btn-stop" onclick={handleStop}>Stop</button>
+      <button class="btn-stop" on:click={handleStop}>Stop</button>
     {/if}
-    <button class="btn-blackout" class:active={state.blackout} onclick={handleBlackout}>
+    <button class="btn-blackout" class:active={state.blackout} on:click={handleBlackout}>
       {state.blackout ? 'Clear Blackout' : 'Blackout'}
     </button>
     {#if !state.running}
-      <button class="btn-reload" onclick={handleReload}>Reload & Start</button>
+      <button class="btn-reload" on:click={handleReload}>Reload & Start</button>
     {/if}
   {/if}
 </section>
@@ -121,9 +126,9 @@
       class:active={activeScenes.has(scene.id)}
       class:gate={scene.trigger_mode === 'gate'}
       class:toggle={scene.trigger_mode === 'toggle'}
-      onpointerdown={() => handlePadDown(scene)}
-      onpointerup={() => handlePadUp(scene)}
-      onpointerleave={() => handlePadUp(scene)}
+      on:pointerdown={() => handlePadDown(scene)}
+      on:pointerup={() => handlePadUp(scene)}
+      on:pointerleave={() => handlePadUp(scene)}
     >
       <span class="pad-name">{scene.name}</span>
       <span class="pad-type">{scene.type}</span>

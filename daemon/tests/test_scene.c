@@ -3,13 +3,17 @@
 #include "fixture.h"
 #include "log.h"
 
+static const spark_scene_def_t s_test_def = {
+    .id = "test", .name = "test", .enabled = true,
+    .trigger_mode = SPARK_SCENE_GATE,
+};
+
 void test_scene_activate_basic(void)
 {
     spark_scene_reset();
 
     spark_scene_t *scene = spark_scene_get(0, 60);
-    scene->id = "test";
-    scene->enabled = true;
+    scene->def = &s_test_def;
 
     ASSERT_TRUE(!scene->active);
     spark_scene_activate(scene, 100);
@@ -23,8 +27,7 @@ void test_scene_activate_already_active(void)
     spark_scene_reset();
 
     spark_scene_t *scene = spark_scene_get(0, 61);
-    scene->id = "test";
-    scene->enabled = true;
+    scene->def = &s_test_def;
 
     spark_scene_activate(scene, 80);
     spark_scene_activate(scene, 127);
@@ -41,8 +44,7 @@ void test_scene_deactivate_basic(void)
     spark_scene_reset();
 
     spark_scene_t *scene = spark_scene_get(0, 62);
-    scene->id = "test";
-    scene->enabled = true;
+    scene->def = &s_test_def;
 
     spark_scene_activate(scene, 100);
     ASSERT_TRUE(scene->active);
@@ -60,8 +62,7 @@ void test_scene_deactivate_not_active(void)
     spark_scene_reset();
 
     spark_scene_t *scene = spark_scene_get(0, 63);
-    scene->id = "test";
-    scene->enabled = true;
+    scene->def = &s_test_def;
 
     spark_scene_deactivate(scene);
     ASSERT_TRUE(!scene->active);
@@ -76,8 +77,7 @@ void test_scene_toggle_on_off(void)
     spark_scene_reset();
 
     spark_scene_t *scene = spark_scene_get(0, 64);
-    scene->id = "test";
-    scene->enabled = true;
+    scene->def = &s_test_def;
 
     spark_scene_toggle(scene, 100);
     ASSERT_TRUE(scene->active);
@@ -94,17 +94,16 @@ void test_scene_multiple_active(void)
 {
     spark_scene_reset();
 
+    static const spark_scene_def_t d1 = { .id = "scene-1", .enabled = true };
+    static const spark_scene_def_t d2 = { .id = "scene-2", .enabled = true };
+    static const spark_scene_def_t d3 = { .id = "scene-3", .enabled = true };
+
     spark_scene_t *s1 = spark_scene_get(0, 70);
-    s1->id = "scene-1";
-    s1->enabled = true;
-
+    s1->def = &d1;
     spark_scene_t *s2 = spark_scene_get(0, 71);
-    s2->id = "scene-2";
-    s2->enabled = true;
-
+    s2->def = &d2;
     spark_scene_t *s3 = spark_scene_get(0, 72);
-    s3->id = "scene-3";
-    s3->enabled = true;
+    s3->def = &d3;
 
     spark_scene_activate(s1, 127);
     spark_scene_activate(s2, 127);
@@ -127,8 +126,7 @@ void test_scene_reset_clears_all(void)
     spark_scene_reset();
 
     spark_scene_t *scene = spark_scene_get(0, 80);
-    scene->id = "test";
-    scene->enabled = true;
+    scene->def = &s_test_def;
     spark_scene_activate(scene, 127);
 
     uint16_t count;
@@ -162,9 +160,9 @@ void test_resolve_static_raw(void)
     ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 60);
-    ASSERT_STR_EQ(scene->id, "test-raw");
-    ASSERT_TRUE(scene->enabled);
-    ASSERT_EQ(scene->trigger_mode, SPARK_SCENE_GATE);
+    ASSERT_STR_EQ(scene->def->id, "test-raw");
+    ASSERT_TRUE(scene->def->enabled);
+    ASSERT_EQ(scene->def->trigger_mode, SPARK_SCENE_GATE);
     ASSERT_EQ(scene->output.mode, SPARK_SCENE_STATIC);
     ASSERT_EQ(scene->output.value_count, 2);
     ASSERT_EQ(scene->output.values[0].dmx_index, 0);
@@ -205,12 +203,12 @@ void test_resolve_multiple_scenes(void)
     ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *sa = spark_scene_get(0, 60);
-    ASSERT_STR_EQ(sa->id, "a");
+    ASSERT_STR_EQ(sa->def->id, "a");
     ASSERT_EQ(sa->output.value_count, 1);
 
     spark_scene_t *sb = spark_scene_get(1, 48);
-    ASSERT_STR_EQ(sb->id, "b");
-    ASSERT_EQ(sb->trigger_mode, SPARK_SCENE_TOGGLE);
+    ASSERT_STR_EQ(sb->def->id, "b");
+    ASSERT_EQ(sb->def->trigger_mode, SPARK_SCENE_TOGGLE);
     ASSERT_EQ(sb->output.value_count, 2);
     ASSERT_EQ(sb->output.values[1].dmx_index, 6);
 }
@@ -444,7 +442,7 @@ void test_resolve_sequence_basic(void)
     ASSERT_EQ(spark_scene_resolve(), 0);
 
     spark_scene_t *scene = spark_scene_get(0, 50);
-    ASSERT_STR_EQ(scene->id, "blink");
+    ASSERT_STR_EQ(scene->def->id, "blink");
     ASSERT_EQ(scene->output.mode, SPARK_SCENE_SEQUENCE);
     ASSERT_EQ(scene->output.step_count, 2);
     ASSERT_TRUE(scene->output.loop);

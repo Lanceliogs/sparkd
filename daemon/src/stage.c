@@ -20,13 +20,13 @@ void spark_stage_apply_midi(spark_stage_t *stage, const spark_midi_event_t *even
     pthread_mutex_lock(&stage->mutex);
 
     spark_scene_t *scene = spark_scene_get(event->channel, event->note);
-    if (!scene->enabled)
+    if (!scene->def || !scene->def->enabled)
     {
         pthread_mutex_unlock(&stage->mutex);
         return;
     }
 
-    switch (scene->trigger_mode)
+    switch (scene->def->trigger_mode)
     {
         case SPARK_SCENE_GATE:
             if (event->type == SPARK_MIDI_NOTE_ON && event->velocity > 0)

@@ -14,11 +14,12 @@ void test_scene_gate(void)
         { .dmx_index = 0, .value = 255, .velocity_scaling = true },
     };
 
+    static const spark_scene_def_t def = {
+        .id = "test", .name = "Test Scene", .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+    };
     spark_scene_t *scene = spark_scene_get(0, 60);
-    scene->id = "test";
-    scene->name = "Test Scene";
-    scene->enabled = true;
-    scene->trigger_mode = SPARK_SCENE_GATE;
+    scene->def = &def;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;
@@ -58,11 +59,12 @@ void test_scene_toggle(void)
         { .dmx_index = 1, .value = 128, .velocity_scaling = false },
     };
 
+    static const spark_scene_def_t def = {
+        .id = "toggle-test", .name = "Toggle Test", .enabled = true,
+        .trigger_mode = SPARK_SCENE_TOGGLE,
+    };
     spark_scene_t *scene = spark_scene_get(0, 61);
-    scene->id = "toggle-test";
-    scene->name = "Toggle Test";
-    scene->enabled = true;
-    scene->trigger_mode = SPARK_SCENE_TOGGLE;
+    scene->def = &def;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;
@@ -96,11 +98,12 @@ void test_scene_blackout(void)
         { .dmx_index = 0, .value = 200, .velocity_scaling = false },
     };
 
+    static const spark_scene_def_t def = {
+        .id = "blackout-test", .name = "Blackout Test", .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+    };
     spark_scene_t *scene = spark_scene_get(0, 62);
-    scene->id = "blackout-test";
-    scene->name = "Blackout Test";
-    scene->enabled = true;
-    scene->trigger_mode = SPARK_SCENE_GATE;
+    scene->def = &def;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;
@@ -135,11 +138,12 @@ void test_scene_disabled(void)
         { .dmx_index = 0, .value = 255, .velocity_scaling = false },
     };
 
+    static const spark_scene_def_t def = {
+        .id = "disabled-test", .name = "Disabled Test", .enabled = false,
+        .trigger_mode = SPARK_SCENE_GATE,
+    };
     spark_scene_t *scene = spark_scene_get(0, 63);
-    scene->id = "disabled-test";
-    scene->name = "Disabled Test";
-    scene->enabled = false;
-    scene->trigger_mode = SPARK_SCENE_GATE;
+    scene->def = &def;
     scene->output.mode = SPARK_SCENE_STATIC;
     scene->output.values = values;
     scene->output.value_count = 1;
@@ -176,11 +180,12 @@ void test_sequence_render(void)
         { .duration_ms = 80, .values = step1_vals, .value_count = 1 },
     };
 
+    static const spark_scene_def_t def = {
+        .id = "blink", .name = "Blink", .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+    };
     spark_scene_t *scene = spark_scene_get(0, 55);
-    scene->id = "blink";
-    scene->name = "Blink";
-    scene->enabled = true;
-    scene->trigger_mode = SPARK_SCENE_GATE;
+    scene->def = &def;
     scene->output.mode = SPARK_SCENE_SEQUENCE;
     scene->output.steps = steps;
     scene->output.step_count = 2;
@@ -238,11 +243,12 @@ void test_sequence_no_loop(void)
         { .duration_ms = 50, .values = step1_vals, .value_count = 1 },
     };
 
+    static const spark_scene_def_t def = {
+        .id = "fade", .name = "Fade", .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+    };
     spark_scene_t *scene = spark_scene_get(0, 56);
-    scene->id = "fade";
-    scene->name = "Fade";
-    scene->enabled = true;
-    scene->trigger_mode = SPARK_SCENE_GATE;
+    scene->def = &def;
     scene->output.mode = SPARK_SCENE_SEQUENCE;
     scene->output.steps = steps;
     scene->output.step_count = 2;
@@ -291,11 +297,12 @@ void test_sequence_linear_transition(void)
           .values = step1_vals, .value_count = 1 },
     };
 
+    static const spark_scene_def_t def = {
+        .id = "lerp", .name = "Lerp", .enabled = true,
+        .trigger_mode = SPARK_SCENE_GATE,
+    };
     spark_scene_t *scene = spark_scene_get(0, 57);
-    scene->id = "lerp";
-    scene->name = "Lerp";
-    scene->enabled = true;
-    scene->trigger_mode = SPARK_SCENE_GATE;
+    scene->def = &def;
     scene->output.mode = SPARK_SCENE_SEQUENCE;
     scene->output.steps = steps;
     scene->output.step_count = 2;

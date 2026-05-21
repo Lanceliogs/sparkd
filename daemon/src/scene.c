@@ -251,10 +251,7 @@ int spark_scene_resolve(void)
         spark_scene_def_t *def = &s_defs[i];
         spark_scene_t *scene = spark_scene_get(def->channel, def->note);
 
-        scene->id = def->id;
-        scene->name = def->name;
-        scene->enabled = def->enabled;
-        scene->trigger_mode = def->trigger_mode;
+        scene->def = def;
 
         int rc = 0;
         if (def->output_mode == SPARK_SCENE_STATIC)
@@ -269,6 +266,12 @@ int spark_scene_resolve(void)
             i, def->id, def->channel, def->note, def->output_mode);
     }
     return 0;
+}
+
+const spark_scene_def_t *spark_scene_get_defs(uint16_t *count)
+{
+    *count = s_def_count;
+    return s_defs;
 }
 
 /* ---- Runtime ---- */
@@ -310,7 +313,7 @@ void spark_scene_activate(spark_scene_t *scene, uint8_t velocity)
     scene->start_time_ms = spark_clock_monotonic_ms();
     s_active_scenes[s_active_scene_count++] = scene;
     spark_log_debug("scene:activate: '%s' velocity=%u active_count=%u",
-                    scene->id, velocity, s_active_scene_count);
+                    scene->def->id, velocity, s_active_scene_count);
 }
 
 void spark_scene_deactivate(spark_scene_t *scene)
@@ -326,7 +329,7 @@ void spark_scene_deactivate(spark_scene_t *scene)
         }
     }
     spark_log_debug("scene:deactivate: '%s' active_count=%u",
-                    scene->id, s_active_scene_count);
+                    scene->def->id, s_active_scene_count);
 }
 
 void spark_scene_toggle(spark_scene_t *scene, uint8_t velocity)

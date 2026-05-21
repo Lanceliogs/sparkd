@@ -60,49 +60,6 @@ typedef enum {
     SPARK_SCENE_LINEAR,
 } spark_scene_transition_t;
 
-// A single target/value (for static)
-typedef struct {
-    uint16_t dmx_index;
-    uint8_t value;
-    bool velocity_scaling;
-} spark_scene_value_t;
-
-// A sequence step
-typedef struct {
-    uint32_t duration_ms;
-    spark_scene_transition_t transition;
-    spark_scene_value_t *values;
-    uint8_t value_count;
-} spark_scene_step_t;
-
-typedef struct {
-    spark_scene_output_mode_t mode;
-    /* static */
-    spark_scene_value_t *values;
-    uint8_t value_count;
-    /* sequence */
-    spark_scene_step_t *steps;
-    uint8_t step_count;
-    bool loop;
-} spark_scene_output_t;
-
-  // The scene itself
-typedef struct {
-    /* Metadata */
-    const char *id;
-    const char *name;
-    /* Trigger */
-    spark_scene_trigger_mode_t trigger_mode;
-    /* Output */
-    spark_scene_output_t output;
-
-    /* Runtime */
-    bool enabled;
-    bool active;
-    uint8_t velocity;
-    uint64_t start_time_ms; // when activated, for sequence phase
-} spark_scene_t;
-
 /* ---- Configuration-time definitions (resolved at load) ---- */
 
 typedef struct {
@@ -137,8 +94,45 @@ typedef struct {
     bool loop;
 } spark_scene_def_t;
 
+/* ---- Resolved runtime types ---- */
+
+typedef struct {
+    uint16_t dmx_index;
+    uint8_t value;
+    bool velocity_scaling;
+} spark_scene_value_t;
+
+typedef struct {
+    uint32_t duration_ms;
+    spark_scene_transition_t transition;
+    spark_scene_value_t *values;
+    uint8_t value_count;
+} spark_scene_step_t;
+
+typedef struct {
+    spark_scene_output_mode_t mode;
+    spark_scene_value_t *values;
+    uint8_t value_count;
+    spark_scene_step_t *steps;
+    uint8_t step_count;
+    bool loop;
+} spark_scene_output_t;
+
+/* ---- Runtime scene ---- */
+
+typedef struct {
+    const spark_scene_def_t *def;
+    spark_scene_output_t output;
+    bool active;
+    uint8_t velocity;
+    uint64_t start_time_ms;
+} spark_scene_t;
+
 /* Def storage: deep-copies def + values into static arrays */
 int spark_scene_add_def(const spark_scene_def_t *def);
+
+/* Def access (for UI / introspection) */
+const spark_scene_def_t *spark_scene_get_defs(uint16_t *count);
 
 /* Resolver: resolve internal defs into scene table using arenas */
 int spark_scene_resolve(void);

@@ -1,0 +1,41 @@
+:root {
+  --bg: #1a1a2e;
+  --bg-surface: #16213e;
+  --bg-card: #0f3460;
+  --text: #e0e0e0;
+  --text-muted: #888;
+  --accent: #e94560;
+  --accent-hover: #ff6b6b;
+  --green: #4ecdc4;
+  --yellow: #f7d354;
+  --red: #e94560;
+  --radius: 8px;
+  --pad-size: 80px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  transition: background 0.15s, transform 0.1s;
+}
+
+button:active {
+  transform: scale(0.95);
+}

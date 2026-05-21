@@ -231,6 +231,87 @@ static void s_handle_midi_reconnect(struct mg_connection *c)
         MG_ESC("status"), MG_ESC("reconnected"));
 }
 
+static void s_handle_scenes_list(struct mg_connection *c)
+{
+    uint16_t count;
+    const spark_scene_def_t *defs = spark_scene_get_defs(&count);
+
+    char buf[8192] = "[";
+    size_t pos = 1;
+
+    for (uint16_t i = 0; i < count && pos < sizeof(buf) - 200; i++)
+    {
+        const spark_scene_def_t *d = &defs[i];
+        const char *type = d->output_mode == SPARK_SCENE_STATIC ? "static" : "sequence";
+        const char *trigger = d->trigger_mode == SPARK_SCENE_GATE ? "gate" : "toggle";
+        if (i > 0) buf[pos++] = ',';
+        pos += snprintf(buf + pos, sizeof(buf) - pos,
+            "{\"id\":\"%s\",\"name\":\"%s\",\"type\":\"%s\",\"trigger_mode\":\"%s\","
+            "\"channel\":%d,\"note\":%d,\"enabled\":%s}",
+            d->id, d->name, type, trigger,
+            d->channel + 1, d->note,
+            d->enabled ? "true" : "false");
+    }
+    buf[pos++] = ']';
+    buf[pos] = '\0';
+
+    mg_http_reply(c, 200, s_json_content_type, "%s\n", buf);
+}
+
+static void s_handle_scene_activate(struct mg_connection *c, struct mg_str scene_id)
+{
+    char id[64];
+    size_t len = scene_id.len < sizeof(id) - 1 ? scene_id.len : sizeof(id) - 1;
+    memcpy(id, scene_id.buf, len);
+    id[len] = '\0';
+
+    uint16_t count;
+    const spark_scene_def_t *defs = spark_scene_get_defs(&count);
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        if (strcmp(defs[i].id, id) == 0)
+        {
+            spark_scene_t *scene = spark_scene_get(defs[i].channel, defs[i].note);
+            if (scene->def && !scene->active)
+                spark_scene_activate(scene, 127);
+            mg_http_reply(c, 200, s_json_content_type,
+                "{%m:%m}\n", MG_ESC("status"), MG_ESC("activated"));
+            return;
+        }
+    }
+
+    mg_http_reply(c, 404, s_json_content_type,
+        "{%m:%m}\n", MG_ESC("error"), MG_ESC("scene not found"));
+}
+
+static void s_handle_scene_release(struct mg_connection *c, struct mg_str scene_id)
+{
+    char id[64];
+    size_t len = scene_id.len < sizeof(id) - 1 ? scene_id.len : sizeof(id) - 1;
+    memcpy(id, scene_id.buf, len);
+    id[len] = '\0';
+
+    uint16_t count;
+    const spark_scene_def_t *defs = spark_scene_get_defs(&count);
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        if (strcmp(defs[i].id, id) == 0)
+        {
+            spark_scene_t *scene = spark_scene_get(defs[i].channel, defs[i].note);
+            if (scene->def && scene->active)
+                spark_scene_deactivate(scene);
+            mg_http_reply(c, 200, s_json_content_type,
+                "{%m:%m}\n", MG_ESC("status"), MG_ESC("released"));
+            return;
+        }
+    }
+
+    mg_http_reply(c, 404, s_json_content_type,
+        "{%m:%m}\n", MG_ESC("error"), MG_ESC("scene not found"));
+}
+
 static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
 {
     if (ev != MG_EV_HTTP_MSG)
@@ -265,6 +346,23 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
     else if (mg_match(hm->uri, mg_str("/api/project/reload"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
         s_handle_project_reload(c, hm);
+    else if (mg_match(hm->uri, mg_str("/api/scenes"), NULL) &&
+             mg_match(hm->method, mg_str("GET"), NULL))
+        s_handle_scenes_list(c);
+    else if (mg_match(hm->uri, mg_str("/api/scenes/*/activate"), NULL) &&
+             mg_match(hm->method, mg_str("POST"), NULL))
+    {
+        struct mg_str caps[1];
+        mg_match(hm->uri, mg_str("/api/scenes/*/activate"), caps);
+        s_handle_scene_activate(c, caps[0]);
+    }
+    else if (mg_match(hm->uri, mg_str("/api/scenes/*/release"), NULL) &&
+             mg_match(hm->method, mg_str("POST"), NULL))
+    {
+        struct mg_str caps[1];
+        mg_match(hm->uri, mg_str("/api/scenes/*/release"), caps);
+        s_handle_scene_release(c, caps[0]);
+    }
     else
     {
         spark_log_warn("http: 404 %.*s", (int)hm->uri.len, hm->uri.buf);

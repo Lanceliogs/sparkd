@@ -125,12 +125,102 @@ static void s_proxy_request(struct mg_mgr *mgr, struct mg_connection *client,
     }
 }
 
+/* WebSocket proxy: client <-> sparkd relay */
+typedef struct {
+    unsigned long peer_id;
+    struct mg_mgr *mgr;
+} ws_proxy_ctx_t;
+
+static void s_ws_proxy_ev_handler(struct mg_connection *c, int ev, void *ev_data)
+{
+    ws_proxy_ctx_t *ctx = (ws_proxy_ctx_t *)c->fn_data;
+    if (!ctx) return;
+
+    if (ev == MG_EV_WS_OPEN)
+    {
+        /* Backend WS connected; nothing to do */
+    }
+    else if (ev == MG_EV_WS_MSG)
+    {
+        struct mg_ws_message *wm = (struct mg_ws_message *)ev_data;
+        struct mg_connection *peer = s_find_connection(ctx->mgr, ctx->peer_id);
+        if (peer)
+            mg_ws_send(peer, wm->data.buf, wm->data.len, WEBSOCKET_OP_TEXT);
+    }
+    else if (ev == MG_EV_CLOSE)
+    {
+        struct mg_connection *peer = s_find_connection(ctx->mgr, ctx->peer_id);
+        if (peer && peer->is_websocket)
+            peer->is_closing = 1;
+        free(ctx);
+        c->fn_data = NULL;
+    }
+}
+
+static void s_ws_proxy_connect(struct mg_mgr *mgr, struct mg_connection *client)
+{
+    char url[512];
+    snprintf(url, sizeof(url), "ws%s/ws", s_daemon_addr + 4); /* http -> ws */
+
+    ws_proxy_ctx_t *be_ctx = calloc(1, sizeof(ws_proxy_ctx_t));
+    be_ctx->peer_id = client->id;
+    be_ctx->mgr = mgr;
+
+    struct mg_connection *be = mg_ws_connect(mgr, url, s_ws_proxy_ev_handler, be_ctx, NULL);
+    if (!be)
+    {
+        free(be_ctx);
+        client->is_closing = 1;
+        return;
+    }
+
+    ws_proxy_ctx_t *cl_ctx = calloc(1, sizeof(ws_proxy_ctx_t));
+    cl_ctx->peer_id = be->id;
+    cl_ctx->mgr = mgr;
+    client->fn_data = cl_ctx;
+}
+
 static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
 {
+    if (ev == MG_EV_WS_MSG)
+    {
+        /* Relay client -> backend */
+        ws_proxy_ctx_t *ctx = (ws_proxy_ctx_t *)c->fn_data;
+        if (ctx)
+        {
+            struct mg_ws_message *wm = (struct mg_ws_message *)ev_data;
+            struct mg_connection *peer = s_find_connection(ctx->mgr, ctx->peer_id);
+            if (peer)
+                mg_ws_send(peer, wm->data.buf, wm->data.len, WEBSOCKET_OP_TEXT);
+        }
+        return;
+    }
+
+    if (ev == MG_EV_CLOSE && c->is_websocket)
+    {
+        ws_proxy_ctx_t *ctx = (ws_proxy_ctx_t *)c->fn_data;
+        if (ctx)
+        {
+            struct mg_connection *peer = s_find_connection(ctx->mgr, ctx->peer_id);
+            if (peer)
+                peer->is_closing = 1;
+            free(ctx);
+            c->fn_data = NULL;
+        }
+        return;
+    }
+
     if (ev != MG_EV_HTTP_MSG) return;
 
     struct mg_http_message *hm = (struct mg_http_message *)ev_data;
     struct mg_mgr *mgr = (struct mg_mgr *)c->fn_data;
+
+    if (mg_match(hm->uri, mg_str("/ws"), NULL))
+    {
+        mg_ws_upgrade(c, hm, NULL);
+        s_ws_proxy_connect(mgr, c);
+        return;
+    }
 
     if (mg_match(hm->uri, mg_str("/api/#"), NULL))
     {

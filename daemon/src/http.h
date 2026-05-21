@@ -21,6 +21,7 @@
 
 int  spark_http_init(const char *listen_addr);
 void spark_http_process_events(int timeout_ms);
+void spark_http_broadcast_scene_events(void);
 void spark_http_destroy(void);
 
 #endif

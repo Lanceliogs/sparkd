@@ -150,4 +150,14 @@ void spark_scene_activate(spark_scene_t *scene, uint8_t velocity);
 void spark_scene_deactivate(spark_scene_t *scene);
 void spark_scene_toggle(spark_scene_t *scene, uint8_t velocity);
 
+/* Scene update events (for WebSocket broadcast) */
+typedef struct {
+    const char *id;
+    bool active;
+    uint8_t velocity;
+} spark_scene_event_t;
+
+const spark_scene_event_t *spark_scene_get_events(uint16_t *count);
+void spark_scene_clear_events(void);
+
 #endif

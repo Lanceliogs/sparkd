@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import {
-    getEngineState,
     getScenes,
     engineStart,
     engineStop,
@@ -13,56 +12,98 @@
     type SceneDef,
   } from '../lib/api';
 
-  let state: EngineState = { running: false, blackout: false, project: '' };
-  let scenes: SceneDef[] = [];
-  let activeScenes: Set<string> = new Set();
-  let connected = false;
-  let interval: ReturnType<typeof setInterval>;
+  let state: EngineState = $state({ running: false, blackout: false, project: '' });
+  let scenes: SceneDef[] = $state([]);
+  let activeScenes: Set<string> = $state(new Set());
+  let connected = $state(false);
+  let ws: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout>;
 
-  async function refresh() {
-    try {
-      state = await getEngineState();
-      scenes = await getScenes();
-      activeScenes = new Set(state.active_scenes ?? []);
+  function wsUrl(): string {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${location.host}/ws`;
+  }
+
+  function connect() {
+    ws = new WebSocket(wsUrl());
+
+    ws.onopen = () => {
       connected = true;
-    } catch {
+    };
+
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      switch (msg.type) {
+        case 'state':
+          state = { running: msg.running, blackout: msg.blackout, project: msg.project ?? '' };
+          activeScenes = new Set(msg.active_scenes ?? []);
+          break;
+        case 'started':
+          state = { ...state, running: true };
+          break;
+        case 'stopped':
+          state = { ...state, running: false };
+          break;
+        case 'blackout':
+          state = { ...state, blackout: msg.enabled };
+          break;
+        case 'scene_on':
+          activeScenes = new Set([...activeScenes, msg.id]);
+          break;
+        case 'scene_off':
+          activeScenes = new Set([...activeScenes].filter(id => id !== msg.id));
+          break;
+      }
+    };
+
+    ws.onclose = () => {
       connected = false;
-    }
+      ws = null;
+      reconnectTimer = setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => {
+      ws?.close();
+    };
+  }
+
+  async function loadScenes() {
+    try {
+      scenes = await getScenes();
+    } catch { /* will retry on reconnect */ }
   }
 
   onMount(() => {
-    refresh();
-    interval = setInterval(refresh, 1000);
-  });
-
-  onDestroy(() => {
-    clearInterval(interval);
+    connect();
+    loadScenes();
+    return () => {
+      clearTimeout(reconnectTimer);
+      ws?.close();
+    };
   });
 
   async function handleStart() {
     await engineStart();
-    await refresh();
   }
 
   async function handleStop() {
     await engineStop();
-    await refresh();
   }
 
   async function handleBlackout() {
     await setBlackout(!state.blackout);
-    await refresh();
   }
 
   async function handleReload() {
     await engineStop();
     await reloadProject();
     await engineStart();
-    await refresh();
+    loadScenes();
   }
 
-  async function handlePadDown(scene: SceneDef) {
+  async function handlePadDown(ev: PointerEvent, scene: SceneDef) {
     if (scene.trigger_mode === 'gate') {
+      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
       await activateScene(scene.id);
     } else {
       if (activeScenes.has(scene.id)) {
@@ -71,13 +112,12 @@
         await activateScene(scene.id);
       }
     }
-    await refresh();
   }
 
-  async function handlePadUp(scene: SceneDef) {
+  async function handlePadUp(ev: PointerEvent, scene: SceneDef) {
     if (scene.trigger_mode === 'gate') {
+      (ev.currentTarget as HTMLElement).releasePointerCapture(ev.pointerId);
       await releaseScene(scene.id);
-      await refresh();
     }
   }
 </script>
@@ -106,15 +146,15 @@
 <section class="controls">
   {#if connected}
     {#if !state.running}
-      <button class="btn-start" on:click={handleStart}>Start</button>
+      <button class="btn-start" onclick={handleStart}>Start</button>
     {:else}
-      <button class="btn-stop" on:click={handleStop}>Stop</button>
+      <button class="btn-stop" onclick={handleStop}>Stop</button>
     {/if}
-    <button class="btn-blackout" class:active={state.blackout} on:click={handleBlackout}>
+    <button class="btn-blackout" class:active={state.blackout} onclick={handleBlackout}>
       {state.blackout ? 'Clear Blackout' : 'Blackout'}
     </button>
     {#if !state.running}
-      <button class="btn-reload" on:click={handleReload}>Reload & Start</button>
+      <button class="btn-reload" onclick={handleReload}>Reload & Start</button>
     {/if}
   {/if}
 </section>
@@ -126,9 +166,8 @@
       class:active={activeScenes.has(scene.id)}
       class:gate={scene.trigger_mode === 'gate'}
       class:toggle={scene.trigger_mode === 'toggle'}
-      on:pointerdown={() => handlePadDown(scene)}
-      on:pointerup={() => handlePadUp(scene)}
-      on:pointerleave={() => handlePadUp(scene)}
+      onpointerdown={(ev) => handlePadDown(ev, scene)}
+      onpointerup={(ev) => handlePadUp(ev, scene)}
     >
       <span class="pad-name">{scene.name}</span>
       <span class="pad-type">{scene.type}</span>

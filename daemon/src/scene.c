@@ -27,6 +27,9 @@ static uint16_t s_step_arena_used = 0;
 static spark_scene_t *s_active_scenes[SPARK_ACTIVE_SCENES_MAX] = {0};
 static uint16_t s_active_scene_count = 0;
 
+static spark_scene_event_t s_events[SPARK_ACTIVE_SCENES_MAX * 2];
+static uint16_t s_event_count = 0;
+
 /* ---- Scene defs ---- */
 
 static spark_scene_value_def_t *s_value_def_arena_alloc(uint16_t count)
@@ -312,6 +315,11 @@ void spark_scene_activate(spark_scene_t *scene, uint8_t velocity)
     scene->velocity = velocity;
     scene->start_time_ms = spark_clock_monotonic_ms();
     s_active_scenes[s_active_scene_count++] = scene;
+
+    if (s_event_count < SPARK_ACTIVE_SCENES_MAX * 2)
+        s_events[s_event_count++] = (spark_scene_event_t){
+            .id = scene->def->id, .active = true, .velocity = velocity };
+
     spark_log_debug("scene:activate: '%s' velocity=%u active_count=%u",
                     scene->def->id, velocity, s_active_scene_count);
 }
@@ -328,6 +336,11 @@ void spark_scene_deactivate(spark_scene_t *scene)
             break;
         }
     }
+
+    if (s_event_count < SPARK_ACTIVE_SCENES_MAX * 2)
+        s_events[s_event_count++] = (spark_scene_event_t){
+            .id = scene->def->id, .active = false, .velocity = 0 };
+
     spark_log_debug("scene:deactivate: '%s' active_count=%u",
                     scene->def->id, s_active_scene_count);
 }
@@ -338,4 +351,15 @@ void spark_scene_toggle(spark_scene_t *scene, uint8_t velocity)
         spark_scene_deactivate(scene);
     else
         spark_scene_activate(scene, velocity);
+}
+
+const spark_scene_event_t *spark_scene_get_events(uint16_t *count)
+{
+    *count = s_event_count;
+    return s_events;
+}
+
+void spark_scene_clear_events(void)
+{
+    s_event_count = 0;
 }

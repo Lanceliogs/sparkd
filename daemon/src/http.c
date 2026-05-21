@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -23,6 +24,41 @@ static struct mg_mgr s_mgr;
 static uint64_t s_start_time_ms;
 
 static const char *s_json_content_type = "Content-Type: application/json\r\n";
+
+static void s_ws_broadcast(const char *msg, size_t len)
+{
+    for (struct mg_connection *c = s_mgr.conns; c; c = c->next)
+    {
+        if (c->is_websocket)
+            mg_ws_send(c, msg, len, WEBSOCKET_OP_TEXT);
+    }
+}
+
+static void s_ws_send_state(struct mg_connection *c)
+{
+    bool running = spark_engine_is_running();
+    bool blackout = spark_engine_get_blackout();
+    const char *project = spark_engine_get_project_path();
+
+    uint16_t active_count;
+    spark_scene_t **active = spark_scene_get_active(&active_count);
+
+    char buf[2048];
+    size_t pos = snprintf(buf, sizeof(buf),
+        "{\"type\":\"state\",\"running\":%s,\"blackout\":%s,\"project\":\"%s\",\"active_scenes\":[",
+        running ? "true" : "false",
+        blackout ? "true" : "false",
+        project ? project : "");
+
+    for (uint16_t i = 0; i < active_count && pos < sizeof(buf) - 80; i++)
+    {
+        if (i > 0) buf[pos++] = ',';
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "\"%s\"", active[i]->def->id);
+    }
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "]}");
+
+    mg_ws_send(c, buf, pos, WEBSOCKET_OP_TEXT);
+}
 
 /* Redirect mongoose logs through spark_log */
 static char s_mg_log_buf[256];
@@ -122,6 +158,8 @@ static void s_handle_engine_start(struct mg_connection *c)
     mg_http_reply(c, 200, s_json_content_type,
         "{%m:%m}\n",
         MG_ESC("status"), MG_ESC("started"));
+    s_ws_broadcast("{\"type\":\"started\"}", 18);
+    s_ws_broadcast("{\"type\":\"blackout\",\"enabled\":false}", 35);
 }
 
 static void s_handle_engine_stop(struct mg_connection *c)
@@ -139,6 +177,8 @@ static void s_handle_engine_stop(struct mg_connection *c)
     mg_http_reply(c, 200, s_json_content_type,
         "{%m:%m}\n",
         MG_ESC("status"), MG_ESC("stopped"));
+    s_ws_broadcast("{\"type\":\"stopped\"}", 18);
+    s_ws_broadcast("{\"type\":\"blackout\",\"enabled\":true}", 34);
 }
 
 static void s_handle_project_reload(struct mg_connection *c, struct mg_http_message *hm)
@@ -205,6 +245,11 @@ static void s_handle_blackout_set(struct mg_connection *c, struct mg_http_messag
     mg_http_reply(c, 200, s_json_content_type,
         "{%m:%s}\n",
         MG_ESC("enabled"), enabled ? "true" : "false");
+
+    char buf[64];
+    int len = snprintf(buf, sizeof(buf),
+        "{\"type\":\"blackout\",\"enabled\":%s}", enabled ? "true" : "false");
+    s_ws_broadcast(buf, len);
 }
 
 static void s_handle_midi_reconnect(struct mg_connection *c)
@@ -314,10 +359,26 @@ static void s_handle_scene_release(struct mg_connection *c, struct mg_str scene_
 
 static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
 {
+    if (ev == MG_EV_WS_OPEN)
+    {
+        spark_log_info("ws: client connected");
+        s_ws_send_state(c);
+        return;
+    }
+
+    if (ev == MG_EV_WS_MSG)
+        return;
+
     if (ev != MG_EV_HTTP_MSG)
         return;
 
     struct mg_http_message *hm = (struct mg_http_message *)ev_data;
+
+    if (mg_match(hm->uri, mg_str("/ws"), NULL))
+    {
+        mg_ws_upgrade(c, hm, NULL);
+        return;
+    }
 
     spark_log_info("http: %.*s %.*s",
         (int)hm->method.len, hm->method.buf,
@@ -394,6 +455,29 @@ int spark_http_init(const char *listen_addr)
 void spark_http_process_events(int timeout_ms)
 {
     mg_mgr_poll(&s_mgr, timeout_ms);
+}
+
+void spark_http_broadcast_scene_events(void)
+{
+    uint16_t count;
+    const spark_scene_event_t *events = spark_scene_get_events(&count);
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        char buf[256];
+        int len;
+        if (events[i].active)
+            len = snprintf(buf, sizeof(buf),
+                "{\"type\":\"scene_on\",\"id\":\"%s\",\"velocity\":%u}",
+                events[i].id, events[i].velocity);
+        else
+            len = snprintf(buf, sizeof(buf),
+                "{\"type\":\"scene_off\",\"id\":\"%s\"}",
+                events[i].id);
+        s_ws_broadcast(buf, len);
+    }
+
+    spark_scene_clear_events();
 }
 
 void spark_http_destroy(void)

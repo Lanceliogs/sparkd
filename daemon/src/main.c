@@ -160,6 +160,7 @@ int main(int argc, char **argv)
     {
         spark_http_process_events(MAIN_LOOP_PERIOD_MS);
         spark_engine_process_events();
+        spark_http_broadcast_scene_events();
     }
 
     spark_log_info("Shutting down");

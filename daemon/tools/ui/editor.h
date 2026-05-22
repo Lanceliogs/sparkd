@@ -10,12 +10,14 @@
 #include "consts.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define EDITOR_MAX_FIXTURES 128
 #define EDITOR_MAX_CHANNELS 64
 #define EDITOR_MAX_BANK_FIXTURES 256
 #define EDITOR_PATH_MAX 1024
+#define EDITOR_MAX_RAW_SECTIONS 16
 
 typedef struct {
     char name[SPARK_MAX_NAME_SIZE];
@@ -33,11 +35,22 @@ typedef struct {
 } editor_fixture_t;
 
 typedef struct {
+    char key[64];
+    size_t start;
+    size_t len;
+} editor_raw_section_t;
+
+typedef struct {
     char path[EDITOR_PATH_MAX];
     bool loaded;
     bool dirty;
     uint16_t fixture_count;
     editor_fixture_t fixtures[EDITOR_MAX_FIXTURES];
+    /* Preserved raw YAML for sections we don't edit */
+    char *raw_buf;
+    size_t raw_buf_len;
+    uint16_t raw_section_count;
+    editor_raw_section_t raw_sections[EDITOR_MAX_RAW_SECTIONS];
 } editor_project_t;
 
 typedef struct {

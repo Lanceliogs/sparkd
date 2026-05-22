@@ -50,8 +50,12 @@ YAML_SRCS := $(YAMLDIR)/api.c $(YAMLDIR)/reader.c $(YAMLDIR)/scanner.c \
 YAML_OBJS := $(YAML_SRCS:$(YAMLDIR)/%.c=$(BUILDDIR)/vendor/libyaml/%.o)
 
 # Test files
-TEST_SRCS := $(wildcard tests/test_*.c)
+TEST_SRCS := $(filter-out tests/test_editor.c tests/test_editor_yaml.c, $(wildcard tests/test_*.c))
 TEST_BINS := $(TEST_SRCS:tests/test_%.c=$(BUILDDIR)/tests/test_%$(EXE))
+
+# Editor test files (need UI objects instead of daemon LIB_OBJS)
+EDITOR_TEST_SRCS := tests/test_editor.c tests/test_editor_yaml.c
+EDITOR_TEST_BINS := $(EDITOR_TEST_SRCS:tests/%.c=$(BUILDDIR)/tests/%$(EXE))
 
 # Modules without main (for linking into tests)
 LIB_SRCS := $(filter-out src/main.c, $(SRCS))
@@ -63,6 +67,13 @@ TOOL_BINS := $(TOOL_SRCS:tools/%.c=$(BUILDDIR)/tools/%$(EXE))
 
 # Standalone tools (no daemon deps)
 STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) $(BUILDDIR)/tools/spark-midi$(EXE) $(BUILDDIR)/tools/spark-ui$(EXE)
+
+# Editor UI objects
+UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c
+UI_OBJS := $(UI_SRCS:tools/ui/%.c=$(BUILDDIR)/tools/ui/%.o)
+EDITOR_OBJS := $(BUILDDIR)/tools/ui/editor.o $(BUILDDIR)/tools/ui/editor_yaml.o
+
+ENV_OBJS := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o
 
 .PHONY: all clean test tools
 
@@ -93,8 +104,8 @@ $(BUILDDIR)/vendor/libyaml/%.o: $(YAMLDIR)/%.c
 	  -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 \
 	  -I$(YAMLDIR) -w -c $< -o $@
 
-test: $(TEST_BINS)
-	@for t in $(TEST_BINS); do \
+test: $(TEST_BINS) $(EDITOR_TEST_BINS)
+	@for t in $(TEST_BINS) $(EDITOR_TEST_BINS); do \
 		echo "--- $$t ---"; \
 		$$t || exit 1; \
 	done
@@ -103,11 +114,17 @@ $(BUILDDIR)/tests/test_%$(EXE): tests/test_%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) 
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Itests -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
+$(BUILDDIR)/tests/test_editor$(EXE): tests/test_editor.c $(EDITOR_OBJS) $(ENV_OBJS) $(YAML_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Itools/ui -Itests -o $@ $< $(EDITOR_OBJS) $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
+
+$(BUILDDIR)/tests/test_editor_yaml$(EXE): tests/test_editor_yaml.c $(EDITOR_OBJS) $(ENV_OBJS) $(YAML_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Itools/ui -Itests -o $@ $< $(EDITOR_OBJS) $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
+
 $(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
-
-ENV_OBJS := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o
 
 $(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ) $(ENV_OBJS)
 	@mkdir -p $(dir $@)
@@ -116,9 +133,6 @@ $(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ) $(ENV_OBJS)
 $(BUILDDIR)/tools/spark-midi$(EXE): tools/spark_midi.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
-
-UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c
-UI_OBJS := $(UI_SRCS:tools/ui/%.c=$(BUILDDIR)/tools/ui/%.o)
 
 $(BUILDDIR)/tools/ui/%.o: tools/ui/%.c
 	@mkdir -p $(dir $@)

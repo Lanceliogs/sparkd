@@ -38,6 +38,7 @@ int editor_open_project(editor_state_t *state, const char *path)
 
 void editor_close_project(editor_state_t *state)
 {
+    free(state->project.raw_buf);
     memset(&state->project, 0, sizeof(state->project));
 }
 

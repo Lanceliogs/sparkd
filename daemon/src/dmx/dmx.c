@@ -1,10 +1,11 @@
 #include "dmx.h"
+#include "spark_atomic.h"
 
 void spark_dmx_reset_stats(spark_dmx_backend_t *backend)
 {
-    backend->frames_sent = 0;
-    backend->write_errors = 0;
-    backend->reconnects = 0;
+    spark_atomic_store_u64(&backend->frames_sent, 0);
+    spark_atomic_store_u64(&backend->write_errors, 0);
+    spark_atomic_store_u64(&backend->reconnects, 0);
 }
 
 int spark_dmx_open(spark_dmx_backend_t *backend)

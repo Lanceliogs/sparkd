@@ -1,13 +1,14 @@
-- id: par1
-  name: Front PAR
-  start-address: 1
-  channel-count: 4
-  channels:
-    - name: dimmer
-      offset: 0
-    - name: red
-      offset: 1
-    - name: green
-      offset: 2
-    - name: blue
-      offset: 3
+fixtures:
+  - id: par1
+    name: Front PAR
+    start-address: 1
+    channel-count: 4
+    channels:
+      - name: dimmer
+        offset: 0
+      - name: red
+        offset: 1
+      - name: green
+        offset: 2
+      - name: blue
+        offset: 3

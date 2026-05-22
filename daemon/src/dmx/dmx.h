@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 
 typedef enum {
     SPARK_DMX_BACKEND_DUMMY,
@@ -44,11 +45,11 @@ typedef struct {
 
 struct spark_dmx_backend {
     const spark_dmx_ops_t *ops; /* pointer to the vtable */
-    spark_dmx_state_t state; /* current connection state */
+    _Atomic spark_dmx_state_t state; /* current connection state */
     /* stats */
-    uint64_t frames_sent;
-    uint64_t write_errors;
-    uint64_t reconnects;
+    _Atomic uint64_t frames_sent;
+    _Atomic uint64_t write_errors;
+    _Atomic uint64_t reconnects;
     /* backend-private data (each backend can cast this) */
     void *priv;
 };

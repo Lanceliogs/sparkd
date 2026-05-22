@@ -333,3 +333,17 @@ int spark_midi_poll(spark_midi_event_t *out, int max)
     }
     return count;
 }
+
+int spark_midi_get_status(spark_midi_port_status_t *out, int max)
+{
+    int count = 0;
+    for (uint8_t i = 0; i < s_input_count && count < max; i++)
+    {
+        strncpy(out[count].pattern, s_inputs[i].pattern, SPARK_MIDI_PORT_STRLEN - 1);
+        out[count].pattern[SPARK_MIDI_PORT_STRLEN - 1] = '\0';
+        out[count].connected = (s_inputs[i].stream != NULL);
+        out[count].last_activity_ms = s_inputs[i].last_activity_ms;
+        count++;
+    }
+    return count;
+}

@@ -33,4 +33,8 @@ void spark_engine_set_blackout(bool enabled);
 const spark_project_config_t *spark_engine_get_config(void);
 const char *spark_engine_get_project_path(void);
 
+/* Forward declare to avoid pulling in dmx.h here */
+struct spark_dmx_backend;
+const struct spark_dmx_backend *spark_engine_get_dmx_backend(void);
+
 #endif

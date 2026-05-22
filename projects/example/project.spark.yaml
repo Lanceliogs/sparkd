@@ -14,12 +14,6 @@ dmx:
   backend: open
   refresh-rate-hz: 25
 
-fixtures:
-  - id: par
-    name: Stairville PAR
-    start-address: 1
-    template: "stairville:par"
-
 scenes:
   - id: red-wash
     name: Red Wash
@@ -113,3 +107,8 @@ scenes:
           par.green: 0
           par.blue: 255
           par.strobe: 255
+fixtures:
+  - id: par
+    name: Stairville PAR
+    start-address: 1
+    template: "stairville:par"

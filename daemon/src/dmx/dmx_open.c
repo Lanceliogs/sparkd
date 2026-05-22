@@ -1,4 +1,5 @@
 #include "dmx.h"
+#include "spark_atomic.h"
 #include "log.h"
 #include "clock.h"
 #include "serial/serial.h"
@@ -26,9 +27,10 @@ static int s_open(spark_dmx_backend_t *backend)
         spark_log_warn("dmx_open:open: Can't open serial port");
         return -1;
     }
-    backend->state = SPARK_DMX_CONNECTED;
-    backend->reconnects++;
-    spark_log_debug("dmx_open:open: Connected (reconnects=%llu)", backend->reconnects);
+    spark_atomic_store(&backend->state, SPARK_DMX_CONNECTED);
+    spark_atomic_inc(&backend->reconnects);
+    spark_log_debug("dmx_open:open: Connected (reconnects=%llu)",
+                    spark_atomic_load_u64(&backend->reconnects));
     return 0;
 }
 
@@ -38,12 +40,12 @@ static void s_close(spark_dmx_backend_t *backend)
     if (!spark_serial_is_open(&priv->serial))
         return;
     spark_serial_close(&priv->serial);
-    backend->state = SPARK_DMX_DISCONNECTED;
+    spark_atomic_store(&backend->state, SPARK_DMX_DISCONNECTED);
 }
 
 static int s_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_DMX_UNIVERSE_SIZE])
 {
-    if (backend->state != SPARK_DMX_CONNECTED)
+    if (spark_atomic_load(&backend->state) != SPARK_DMX_CONNECTED)
         return -1;
  
     dmx_open_priv_t *priv = backend->priv;
@@ -59,15 +61,17 @@ static int s_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_
     
     if (written < 0)
     {
-        backend->write_errors++;
-        spark_log_debug("dmx_open:send_frame: write failed, errors=%llu", backend->write_errors);
+        spark_atomic_inc(&backend->write_errors);
+        spark_log_debug("dmx_open:send_frame: write failed, errors=%llu",
+                        spark_atomic_load_u64(&backend->write_errors));
         return -1;
     }
 
-    backend->frames_sent++;
-    if (backend->frames_sent % 40 == 1)
+    spark_atomic_inc(&backend->frames_sent);
+    uint64_t frames_sent = spark_atomic_load_u64(&backend->frames_sent);
+    if (frames_sent % 40 == 1)
         spark_log_debug("dmx_open:send_frame: frame #%llu, wrote %d bytes, first 8 ch: [%u %u %u %u %u %u %u %u]",
-                        backend->frames_sent, written,
+                        frames_sent, written,
                         frame[0], frame[1], frame[2], frame[3],
                         frame[4], frame[5], frame[6], frame[7]);
     return 0;
@@ -75,7 +79,7 @@ static int s_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_
 
 static bool s_is_connected(spark_dmx_backend_t *backend)
 {
-    return backend->state == SPARK_DMX_CONNECTED;
+    return spark_atomic_load(&backend->state) == SPARK_DMX_CONNECTED;
 }
 
 static const spark_dmx_ops_t s_open_ops = {
@@ -100,7 +104,7 @@ void spark_dmx_open_init(spark_dmx_backend_t *backend, const char *port)
         SPARK_SERIAL_PARITY_NONE
     );
 
-    backend->state = SPARK_DMX_DISCONNECTED;
+    spark_atomic_store(&backend->state, SPARK_DMX_DISCONNECTED);
     spark_dmx_reset_stats(backend);
     backend->ops = &s_open_ops;
 }

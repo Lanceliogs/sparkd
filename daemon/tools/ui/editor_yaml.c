@@ -555,6 +555,21 @@ static int s_emit_sequence_end(yaml_emitter_t *e)
 
 /* ---- Emit project YAML ---- */
 
+static const char *s_key_order[] = {
+    "format", "app", "midi", "dmx", "fixtures", "scenes", NULL
+};
+
+static const editor_raw_section_t *s_find_raw_section(
+    const editor_project_t *project, const char *key)
+{
+    for (uint16_t i = 0; i < project->raw_section_count; i++)
+    {
+        if (strcmp(project->raw_sections[i].key, key) == 0)
+            return &project->raw_sections[i];
+    }
+    return NULL;
+}
+
 static int s_emit_fixtures_to_buf(const editor_project_t *project,
                                   char **out_buf, size_t *out_len)
 {
@@ -622,42 +637,53 @@ int editor_yaml_emit_project(const char *path, const editor_project_t *project)
 
     if (project->raw_buf && project->raw_section_count > 0)
     {
-        /*
-         * We have preserved sections. Write them in original order,
-         * inserting the fixtures section at its original position
-         * (or appending if it wasn't present).
-         */
-        int fixtures_written = 0;
+        int need_newline = 0;
 
+        /* Write sections in canonical key order */
+        for (int k = 0; s_key_order[k] != NULL; k++)
+        {
+            if (strcmp(s_key_order[k], "fixtures") == 0)
+            {
+                if (fix_buf)
+                {
+                    if (need_newline) fprintf(f, "\n");
+                    fwrite(fix_buf, 1, fix_len, f);
+                    need_newline = 1;
+                }
+                continue;
+            }
+
+            const editor_raw_section_t *sec = s_find_raw_section(project, s_key_order[k]);
+            if (!sec) continue;
+
+            if (need_newline)
+            {
+                const char *raw = project->raw_buf + sec->start;
+                if (raw[0] != '\n') fprintf(f, "\n");
+            }
+            fwrite(project->raw_buf + sec->start, 1, sec->len, f);
+            need_newline = 1;
+        }
+
+        /* Append any raw sections not in s_key_order (forward compatibility) */
         for (uint16_t i = 0; i < project->raw_section_count; i++)
         {
             const editor_raw_section_t *sec = &project->raw_sections[i];
-
-            /* If this section came after where fixtures was, emit fixtures first */
-            /* We don't know the exact original fixtures position, so we use a
-               heuristic: write fixtures before "scenes" if it exists, otherwise
-               after the last raw section. For simplicity, just write preserved
-               sections first then fixtures at the end. But actually, let's
-               preserve the original order by checking if the key is "fixtures". */
-
-            fwrite(project->raw_buf + sec->start, 1, sec->len, f);
-        }
-
-        /* Write fixtures section after all preserved sections */
-        if (fix_buf)
-        {
-            /* Add separator newline only if needed */
-            if (project->raw_section_count > 0)
+            int found = 0;
+            for (int k = 0; s_key_order[k] != NULL; k++)
             {
-                const editor_raw_section_t *last = &project->raw_sections[project->raw_section_count - 1];
-                size_t end = last->start + last->len;
-                if (end > 0 && project->raw_buf[end - 1] != '\n')
-                    fprintf(f, "\n");
+                if (strcmp(sec->key, s_key_order[k]) == 0) { found = 1; break; }
             }
-            fwrite(fix_buf, 1, fix_len, f);
-            fixtures_written = 1;
+            if (found) continue;
+
+            if (need_newline)
+            {
+                const char *raw = project->raw_buf + sec->start;
+                if (raw[0] != '\n') fprintf(f, "\n");
+            }
+            fwrite(project->raw_buf + sec->start, 1, sec->len, f);
+            need_newline = 1;
         }
-        (void)fixtures_written;
     }
     else
     {

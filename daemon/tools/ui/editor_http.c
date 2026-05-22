@@ -620,8 +620,8 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
     if (mg_match(hm->uri, mg_str("/api/editor/fixtures/#"), NULL))
     {
         struct mg_str tail = hm->uri;
-        tail.buf += 22; /* skip "/api/editor/fixtures/" */
-        tail.len -= 22;
+        tail.buf += 21; /* skip "/api/editor/fixtures/" */
+        tail.len -= 21;
         int idx = (int)strtoul(tail.buf, NULL, 10);
 
         if (mg_method_is(hm, "PUT"))
@@ -649,8 +649,8 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
         mg_method_is(hm, "POST"))
     {
         struct mg_str tail = hm->uri;
-        tail.buf += 19; /* "/api/editor/banks/" */
-        tail.len -= 19;
+        tail.buf += 18; /* "/api/editor/banks/" */
+        tail.len -= 18;
         int bank_idx = (int)strtoul(tail.buf, NULL, 10);
         s_handle_bank_save(c, bank_idx);
         return true;
@@ -661,8 +661,8 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
         mg_method_is(hm, "POST"))
     {
         struct mg_str tail = hm->uri;
-        tail.buf += 19;
-        tail.len -= 19;
+        tail.buf += 18;
+        tail.len -= 18;
         int bank_idx = (int)strtoul(tail.buf, NULL, 10);
         s_handle_bank_fixture_add(c, hm, bank_idx);
         return true;
@@ -672,8 +672,8 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
     if (mg_match(hm->uri, mg_str("/api/editor/banks/#/fixtures/#"), NULL))
     {
         struct mg_str tail = hm->uri;
-        tail.buf += 19;
-        tail.len -= 19;
+        tail.buf += 18;
+        tail.len -= 18;
         char *end;
         int bank_idx = (int)strtoul(tail.buf, &end, 10);
         const char *fix_part = end + 10; /* skip "/fixtures/" */

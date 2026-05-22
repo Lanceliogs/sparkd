@@ -325,15 +325,17 @@
   {/if}
 </header>
 
-<!-- File browser -->
 {#if showBrowser && browseResult}
-  <section class="browser-panel">
-    <div class="browser-header">
-      <button class="btn-xs" onclick={browseUp}>..</button>
-      <span class="browser-path">{browseResult.path}</span>
-      <button class="btn-xs btn-muted" onclick={() => showBrowser = false}>Close</button>
-    </div>
+<div class="modal-overlay" role="dialog" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') showBrowser = false; }}>
+  <button class="modal-backdrop" aria-label="Close" onclick={() => showBrowser = false} tabindex="-1"></button>
+  <div class="modal">
+    <header class="modal-header">
+      <h3>Open Project</h3>
+      <button class="modal-close" onclick={() => showBrowser = false}>X</button>
+    </header>
+    <div class="browser-path">{browseResult.path}</div>
     <div class="browser-list">
+      <button class="browser-entry dir" onclick={browseUp}>..</button>
       {#each browseResult.entries.filter(e => e.type === 'dir').sort((a, b) => a.name.localeCompare(b.name)) as entry}
         <button class="browser-entry dir" onclick={() => browseNav(entry.name)}>{entry.name}/</button>
       {/each}
@@ -344,7 +346,8 @@
         <span class="empty-msg">Empty directory</span>
       {/if}
     </div>
-  </section>
+  </div>
+</div>
 {/if}
 
 <!-- Main editor layout -->
@@ -593,13 +596,17 @@
   .open-input::placeholder { color: var(--text-muted); }
 
   /* File browser */
-  .browser-panel { background: var(--bg-card); border-radius: var(--radius); padding: 0.6rem; margin-bottom: 0.8rem; max-height: 250px; display: flex; flex-direction: column; }
-  .browser-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--bg-surface); }
-  .browser-path { flex: 1; font-size: 0.7rem; color: var(--text-muted); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .browser-list { overflow-y: auto; display: flex; flex-direction: column; gap: 0.1rem; }
-  .browser-entry { text-align: left; padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; background: none; color: var(--text); font-weight: 400; }
-  .browser-entry:hover { background: var(--bg-surface); }
-  .browser-entry.dir { color: var(--green); font-weight: 600; }
+  .modal-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); border: none; cursor: default; }
+  .modal { position: relative; background: var(--bg-surface); border-radius: var(--radius); width: 90%; max-width: 500px; max-height: 70vh; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 1rem; border-bottom: 1px solid var(--bg-card); }
+  .modal-header h3 { margin: 0; font-size: 1rem; }
+  .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1rem; padding: 0.2rem 0.5rem; }
+  .browser-path { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-muted); font-family: monospace; border-bottom: 1px solid var(--bg-card); word-break: break-all; }
+  .browser-list { overflow-y: auto; flex: 1; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.1rem; }
+  .browser-entry { text-align: left; padding: 0.35rem 0.8rem; font-size: 0.85rem; border-radius: 4px; background: none; color: var(--text); font-weight: 400; border: none; }
+  .browser-entry:hover { background: var(--bg-card); }
+  .browser-entry.dir { color: var(--accent); font-weight: 600; }
 
   /* Main layout */
   .editor-layout {
@@ -657,8 +664,9 @@
   /* Pad grid */
   .pad-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(70px, 90px));
     gap: 0.35rem;
+    margin-top: 0.4rem;
   }
 
   .pad-btn {
@@ -669,7 +677,7 @@
     justify-content: center;
     gap: 0.15rem;
     background: var(--bg-card);
-    border: 2px solid transparent;
+    border: 2px solid var(--text-muted);
     border-radius: var(--radius);
     color: var(--text);
     font-size: 0.65rem;
@@ -680,6 +688,7 @@
     text-align: center;
     min-width: 0;
   }
+  .pad-btn:active { transform: none; }
   .pad-btn:hover { border-color: var(--accent); }
   .pad-btn.selected { background: var(--accent); color: white; border-color: var(--accent-hover); }
   .pad-id { font-size: 0.7rem; }
@@ -723,7 +732,7 @@
 
   /* Edit card */
   .edit-card {
-    flex: 3;
+    flex: 2;
     display: flex;
     flex-direction: column;
     background: var(--bg-card);

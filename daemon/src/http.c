@@ -1,7 +1,10 @@
 #include "http.h"
 #include "engine.h"
+#include "midi.h"
 #include "scene.h"
 #include "fixture_bank.h"
+#include "dmx/dmx.h"
+#include "spark_atomic.h"
 #include "env.h"
 #include "consts.h"
 #include "log.h"
@@ -370,6 +373,68 @@ static void s_handle_scene_release(struct mg_connection *c, struct mg_str scene_
         "{%m:%m}\n", MG_ESC("error"), MG_ESC("scene not found"));
 }
 
+static void s_handle_midi_status(struct mg_connection *c)
+{
+    spark_midi_port_status_t ports[SPARK_MIDI_MAX_DEVICES];
+    int count = spark_midi_get_status(ports, SPARK_MIDI_MAX_DEVICES);
+
+    char buf[2048];
+    size_t pos = snprintf(buf, sizeof(buf), "{\"port_count\":%d,\"ports\":[", count);
+
+    for (int i = 0; i < count && pos < sizeof(buf) - 128; i++)
+    {
+        if (i > 0) buf[pos++] = ',';
+        pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos,
+            "{\"pattern\":\"%s\",\"connected\":%s,\"last_activity_ms\":%llu}",
+            ports[i].pattern,
+            ports[i].connected ? "true" : "false",
+            (unsigned long long)ports[i].last_activity_ms);
+    }
+
+    pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "]}\n");
+    mg_http_reply(c, 200, s_json_content_type, "%s", buf);
+}
+
+static const char *s_dmx_state_str(spark_dmx_state_t state)
+{
+    switch (state)
+    {
+    case SPARK_DMX_DISCONNECTED: return "disconnected";
+    case SPARK_DMX_CONNECTING:   return "connecting";
+    case SPARK_DMX_CONNECTED:    return "connected";
+    case SPARK_DMX_ERROR:        return "error";
+    default:                     return "unknown";
+    }
+}
+
+static void s_handle_dmx_status(struct mg_connection *c)
+{
+    const spark_dmx_backend_t *backend = spark_engine_get_dmx_backend();
+
+    if (!backend)
+    {
+        mg_http_reply(c, 200, s_json_content_type,
+            "{\"backend\":\"none\",\"state\":\"disconnected\","
+            "\"stats\":{\"frames_sent\":0,\"write_errors\":0,\"reconnects\":0}}\n");
+        return;
+    }
+
+    const spark_project_config_t *cfg = spark_engine_get_config();
+    const char *backend_name = cfg->dmx_backend == SPARK_DMX_BACKEND_OPEN ? "open" : "dummy";
+    spark_dmx_state_t state = spark_atomic_load(&backend->state);
+    uint64_t frames = spark_atomic_load_u64(&backend->frames_sent);
+    uint64_t errors = spark_atomic_load_u64(&backend->write_errors);
+    uint64_t reconn = spark_atomic_load_u64(&backend->reconnects);
+
+    mg_http_reply(c, 200, s_json_content_type,
+        "{\"backend\":\"%s\",\"state\":\"%s\","
+        "\"stats\":{\"frames_sent\":%llu,\"write_errors\":%llu,\"reconnects\":%llu}}\n",
+        backend_name, s_dmx_state_str(state),
+        (unsigned long long)frames,
+        (unsigned long long)errors,
+        (unsigned long long)reconn);
+}
+
 static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
 {
     if (ev == MG_EV_WS_OPEN)
@@ -423,6 +488,12 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
     else if (mg_match(hm->uri, mg_str("/api/fixtures/bank/reload"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
         s_handle_fixture_bank_reload(c);
+    else if (mg_match(hm->uri, mg_str("/api/midi/status"), NULL) &&
+             mg_match(hm->method, mg_str("GET"), NULL))
+        s_handle_midi_status(c);
+    else if (mg_match(hm->uri, mg_str("/api/dmx/status"), NULL) &&
+             mg_match(hm->method, mg_str("GET"), NULL))
+        s_handle_dmx_status(c);
     else if (mg_match(hm->uri, mg_str("/api/scenes"), NULL) &&
              mg_match(hm->method, mg_str("GET"), NULL))
         s_handle_scenes_list(c);

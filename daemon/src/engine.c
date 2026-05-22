@@ -276,3 +276,9 @@ const char *spark_engine_get_project_path(void)
 {
     return s_project_path[0] ? s_project_path : NULL;
 }
+
+const struct spark_dmx_backend *spark_engine_get_dmx_backend(void)
+{
+    if (!s_running) return NULL;
+    return &s_dmx_backend;
+}

@@ -1,9 +1,10 @@
-- id: blue-wash
-  type: static
-  trigger:
-    channel: 1
-    note: 60
-    mode: gate
-  values:
-    par1.dimmer: 255
-    par1.blue: 255
+scenes:
+  - id: blue-wash
+    type: static
+    trigger:
+      channel: 1
+      note: 60
+      mode: gate
+    values:
+      par1.dimmer: 255
+      par1.blue: 255

@@ -8,8 +8,14 @@
     activateScene,
     releaseScene,
     reloadProject,
+    getMidiStatus,
+    getDmxStatus,
+    editorBrowse,
     type EngineState,
     type SceneDef,
+    type MidiStatus,
+    type DmxStatus,
+    type BrowseResult,
   } from '../lib/api';
 
   let state: EngineState = $state({ running: false, blackout: false, project: '' });
@@ -18,6 +24,15 @@
   let connected = $state(false);
   let ws: WebSocket | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout>;
+
+  /* Status polling */
+  let midiStatus: MidiStatus = $state({ port_count: 0, ports: [] });
+  let dmxStatus: DmxStatus = $state({ backend: 'none', state: 'disconnected', stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } });
+  let statusPollTimer: ReturnType<typeof setInterval> | null = null;
+
+  /* File browser for project swap */
+  let showBrowser = $state(false);
+  let browseResult: BrowseResult | null = $state(null);
 
   function wsUrl(): string {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -73,11 +88,32 @@
     } catch { /* will retry on reconnect */ }
   }
 
+  function startStatusPoll() {
+    if (statusPollTimer) return;
+    pollStatus();
+    statusPollTimer = setInterval(pollStatus, 1500);
+  }
+
+  function stopStatusPoll() {
+    if (statusPollTimer) { clearInterval(statusPollTimer); statusPollTimer = null; }
+  }
+
+  async function pollStatus() {
+    midiStatus = await getMidiStatus();
+    dmxStatus = await getDmxStatus();
+  }
+
+  $effect(() => {
+    if (state.running) startStatusPoll();
+    else stopStatusPoll();
+  });
+
   onMount(() => {
     connect();
     loadScenes();
     return () => {
       clearTimeout(reconnectTimer);
+      stopStatusPoll();
       ws?.close();
     };
   });
@@ -98,6 +134,41 @@
     await engineStop();
     await reloadProject();
     await engineStart();
+    loadScenes();
+  }
+
+  async function openBrowser() {
+    const startPath = state.project
+      ? state.project.replace(/[/\\][^/\\]*$/, '')
+      : '/';
+    browseResult = await editorBrowse(startPath);
+    showBrowser = true;
+  }
+
+  async function browseTo(path: string) {
+    browseResult = await editorBrowse(path);
+  }
+
+  function browseUp() {
+    if (!browseResult) return;
+    const normalized = browseResult.path.replace(/\\/g, '/');
+    const parts = normalized.split('/').filter(p => p !== '');
+    if (parts.length <= 1) return;
+    parts.pop();
+    const parent = parts.join('/');
+    const result = parent.match(/^[A-Za-z]:$/) ? parent + '/' : parent;
+    browseTo(result);
+  }
+
+  function joinPath(base: string, name: string): string {
+    const sep = base.endsWith('/') || base.endsWith('\\') ? '' : '/';
+    return base + sep + name;
+  }
+
+  async function selectProject(path: string) {
+    showBrowser = false;
+    browseResult = null;
+    await reloadProject(path);
     loadScenes();
   }
 
@@ -155,9 +226,39 @@
     </button>
     {#if !state.running}
       <button class="btn-reload" onclick={handleReload}>Reload & Start</button>
+      <button class="btn-load" onclick={openBrowser}>Load Project</button>
     {/if}
   {/if}
 </section>
+
+{#if state.running}
+<section class="status-footer">
+  <div class="status-group">
+    <span class="status-label">MIDI</span>
+    {#if midiStatus.port_count === 0}
+      <span class="status-value muted">no ports</span>
+    {:else}
+      {#each midiStatus.ports as port}
+        <span class="status-value">
+          <span class="dot-sm" class:green={port.connected} class:red={!port.connected}></span>
+          {port.pattern}
+        </span>
+      {/each}
+    {/if}
+  </div>
+  <div class="status-group">
+    <span class="status-label">DMX</span>
+    <span class="status-value">
+      <span class="dot-sm" class:green={dmxStatus.state === 'connected'} class:yellow={dmxStatus.state === 'connecting'} class:red={dmxStatus.state === 'disconnected' || dmxStatus.state === 'error'}></span>
+      {dmxStatus.backend}
+    </span>
+    <span class="status-value muted">{dmxStatus.stats.frames_sent} frames</span>
+    {#if dmxStatus.stats.write_errors > 0}
+      <span class="status-value error">{dmxStatus.stats.write_errors} errors</span>
+    {/if}
+  </div>
+</section>
+{/if}
 
 <section class="pad-grid">
   {#each scenes as scene}
@@ -174,6 +275,37 @@
     </button>
   {/each}
 </section>
+
+{#if showBrowser}
+<div class="modal-overlay" role="dialog" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') showBrowser = false; }}>
+  <button class="modal-backdrop" aria-label="Close" onclick={() => showBrowser = false} tabindex="-1"></button>
+  <div class="modal">
+    <header class="modal-header">
+      <h3>Load Project</h3>
+      <button class="modal-close" onclick={() => showBrowser = false}>X</button>
+    </header>
+    {#if browseResult}
+      <div class="browse-path">{browseResult.path}</div>
+      <div class="browse-list">
+        <button class="browse-item dir" onclick={browseUp}>..</button>
+        {#each browseResult.entries as entry}
+          {#if entry.type === 'dir'}
+            <button class="browse-item dir" onclick={() => browseTo(joinPath(browseResult!.path, entry.name))}>
+              {entry.name}/
+            </button>
+          {:else if entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')}
+            <button class="browse-item file" onclick={() => selectProject(joinPath(browseResult!.path, entry.name))}>
+              {entry.name}
+            </button>
+          {:else}
+            <span class="browse-item disabled">{entry.name}</span>
+          {/if}
+        {/each}
+      </div>
+    {/if}
+  </div>
+</div>
+{/if}
 
 <style>
   .status-bar {
@@ -270,7 +402,7 @@
     justify-content: center;
     gap: 0.3rem;
     background: var(--bg-card);
-    border: 2px solid transparent;
+    border: 2px solid var(--text-muted);
     color: var(--text);
     padding: 0.5rem;
     user-select: none;
@@ -305,4 +437,137 @@
   .pad.active .pad-type {
     color: rgba(255, 255, 255, 0.7);
   }
+
+  .btn-load {
+    background: var(--bg-card);
+    color: var(--text);
+    border: 2px solid var(--accent);
+  }
+
+  /* Status footer */
+  .status-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    gap: 2rem;
+    padding: 0.6rem 1rem;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--bg-card);
+    font-size: 0.8rem;
+    z-index: 50;
+  }
+
+  .status-group {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .status-label {
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+  }
+
+  .status-value {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .status-value.muted { color: var(--text-muted); }
+  .status-value.error { color: var(--red); }
+
+  .dot-sm {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .dot-sm.green { background: var(--green); }
+  .dot-sm.yellow { background: var(--yellow); }
+  .dot-sm.red { background: var(--red); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    cursor: default;
+  }
+
+  .modal {
+    position: relative;
+    background: var(--bg-surface);
+    border-radius: var(--radius);
+    width: 90%;
+    max-width: 500px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--bg-card);
+  }
+
+  .modal-header h3 { margin: 0; font-size: 1rem; }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .browse-path {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--bg-card);
+    word-break: break-all;
+  }
+
+  .browse-list {
+    overflow-y: auto;
+    flex: 1;
+    padding: 0.5rem;
+  }
+
+  .browse-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.4rem 0.8rem;
+    border: none;
+    background: none;
+    color: var(--text);
+    font-size: 0.85rem;
+    border-radius: 4px;
+  }
+
+  .browse-item:hover { background: var(--bg-card); }
+  .browse-item.dir { color: var(--accent); }
+  .browse-item.file { font-weight: 500; }
+  .browse-item.disabled { color: var(--text-muted); opacity: 0.5; }
 </style>

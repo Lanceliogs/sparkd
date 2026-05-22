@@ -27,6 +27,7 @@
 #include "consts.h"
 #include "midi_event.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef enum {
@@ -56,5 +57,14 @@ void spark_midi_close_all(void);
 int spark_midi_poll(spark_midi_event_t *out, int max);
 
 int spark_midi_reconnect(void);
+
+/* Status reporting */
+typedef struct {
+    char pattern[SPARK_MIDI_PORT_STRLEN];
+    bool connected;
+    uint64_t last_activity_ms;
+} spark_midi_port_status_t;
+
+int spark_midi_get_status(spark_midi_port_status_t *out, int max);
 
 #endif

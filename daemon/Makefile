@@ -58,7 +58,7 @@ LIB_SRCS := $(filter-out src/main.c, $(SRCS))
 LIB_OBJS := $(LIB_SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
 # Tools (linked against daemon libs)
-TOOL_SRCS := $(filter-out tools/sparkctl.c tools/midi_list.c tools/midi_monitor.c tools/spark_midi.c tools/spark_ui.c, $(wildcard tools/*.c))
+TOOL_SRCS := $(filter-out tools/sparkctl.c tools/midi_list.c tools/midi_monitor.c tools/spark_midi.c, $(wildcard tools/*.c))
 TOOL_BINS := $(TOOL_SRCS:tools/%.c=$(BUILDDIR)/tools/%$(EXE))
 
 # Standalone tools (no daemon deps)
@@ -117,9 +117,16 @@ $(BUILDDIR)/tools/spark-midi$(EXE): tools/spark_midi.c $(LIB_OBJS) $(PM_OBJS) $(
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/tools/spark-ui$(EXE): tools/spark_ui.c $(MG_OBJ) $(ENV_OBJS) $(YAML_OBJS)
+UI_SRCS := tools/ui/spark_ui.c tools/ui/editor.c tools/ui/editor_yaml.c
+UI_OBJS := $(UI_SRCS:tools/ui/%.c=$(BUILDDIR)/tools/ui/%.o)
+
+$(BUILDDIR)/tools/ui/%.o: tools/ui/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $< $(MG_OBJ) $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -Itools/ui -c $< -o $@
+
+$(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(YAML_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Itools/ui -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILDDIR)/daemon $(BUILDDIR)/tests $(BUILDDIR)/tools $(BUILDDIR)/vendor $(TARGET)

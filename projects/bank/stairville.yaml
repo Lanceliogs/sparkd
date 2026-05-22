@@ -1,26 +1,38 @@
+---
 bank:
   id: "stairville"
   version: 1
-
 fixtures:
-  - id: par
-    name: Stairville PAR
-    channel-count: 8
-    channels:
-      - name: dimmer
-        offset: 0
-      - name: red
-        offset: 1
-      - name: green
-        offset: 2
-      - name: blue
-        offset: 3
-      - name: white
-        offset: 4
-      - name: mode
-        offset: 5
-      - name: color
-        offset: 6
-      - name: strobe
-        offset: 7
-  
+- id: par
+  name: Stairville PAR 8 Channels
+  channel-count: 8
+  channels:
+  - name: dimmer
+    offset: 0
+  - name: red
+    offset: 1
+  - name: green
+    offset: 2
+  - name: blue
+    offset: 3
+  - name: white
+    offset: 4
+  - name: mode
+    offset: 5
+  - name: color
+    offset: 6
+  - name: strobe
+    offset: 7
+- id: switch-4ch
+  name: 'Generic Switch 4 Channels '
+  channel-count: 4
+  channels:
+  - name: sw1
+    offset: 0
+  - name: sw2
+    offset: 1
+  - name: sw3
+    offset: 2
+  - name: sw4
+    offset: 3
+...

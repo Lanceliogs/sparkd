@@ -8,6 +8,7 @@
 #include "clock.h"
 
 #include "mongoose.h"
+#include "mg_helpers.h"
 
 #include <stdio.h>
 #include <stdlib.h>

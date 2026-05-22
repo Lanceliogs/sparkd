@@ -1,24 +1,20 @@
 # sparkd top-level Makefile
 
-.PHONY: all clean test daemon sparkctl ui tools
+.PHONY: all clean test daemon tools ui
 
-all: daemon sparkctl
+all: daemon tools
 
 daemon:
 	$(MAKE) -C daemon
 
-sparkctl:
-	$(MAKE) -C tools
+tools:
+	$(MAKE) -C daemon tools
 
 test:
 	$(MAKE) -C daemon test
-
-tools:
-	$(MAKE) -C daemon tools
 
 ui:
 	cd ui && npm run build
 
 clean:
 	$(MAKE) -C daemon clean
-	$(MAKE) -C tools clean

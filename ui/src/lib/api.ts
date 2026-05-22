@@ -103,8 +103,11 @@ export interface EditorBank {
 }
 
 export async function editorStatus(): Promise<EditorStatus> {
-  const res = await fetch(`${BASE}/api/editor/status`);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}/api/editor/status`);
+    if (!res.ok) return { project_loaded: false, project_path: '', dirty: false, fixture_count: 0, bank_count: 0 };
+    return await res.json();
+  } catch { return { project_loaded: false, project_path: '', dirty: false, fixture_count: 0, bank_count: 0 }; }
 }
 
 export async function editorOpen(path: string): Promise<void> {
@@ -124,8 +127,11 @@ export async function editorSave(): Promise<void> {
 }
 
 export async function editorGetFixtures(): Promise<EditorFixture[]> {
-  const res = await fetch(`${BASE}/api/editor/fixtures`);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}/api/editor/fixtures`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch { return []; }
 }
 
 export async function editorAddFixture(fixture: Omit<EditorFixture, 'index'>): Promise<void> {
@@ -149,8 +155,11 @@ export async function editorDeleteFixture(index: number): Promise<void> {
 }
 
 export async function editorGetBanks(): Promise<EditorBank[]> {
-  const res = await fetch(`${BASE}/api/editor/banks`);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}/api/editor/banks`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch { return []; }
 }
 
 export async function editorBankAddFixture(bankIndex: number, fixture: Omit<BankFixture, 'index'>): Promise<void> {
@@ -178,8 +187,11 @@ export async function editorBankSave(bankIndex: number): Promise<void> {
 }
 
 export async function editorGetBankDirs(): Promise<string[]> {
-  const res = await fetch(`${BASE}/api/editor/bank-dirs`);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}/api/editor/bank-dirs`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch { return []; }
 }
 
 export async function editorCreateBank(id: string, directory: string): Promise<void> {
@@ -196,6 +208,9 @@ export interface BrowseResult {
 }
 
 export async function editorBrowse(path: string): Promise<BrowseResult> {
-  const res = await fetch(`${BASE}/api/editor/browse?path=${encodeURIComponent(path)}`);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}/api/editor/browse?path=${encodeURIComponent(path)}`);
+    if (!res.ok) return { path: path || '.', entries: [] };
+    return await res.json();
+  } catch { return { path: path || '.', entries: [] }; }
 }

@@ -117,7 +117,7 @@ $(BUILDDIR)/tools/spark-midi$(EXE): tools/spark_midi.c $(LIB_OBJS) $(PM_OBJS) $(
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
-UI_SRCS := tools/ui/spark_ui.c tools/ui/editor.c tools/ui/editor_yaml.c
+UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c
 UI_OBJS := $(UI_SRCS:tools/ui/%.c=$(BUILDDIR)/tools/ui/%.o)
 
 $(BUILDDIR)/tools/ui/%.o: tools/ui/%.c

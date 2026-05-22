@@ -1,0 +1,695 @@
+#include "editor_http.h"
+#include "mg_helpers.h"
+#include "editor.h"
+#include "env.h"
+#include "log.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <direct.h>
+#else
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#endif
+
+static editor_state_t s_editor;
+
+void editor_http_init(const char *bank_paths)
+{
+    editor_load_banks(&s_editor, bank_paths);
+}
+
+/* ---- Helpers ---- */
+
+static void s_escape_json_str(const char *src, char *dst, size_t dst_size)
+{
+    size_t j = 0;
+    for (size_t i = 0; src[i] && j < dst_size - 2; i++)
+    {
+        if (src[i] == '\\' || src[i] == '"')
+            dst[j++] = '\\';
+        dst[j++] = src[i];
+    }
+    dst[j] = '\0';
+}
+
+/* ---- Project lifecycle ---- */
+
+static void s_handle_status(struct mg_connection *c)
+{
+    char escaped_path[EDITOR_PATH_MAX * 2];
+    s_escape_json_str(s_editor.project.path, escaped_path, sizeof(escaped_path));
+
+    char buf[4096];
+    snprintf(buf, sizeof(buf),
+        "{\"project_loaded\":%s,\"project_path\":\"%s\",\"dirty\":%s,"
+        "\"fixture_count\":%d,\"bank_count\":%d}",
+        s_editor.project.loaded ? "true" : "false",
+        escaped_path,
+        s_editor.project.dirty ? "true" : "false",
+        s_editor.project.fixture_count,
+        s_editor.bank_count);
+    mg_json_reply(c, 200, buf);
+}
+
+static void s_handle_open(struct mg_connection *c, struct mg_http_message *hm)
+{
+    char path[EDITOR_PATH_MAX] = {0};
+    int n = mg_json_get_str_buf(hm->body, "$.path", path, sizeof(path));
+    if (n <= 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"missing path\"}");
+        return;
+    }
+    if (editor_open_project(&s_editor, path) != 0)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"failed to open project\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_close(struct mg_connection *c)
+{
+    editor_close_project(&s_editor);
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_save(struct mg_connection *c)
+{
+    if (editor_save_project(&s_editor) != 0)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"save failed\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+/* ---- Project fixtures ---- */
+
+static void s_handle_fixtures_get(struct mg_connection *c)
+{
+    char *out = (char *)malloc(64 * 1024);
+    int pos = 0;
+
+    pos += snprintf(out + pos, 64 * 1024 - pos, "[");
+    for (int i = 0; i < s_editor.project.fixture_count; i++)
+    {
+        const editor_fixture_t *f = &s_editor.project.fixtures[i];
+        if (i > 0) pos += snprintf(out + pos, 64 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 64 * 1024 - pos,
+            "{\"index\":%d,\"id\":\"%s\",\"name\":\"%s\","
+            "\"start_address\":%d,\"channel_count\":%d,"
+            "\"template\":\"%s\",\"copy_from\":\"%s\",\"channels\":[",
+            i, f->id, f->name, f->start_address, f->channel_count,
+            f->template_ref, f->copy_from);
+        for (int j = 0; j < f->channel_count; j++)
+        {
+            if (j > 0) pos += snprintf(out + pos, 64 * 1024 - pos, ",");
+            pos += snprintf(out + pos, 64 * 1024 - pos,
+                "{\"name\":\"%s\",\"offset\":%d}",
+                f->channels[j].name, f->channels[j].offset);
+        }
+        pos += snprintf(out + pos, 64 * 1024 - pos, "]}");
+    }
+    pos += snprintf(out + pos, 64 * 1024 - pos, "]");
+
+    mg_http_reply(c, 200,
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: application/json\r\n",
+        "%.*s", pos, out);
+    free(out);
+}
+
+static int s_parse_fixture_json(struct mg_str body, editor_fixture_t *fix)
+{
+    memset(fix, 0, sizeof(*fix));
+    mg_json_get_str_buf(body, "$.id", fix->id, sizeof(fix->id));
+    mg_json_get_str_buf(body, "$.name", fix->name, sizeof(fix->name));
+    mg_json_get_str_buf(body, "$.template", fix->template_ref, sizeof(fix->template_ref));
+    mg_json_get_str_buf(body, "$.copy_from", fix->copy_from, sizeof(fix->copy_from));
+
+    double val;
+    if (mg_json_get_num(body, "$.start_address", &val))
+        fix->start_address = (uint16_t)val;
+    if (mg_json_get_num(body, "$.channel_count", &val))
+        fix->channel_count = (uint8_t)val;
+
+    for (int i = 0; i < EDITOR_MAX_CHANNELS; i++)
+    {
+        char pname[64], poffset[64];
+        snprintf(pname, sizeof(pname), "$.channels[%d].name", i);
+        snprintf(poffset, sizeof(poffset), "$.channels[%d].offset", i);
+
+        int n = mg_json_get_str_buf(body, pname, fix->channels[i].name, SPARK_MAX_NAME_SIZE);
+        if (n <= 0) break;
+
+        double ov;
+        if (mg_json_get_num(body, poffset, &ov))
+            fix->channels[i].offset = (uint8_t)ov;
+
+        if (i + 1 > fix->channel_count)
+            fix->channel_count = (uint8_t)(i + 1);
+    }
+    return (fix->id[0] != '\0') ? 0 : -1;
+}
+
+static void s_handle_fixture_add(struct mg_connection *c, struct mg_http_message *hm)
+{
+    editor_fixture_t fix;
+    if (s_parse_fixture_json(hm->body, &fix) != 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
+        return;
+    }
+    if (editor_fixture_add(&s_editor, &fix) != 0)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"add failed\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_fixture_update(struct mg_connection *c,
+                                    struct mg_http_message *hm, int index)
+{
+    editor_fixture_t fix;
+    if (s_parse_fixture_json(hm->body, &fix) != 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
+        return;
+    }
+    if (editor_fixture_update(&s_editor, index, &fix) != 0)
+    {
+        mg_json_reply(c, 404, "{\"error\":\"fixture not found\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_fixture_delete(struct mg_connection *c, int index)
+{
+    if (editor_fixture_remove(&s_editor, index) != 0)
+    {
+        mg_json_reply(c, 404, "{\"error\":\"fixture not found\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+/* ---- Banks ---- */
+
+static void s_handle_banks_get(struct mg_connection *c)
+{
+    char *out = (char *)malloc(128 * 1024);
+    int pos = 0;
+    pos += snprintf(out + pos, 128 * 1024 - pos, "[");
+
+    for (int bi = 0; bi < s_editor.bank_count; bi++)
+    {
+        const editor_bank_t *bank = &s_editor.banks[bi];
+        char esc_path[EDITOR_PATH_MAX * 2];
+        s_escape_json_str(bank->path, esc_path, sizeof(esc_path));
+        if (bi > 0) pos += snprintf(out + pos, 128 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 128 * 1024 - pos,
+            "{\"index\":%d,\"id\":\"%s\",\"path\":\"%s\","
+            "\"version\":%d,\"dirty\":%s,\"fixtures\":[",
+            bi, bank->id, esc_path, bank->version,
+            bank->dirty ? "true" : "false");
+
+        for (int fi = 0; fi < bank->fixture_count; fi++)
+        {
+            const editor_bank_fixture_t *f = &bank->fixtures[fi];
+            if (fi > 0) pos += snprintf(out + pos, 128 * 1024 - pos, ",");
+            pos += snprintf(out + pos, 128 * 1024 - pos,
+                "{\"index\":%d,\"id\":\"%s\",\"name\":\"%s\","
+                "\"channel_count\":%d,\"channels\":[",
+                fi, f->id, f->name, f->channel_count);
+            for (int j = 0; j < f->channel_count; j++)
+            {
+                if (j > 0) pos += snprintf(out + pos, 128 * 1024 - pos, ",");
+                pos += snprintf(out + pos, 128 * 1024 - pos,
+                    "{\"name\":\"%s\",\"offset\":%d}",
+                    f->channels[j].name, f->channels[j].offset);
+            }
+            pos += snprintf(out + pos, 128 * 1024 - pos, "]}");
+        }
+        pos += snprintf(out + pos, 128 * 1024 - pos, "]}");
+    }
+    pos += snprintf(out + pos, 128 * 1024 - pos, "]");
+
+    mg_http_reply(c, 200,
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: application/json\r\n",
+        "%.*s", pos, out);
+    free(out);
+}
+
+static int s_parse_bank_fixture_json(struct mg_str body, editor_bank_fixture_t *fix)
+{
+    memset(fix, 0, sizeof(*fix));
+    mg_json_get_str_buf(body, "$.id", fix->id, sizeof(fix->id));
+    mg_json_get_str_buf(body, "$.name", fix->name, sizeof(fix->name));
+
+    double val;
+    if (mg_json_get_num(body, "$.channel_count", &val))
+        fix->channel_count = (uint8_t)val;
+
+    for (int i = 0; i < EDITOR_MAX_CHANNELS; i++)
+    {
+        char pname[64], poffset[64];
+        snprintf(pname, sizeof(pname), "$.channels[%d].name", i);
+        snprintf(poffset, sizeof(poffset), "$.channels[%d].offset", i);
+
+        int n = mg_json_get_str_buf(body, pname, fix->channels[i].name, SPARK_MAX_NAME_SIZE);
+        if (n <= 0) break;
+
+        double ov;
+        if (mg_json_get_num(body, poffset, &ov))
+            fix->channels[i].offset = (uint8_t)ov;
+
+        if (i + 1 > fix->channel_count)
+            fix->channel_count = (uint8_t)(i + 1);
+    }
+    return (fix->id[0] != '\0') ? 0 : -1;
+}
+
+static void s_handle_bank_fixture_add(struct mg_connection *c,
+                                      struct mg_http_message *hm, int bank_idx)
+{
+    editor_bank_fixture_t fix;
+    if (s_parse_bank_fixture_json(hm->body, &fix) != 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
+        return;
+    }
+    if (editor_bank_fixture_add(&s_editor, bank_idx, &fix) != 0)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"add failed\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_bank_fixture_update(struct mg_connection *c,
+                                         struct mg_http_message *hm,
+                                         int bank_idx, int fix_idx)
+{
+    editor_bank_fixture_t fix;
+    if (s_parse_bank_fixture_json(hm->body, &fix) != 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
+        return;
+    }
+    if (editor_bank_fixture_update(&s_editor, bank_idx, fix_idx, &fix) != 0)
+    {
+        mg_json_reply(c, 404, "{\"error\":\"not found\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_bank_fixture_delete(struct mg_connection *c,
+                                         int bank_idx, int fix_idx)
+{
+    if (editor_bank_fixture_remove(&s_editor, bank_idx, fix_idx) != 0)
+    {
+        mg_json_reply(c, 404, "{\"error\":\"not found\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_bank_save(struct mg_connection *c, int bank_idx)
+{
+    if (editor_save_bank(&s_editor, bank_idx) != 0)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"save failed\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+/* ---- Bank directories ---- */
+
+static void s_handle_bank_dirs(struct mg_connection *c)
+{
+    const char *paths = spark_env_get("SPARK_FIXTURE_BANK_PATH");
+    char *out = (char *)malloc(8192);
+    int pos = 0;
+    pos += snprintf(out + pos, 8192 - pos, "[");
+
+    if (paths && paths[0] != '\0')
+    {
+        char buf[4096];
+        strncpy(buf, paths, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+
+        char *saveptr = NULL;
+        char *token = strtok_r(buf, ";", &saveptr);
+        int first = 1;
+        while (token)
+        {
+            while (*token == ' ') token++;
+            size_t tlen = strlen(token);
+            while (tlen > 0 && token[tlen - 1] == ' ') token[--tlen] = '\0';
+            if (tlen > 0)
+            {
+                char esc[EDITOR_PATH_MAX * 2];
+                s_escape_json_str(token, esc, sizeof(esc));
+                if (!first) pos += snprintf(out + pos, 8192 - pos, ",");
+                pos += snprintf(out + pos, 8192 - pos, "\"%s\"", esc);
+                first = 0;
+            }
+            token = strtok_r(NULL, ";", &saveptr);
+        }
+    }
+
+    pos += snprintf(out + pos, 8192 - pos, "]");
+    mg_http_reply(c, 200,
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: application/json\r\n",
+        "%.*s", pos, out);
+    free(out);
+}
+
+static void s_handle_bank_create(struct mg_connection *c, struct mg_http_message *hm)
+{
+    char id[SPARK_MAX_ID_SIZE] = {0};
+    char directory[EDITOR_PATH_MAX] = {0};
+
+    mg_json_get_str_buf(hm->body, "$.id", id, sizeof(id));
+    mg_json_get_str_buf(hm->body, "$.directory", directory, sizeof(directory));
+
+    if (id[0] == '\0' || directory[0] == '\0')
+    {
+        mg_json_reply(c, 400, "{\"error\":\"missing id or directory\"}");
+        return;
+    }
+
+    char filepath[EDITOR_PATH_MAX + 128];
+    snprintf(filepath, sizeof(filepath), "%s/%s.yaml", directory, id);
+
+    FILE *f = fopen(filepath, "w");
+    if (!f)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"cannot create file\"}");
+        return;
+    }
+    fprintf(f, "bank:\n  id: \"%s\"\n  version: 1\n\nfixtures: []\n", id);
+    fclose(f);
+
+    const char *paths = spark_env_get("SPARK_FIXTURE_BANK_PATH");
+    editor_load_banks(&s_editor, paths);
+
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+/* ---- File browser ---- */
+
+static int s_is_hidden(const char *name)
+{
+    return name[0] == '.';
+}
+
+static int s_is_browsable(const char *name)
+{
+    size_t len = strlen(name);
+    if (len >= 5 && strcmp(name + len - 5, ".yaml") == 0) return 1;
+    if (len >= 4 && strcmp(name + len - 4, ".yml") == 0) return 1;
+    return 0;
+}
+
+#ifdef _WIN32
+
+static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
+{
+    char path[EDITOR_PATH_MAX] = {0};
+    mg_http_get_var(&hm->query, "path", path, sizeof(path));
+
+    if (path[0] == '\0' || (path[0] == '/' && path[1] == '\0'))
+    {
+        _getcwd(path, sizeof(path));
+    }
+
+    size_t plen = strlen(path);
+    while (plen > 1 && (path[plen - 1] == '/' || path[plen - 1] == '\\'))
+        path[--plen] = '\0';
+
+    char pattern[EDITOR_PATH_MAX + 4];
+    snprintf(pattern, sizeof(pattern), "%s\\*", path);
+
+    spark_log_debug("browse: path='%s' pattern='%s'", path, pattern);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE)
+    {
+        spark_log_debug("browse: FindFirstFileA failed for '%s'", pattern);
+        mg_json_reply(c, 404, "{\"error\":\"cannot open directory\"}");
+        return;
+    }
+
+    char escaped_path[EDITOR_PATH_MAX * 2];
+    s_escape_json_str(path, escaped_path, sizeof(escaped_path));
+
+    char *out = (char *)malloc(64 * 1024);
+    int pos = 0;
+    pos += snprintf(out + pos, 64 * 1024 - pos,
+        "{\"path\":\"%s\",\"entries\":[", escaped_path);
+
+    int first = 1;
+    do {
+        if (s_is_hidden(fd.cFileName)) continue;
+        int is_dir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (!is_dir && !s_is_browsable(fd.cFileName)) continue;
+
+        if (!first) pos += snprintf(out + pos, 64 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 64 * 1024 - pos,
+            "{\"name\":\"%s\",\"type\":\"%s\"}",
+            fd.cFileName, is_dir ? "dir" : "file");
+        first = 0;
+    } while (FindNextFileA(h, &fd));
+
+    FindClose(h);
+    pos += snprintf(out + pos, 64 * 1024 - pos, "]}");
+
+    mg_http_reply(c, 200,
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: application/json\r\n",
+        "%.*s", pos, out);
+    free(out);
+}
+
+#else
+
+static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
+{
+    char path[EDITOR_PATH_MAX] = {0};
+    mg_http_get_var(&hm->query, "path", path, sizeof(path));
+
+    if (path[0] == '\0')
+    {
+        getcwd(path, sizeof(path));
+    }
+
+    DIR *dir = opendir(path);
+    if (!dir)
+    {
+        mg_json_reply(c, 404, "{\"error\":\"cannot open directory\"}");
+        return;
+    }
+
+    char *out = (char *)malloc(64 * 1024);
+    int pos = 0;
+    pos += snprintf(out + pos, 64 * 1024 - pos,
+        "{\"path\":\"%s\",\"entries\":[", path);
+
+    struct dirent *entry;
+    int first = 1;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (s_is_hidden(entry->d_name)) continue;
+
+        int is_dir = 0;
+        if (entry->d_type == DT_DIR)
+        {
+            is_dir = 1;
+        }
+        else if (entry->d_type == DT_UNKNOWN)
+        {
+            char fullpath[EDITOR_PATH_MAX * 2];
+            snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
+            struct stat st;
+            if (stat(fullpath, &st) == 0 && S_ISDIR(st.st_mode))
+                is_dir = 1;
+        }
+
+        if (!is_dir && !s_is_browsable(entry->d_name)) continue;
+
+        if (!first) pos += snprintf(out + pos, 64 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 64 * 1024 - pos,
+            "{\"name\":\"%s\",\"type\":\"%s\"}",
+            entry->d_name, is_dir ? "dir" : "file");
+        first = 0;
+    }
+
+    closedir(dir);
+    pos += snprintf(out + pos, 64 * 1024 - pos, "]}");
+
+    mg_http_reply(c, 200,
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: application/json\r\n",
+        "%.*s", pos, out);
+    free(out);
+}
+
+#endif
+
+/* ---- Route dispatcher ---- */
+
+bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
+{
+    if (mg_match(hm->uri, mg_str("/api/editor/status"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_status(c);
+        return true;
+    }
+    if (mg_match(hm->uri, mg_str("/api/editor/open"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_open(c, hm);
+        return true;
+    }
+    if (mg_match(hm->uri, mg_str("/api/editor/close"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_close(c);
+        return true;
+    }
+    if (mg_match(hm->uri, mg_str("/api/editor/save"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_save(c);
+        return true;
+    }
+
+    /* Bank dirs + create */
+    if (mg_match(hm->uri, mg_str("/api/editor/bank-dirs"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_bank_dirs(c);
+        return true;
+    }
+    if (mg_match(hm->uri, mg_str("/api/editor/banks/create"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_bank_create(c, hm);
+        return true;
+    }
+
+    /* File browser */
+    if (mg_match(hm->uri, mg_str("/api/editor/browse"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_browse(c, hm);
+        return true;
+    }
+
+    /* Project fixtures */
+    if (mg_match(hm->uri, mg_str("/api/editor/fixtures"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_fixtures_get(c);
+        return true;
+    }
+    if (mg_match(hm->uri, mg_str("/api/editor/fixtures"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_fixture_add(c, hm);
+        return true;
+    }
+
+    /* /api/editor/fixtures/:index */
+    if (mg_match(hm->uri, mg_str("/api/editor/fixtures/#"), NULL))
+    {
+        struct mg_str tail = hm->uri;
+        tail.buf += 22; /* skip "/api/editor/fixtures/" */
+        tail.len -= 22;
+        int idx = (int)strtoul(tail.buf, NULL, 10);
+
+        if (mg_method_is(hm, "PUT"))
+        {
+            s_handle_fixture_update(c, hm, idx);
+            return true;
+        }
+        if (mg_method_is(hm, "DELETE"))
+        {
+            s_handle_fixture_delete(c, idx);
+            return true;
+        }
+    }
+
+    /* Banks list */
+    if (mg_match(hm->uri, mg_str("/api/editor/banks"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_banks_get(c);
+        return true;
+    }
+
+    /* /api/editor/banks/:bank_idx/save */
+    if (mg_match(hm->uri, mg_str("/api/editor/banks/#/save"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        struct mg_str tail = hm->uri;
+        tail.buf += 19; /* "/api/editor/banks/" */
+        tail.len -= 19;
+        int bank_idx = (int)strtoul(tail.buf, NULL, 10);
+        s_handle_bank_save(c, bank_idx);
+        return true;
+    }
+
+    /* /api/editor/banks/:bank_idx/fixtures */
+    if (mg_match(hm->uri, mg_str("/api/editor/banks/#/fixtures"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        struct mg_str tail = hm->uri;
+        tail.buf += 19;
+        tail.len -= 19;
+        int bank_idx = (int)strtoul(tail.buf, NULL, 10);
+        s_handle_bank_fixture_add(c, hm, bank_idx);
+        return true;
+    }
+
+    /* /api/editor/banks/:bank_idx/fixtures/:fix_idx */
+    if (mg_match(hm->uri, mg_str("/api/editor/banks/#/fixtures/#"), NULL))
+    {
+        struct mg_str tail = hm->uri;
+        tail.buf += 19;
+        tail.len -= 19;
+        char *end;
+        int bank_idx = (int)strtoul(tail.buf, &end, 10);
+        const char *fix_part = end + 10; /* skip "/fixtures/" */
+        int fix_idx = (int)strtoul(fix_part, NULL, 10);
+
+        if (mg_method_is(hm, "PUT"))
+        {
+            s_handle_bank_fixture_update(c, hm, bank_idx, fix_idx);
+            return true;
+        }
+        if (mg_method_is(hm, "DELETE"))
+        {
+            s_handle_bank_fixture_delete(c, bank_idx, fix_idx);
+            return true;
+        }
+    }
+
+    return false;
+}

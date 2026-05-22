@@ -275,7 +275,7 @@ static void s_handle_midi_reconnect(struct mg_connection *c)
     }
 
     int rc = spark_engine_midi_reconnect();
-    if (rc != 0)
+    if (rc < 0)
     {
         mg_http_reply(c, 500, s_json_content_type,
             "{%m:%m}\n",

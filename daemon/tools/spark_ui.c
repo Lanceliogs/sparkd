@@ -1,4 +1,6 @@
 #include "mongoose.h"
+#include "env.h"
+#include "log.h"
 
 #include <signal.h>
 #include <stdbool.h>
@@ -6,8 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DEFAULT_HTTP_ADDR "http://127.0.0.1:7601"
-#define DEFAULT_DAEMON_ADDR "http://127.0.0.1:7600"
+#define DEFAULT_HTTP_ADDR "127.0.0.1:7601"
+#define DEFAULT_DAEMON_ADDR "127.0.0.1:7600"
 #define DEFAULT_UI_ROOT "ui/dist"
 
 static volatile bool s_running = true;
@@ -262,14 +264,16 @@ static void s_open_browser(const char *addr)
 
 int main(int argc, char **argv)
 {
+    spark_env_load();
+
     char http_addr[256];
     snprintf(http_addr, sizeof(http_addr), "%s", DEFAULT_HTTP_ADDR);
     bool open_browser = false;
 
     const char *env;
-    if ((env = getenv("SPARK_UI_HTTP_ADDR")) != NULL)
+    if ((env = spark_env_get("SPARK_UI_HTTP_ADDR")) != NULL)
         snprintf(http_addr, sizeof(http_addr), "%s", env);
-    if ((env = getenv("SPARK_UI_DAEMON_ADDR")) != NULL)
+    if ((env = spark_env_get("SPARK_UI_DAEMON_ADDR")) != NULL)
         snprintf(s_daemon_addr, sizeof(s_daemon_addr), "%s", env);
 
     for (int i = 1; i < argc; i++)
@@ -297,11 +301,19 @@ int main(int argc, char **argv)
     signal(SIGINT, s_signal_handler);
     signal(SIGTERM, s_signal_handler);
 
+    /* Build full URLs with protocol prefix */
+    char listen_url[270];
+    snprintf(listen_url, sizeof(listen_url), "http://%s", http_addr);
+
+    char daemon_full[270];
+    snprintf(daemon_full, sizeof(daemon_full), "http://%s", s_daemon_addr);
+    strncpy(s_daemon_addr, daemon_full, sizeof(s_daemon_addr) - 1);
+
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
     mg_log_set(0);
 
-    struct mg_connection *c = mg_http_listen(&mgr, http_addr, s_ev_handler, &mgr);
+    struct mg_connection *c = mg_http_listen(&mgr, listen_url, s_ev_handler, &mgr);
     if (!c)
     {
         fprintf(stderr, "spark-ui: failed to listen on %s\n", http_addr);
@@ -312,7 +324,7 @@ int main(int argc, char **argv)
     printf("spark-ui: proxying /api/* to %s\n", s_daemon_addr);
 
     if (open_browser)
-        s_open_browser(http_addr);
+        s_open_browser(listen_url);
 
     while (s_running)
         mg_mgr_poll(&mgr, 100);

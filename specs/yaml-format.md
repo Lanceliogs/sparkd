@@ -40,7 +40,7 @@ scenes: []
 | `fixtures`         | **parsed**   | Physical lights and channels        |
 | `scenes`           | **parsed**   | Lighting states (static + sequence) |
 | `includes`         | **parsed**   | Include files (directory mode)      |
-| `fixture-templates`| skipped      | Reusable channel layout helpers     |
+| `fixture-templates`| skipped      | (deprecated: use fixture bank files)|
 | `mappings`         | skipped      | MIDI trigger to action bindings     |
 | `http`             | skipped      | HTTP server config                  |
 | `safety`           | skipped      | Heartbeat surveillance config       |
@@ -141,6 +141,8 @@ Constraints:
 
 A fixture represents one physical light patched at a DMX start address.
 
+### Inline channels (default)
+
 ```yaml
 fixtures:
   - id: leftpar
@@ -160,15 +162,51 @@ fixtures:
         offset: 4
 ```
 
+### Copy from another fixture
+
+Copies `channel-count` and `channels` from a fixture defined earlier in the same file:
+
+```yaml
+fixtures:
+  - id: leftpar
+    start-address: 1
+    channel-count: 5
+    channels:
+      - name: dimmer
+        offset: 0
+      # ...
+
+  - id: rightpar
+    start-address: 6
+    copy-from: leftpar           # inherits channel layout from leftpar
+```
+
+### Template from fixture bank
+
+Copies `channel-count` and `channels` from a template in an external bank file:
+
+```yaml
+fixtures:
+  - id: leftpar
+    start-address: 1
+    template: stairville:par-8ch   # bank-id:fixture-id
+```
+
 ### Fixture fields
 
-| Field           | Required | Type   | Description                          |
-|-----------------|----------|--------|--------------------------------------|
-| `id`            | yes      | string | Unique identifier                    |
-| `name`          | no       | string | Display name (defaults to `id`)      |
-| `start-address` | yes      | int    | DMX start address (1-512)            |
-| `channel-count` | yes      | int    | Number of DMX channels               |
-| `channels`      | yes      | list   | Channel definitions                  |
+| Field           | Required | Type   | Description                                |
+|-----------------|----------|--------|--------------------------------------------|
+| `id`            | yes      | string | Unique identifier                          |
+| `name`          | no       | string | Display name (defaults to `id`)            |
+| `start-address` | yes      | int    | DMX start address (1-512)                  |
+| `channel-count` | cond.    | int    | Number of DMX channels                     |
+| `channels`      | cond.    | list   | Channel definitions                        |
+| `copy-from`     | cond.    | string | ID of fixture earlier in file to copy from |
+| `template`      | cond.    | string | `bank-id:fixture-id` from bank             |
+
+Channel source fields (`channels`, `copy-from`, `template`) are mutually exclusive.
+Exactly one must be present. When using `copy-from` or `template`, `channel-count`
+is inherited automatically.
 
 ### Channel fields
 
@@ -186,6 +224,69 @@ fixture-id.channel-name
 ```
 
 Resolution: `dmx_index = (start-address - 1) + channel.offset`
+
+---
+
+## Fixture Bank Files
+
+Bank files define reusable fixture templates that can be referenced by any project.
+They live in directories listed in `SPARK_FIXTURE_BANK_PATH` (or `~/.spark/fixtures/`).
+
+```yaml
+bank:
+  id: stairville
+  version: 1
+
+fixtures:
+  - id: par-8ch
+    channel-count: 8
+    channels:
+      - name: dimmer
+        offset: 0
+      - name: red
+        offset: 1
+      - name: green
+        offset: 2
+      - name: blue
+        offset: 3
+      - name: white
+        offset: 4
+      - name: mode
+        offset: 5
+      - name: color
+        offset: 6
+      - name: strobe
+        offset: 7
+
+  - id: par-4ch
+    channel-count: 4
+    channels:
+      - name: red
+        offset: 0
+      - name: green
+        offset: 1
+      - name: blue
+        offset: 2
+      - name: dimmer
+        offset: 3
+```
+
+### Bank file fields
+
+| Field          | Required | Type   | Description                              |
+|----------------|----------|--------|------------------------------------------|
+| `bank.id`      | yes      | string | Unique bank identifier                   |
+| `bank.version` | no       | int    | Bank version (informational)             |
+| `fixtures`     | yes      | list   | Fixture templates (no `start-address`)   |
+
+### Loading rules
+
+- `SPARK_FIXTURE_BANK_PATH` uses `;` as separator (e.g. `/path/a;/path/b`)
+- All `.yaml`/`.yml` files in each directory are scanned
+- Files without `bank.id` are skipped (warning)
+- Duplicate `bank.id` across files: second file is skipped (warning with path)
+- `bank:` section must appear before `fixtures:` in the file
+- Templates are referenced as `bank-id:fixture-id` in project files
 
 ---
 

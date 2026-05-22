@@ -12,29 +12,13 @@ midi:
 dmx:
   device: COM3
   backend: open
+  refresh-rate-hz: 25
 
 fixtures:
   - id: par
     name: Stairville PAR
     start-address: 1
-    channel-count: 8
-    channels:
-      - name: dimmer
-        offset: 0
-      - name: red
-        offset: 1
-      - name: green
-        offset: 2
-      - name: blue
-        offset: 3
-      - name: white
-        offset: 4
-      - name: mode
-        offset: 5
-      - name: color
-        offset: 6
-      - name: strobe
-        offset: 7
+    template: "stairville:par"
 
 scenes:
   - id: red-wash

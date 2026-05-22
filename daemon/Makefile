@@ -30,9 +30,9 @@ endif
 TARGET := $(BUILDDIR)/sparkd$(EXE)
 
 # Source files (add as modules are implemented)
-SRCS := src/main.c src/log.c src/clock.c src/engine.c src/http.c
+SRCS := src/main.c src/log.c src/clock.c src/env.c src/engine.c src/http.c
 SRCS += src/project/project.c src/project/project_yaml.c
-SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/dmx/dmx_out.c src/serial/serial.c
+SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/fixture_bank.c src/dmx/dmx_out.c src/serial/serial.c
 SRCS += src/dmx/dmx.c src/dmx/dmx_dummy.c src/dmx/dmx_open.c
 
 OBJS := $(SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
@@ -107,17 +107,19 @@ $(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJ
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ)
+ENV_OBJS := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o
+
+$(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ) $(ENV_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) -Wall -Wextra -pedantic -std=c17 -g -D_DEFAULT_SOURCE -I$(MONGOOSEDIR) -o $@ $< $(MG_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(MG_OBJ) $(ENV_OBJS) $(LDFLAGS)
 
 $(BUILDDIR)/tools/spark-midi$(EXE): tools/spark_midi.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/tools/spark-ui$(EXE): tools/spark_ui.c $(MG_OBJ)
+$(BUILDDIR)/tools/spark-ui$(EXE): tools/spark_ui.c $(MG_OBJ) $(ENV_OBJS) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) -Wall -Wextra -pedantic -std=c17 -g -D_DEFAULT_SOURCE -I$(MONGOOSEDIR) -o $@ $< $(MG_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(MG_OBJ) $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILDDIR)/daemon $(BUILDDIR)/tests $(BUILDDIR)/tools $(BUILDDIR)/vendor $(TARGET)

@@ -1,6 +1,8 @@
 #include "consts.h"
 #include "log.h"
+#include "env.h"
 #include "engine.h"
+#include "fixture_bank.h"
 #include "http.h"
 
 #include <stdbool.h>
@@ -20,7 +22,7 @@ void signal_handler(int signum)
 }
 
 #define SPARK_HTTP_ADDR_STRLEN 128
-#define SPARK_HTTP_DEFAULT_ADDR "http://127.0.0.1:7600"
+#define SPARK_HTTP_DEFAULT_ADDR "127.0.0.1:7600"
 
 typedef struct {
     spark_log_level_t log_level;
@@ -65,6 +67,8 @@ static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
 
 int main(int argc, char **argv)
 {
+    spark_env_load();
+
     spark_args_t args = {
         .print_help = false,
         .print_version = false,
@@ -73,11 +77,11 @@ int main(int argc, char **argv)
         .project = "",
     };
 
-    const char *env_addr = getenv("SPARK_HTTP_ADDR");
+    const char *env_addr = spark_env_get("SPARK_HTTP_ADDR");
     if (env_addr)
         snprintf(args.http_addr, sizeof(args.http_addr), "%s", env_addr);
 
-    const char *env_project = getenv("SPARK_PROJECT_PATH");
+    const char *env_project = spark_env_get("SPARK_PROJECT_PATH");
     if (env_project)
         snprintf(args.project, sizeof(args.project), "%s", env_project);
 
@@ -97,7 +101,7 @@ int main(int argc, char **argv)
         printf("\n");
         printf("  sparkd --help        Print this help\n");
         printf("  sparkd --version     Print the version\n");
-        printf("  --http ADDR          HTTP listen address (default: %s)\n", SPARK_HTTP_DEFAULT_ADDR);
+        printf("  --http HOST:PORT     HTTP listen address (default: %s)\n", args.http_addr);
         printf("  --project PATH       Project file to load (omit for hardcoded fallback)\n");
         printf("  --auto               Auto-start engine after loading project\n");
         printf("  --validate           Validate project and exit (requires --project)\n");
@@ -116,6 +120,9 @@ int main(int argc, char **argv)
     int rc = spark_engine_init();
     if (rc != 0)
         return rc;
+
+    const char *bank_paths = spark_env_get("SPARK_FIXTURE_BANK_PATH");
+    spark_fixture_bank_load(bank_paths);
 
     const char *project_path = args.project[0] ? args.project : NULL;
     rc = spark_engine_load_project(project_path);
@@ -142,7 +149,9 @@ int main(int argc, char **argv)
         }
     }
 
-    rc = spark_http_init(args.http_addr);
+    char http_listen[SPARK_HTTP_ADDR_STRLEN + 8];
+    snprintf(http_listen, sizeof(http_listen), "http://%s", args.http_addr);
+    rc = spark_http_init(http_listen);
     if (rc != 0)
     {
         if (args.auto_start)

@@ -17,11 +17,14 @@
 #include "midi.h"
 #include "dmx/dmx.h"
 
+#include <stdint.h>
+
 typedef struct {
     spark_midi_mode_t midi_mode;
     char midi_device[SPARK_MIDI_PORT_STRLEN];
     spark_dmx_backend_type_t dmx_backend;
     char dmx_device[SPARK_SERIAL_PORT_STRLEN];
+    uint8_t dmx_refresh_rate_hz;
 } spark_project_config_t;
 
 int spark_project_load(const char *path, spark_project_config_t *config_out);

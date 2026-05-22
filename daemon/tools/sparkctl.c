@@ -1,11 +1,13 @@
 #include "mongoose.h"
+#include "env.h"
+#include "log.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define DEFAULT_ADDR "http://127.0.0.1:7600"
+#define DEFAULT_ADDR "127.0.0.1:7600"
 
 typedef struct {
     const char *method;
@@ -125,8 +127,10 @@ static void s_print_status(const char *body)
 
 int main(int argc, char **argv)
 {
+    spark_env_load();
+
     char addr[256];
-    const char *env_addr = getenv("SPARK_HTTP_ADDR");
+    const char *env_addr = spark_env_get("SPARK_HTTP_ADDR");
     snprintf(addr, sizeof(addr), "%s", env_addr ? env_addr : DEFAULT_ADDR);
 
     const char *cmd_name = NULL;
@@ -181,7 +185,7 @@ int main(int argc, char **argv)
     }
 
     char url[512];
-    snprintf(url, sizeof(url), "%s%s", addr, cmd->path);
+    snprintf(url, sizeof(url), "http://%s%s", addr, cmd->path);
 
     char req_body[1024] = "";
     if (strcmp(cmd_name, "set-blackout") == 0)

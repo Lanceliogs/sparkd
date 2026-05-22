@@ -1,5 +1,6 @@
 #include "project_yaml.h"
 #include "../fixture.h"
+#include "../fixture_bank.h"
 #include "../scene.h"
 #include "../consts.h"
 #include "../log.h"
@@ -191,6 +192,9 @@ static int s_parse_fixture(yaml_parser_t *p)
 
     spark_channel_def_t channels[64];
     uint8_t channel_count = 0;
+    char copy_from[SPARK_MAX_ID_SIZE] = {0};
+    char template_ref[SPARK_MAX_ID_SIZE + SPARK_MAX_ID_SIZE] = {0};
+    int has_inline_channels = 0;
 
     for (;;)
     {
@@ -258,6 +262,21 @@ static int s_parse_fixture(yaml_parser_t *p)
             yaml_event_delete(&ev);
             if (s_parse_channels(p, channels, &channel_count, 64) != 0)
                 return -1;
+            has_inline_channels = 1;
+        }
+        else if (strcmp(key, "copy-from") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            strncpy(copy_from, s_scalar(&ev), sizeof(copy_from) - 1);
+            yaml_event_delete(&ev);
+        }
+        else if (strcmp(key, "template") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            strncpy(template_ref, s_scalar(&ev), sizeof(template_ref) - 1);
+            yaml_event_delete(&ev);
         }
         else
         {
@@ -266,6 +285,7 @@ static int s_parse_fixture(yaml_parser_t *p)
         }
     }
 
+    /* Validation */
     if (fix.id[0] == '\0')
     {
         spark_log_error("project: fixture missing 'id'");
@@ -276,21 +296,64 @@ static int s_parse_fixture(yaml_parser_t *p)
         spark_log_error("project: fixture '%s' missing 'start-address'", fix.id);
         return -1;
     }
-    if (fix.channel_count == 0)
+
+    int source_count = (copy_from[0] != '\0') + (template_ref[0] != '\0') + has_inline_channels;
+    if (source_count > 1)
     {
-        spark_log_error("project: fixture '%s' missing 'channel-count'", fix.id);
+        spark_log_error("project: fixture '%s' has multiple channel sources "
+                        "(use only one of: channels, copy-from, template)", fix.id);
         return -1;
+    }
+
+    /* Resolve channel data */
+    if (copy_from[0] != '\0')
+    {
+        const spark_fixture_t *src = spark_fixture_find(copy_from);
+        if (!src)
+        {
+            spark_log_error("project: fixture '%s' copy-from '%s' not found "
+                            "(must appear earlier in file)", fix.id, copy_from);
+            return -1;
+        }
+        fix.channel_count = src->channel_count;
+        fix.channels = src->channels;
+        spark_log_debug("project: fixture '%s' copying channels from '%s'", fix.id, copy_from);
+    }
+    else if (template_ref[0] != '\0')
+    {
+        const spark_fixture_t *src = spark_fixture_bank_find(template_ref);
+        if (!src)
+        {
+            spark_log_error("project: fixture '%s' template '%s' not found in bank",
+                            fix.id, template_ref);
+            return -1;
+        }
+        fix.channel_count = src->channel_count;
+        fix.channels = src->channels;
+        spark_log_debug("project: fixture '%s' using template '%s'", fix.id, template_ref);
+    }
+    else
+    {
+        /* Inline channels (current behavior) */
+        if (fix.channel_count == 0 && channel_count == 0)
+        {
+            spark_log_error("project: fixture '%s' missing channel data "
+                            "(provide channels, copy-from, or template)", fix.id);
+            return -1;
+        }
+        if (fix.channel_count == 0)
+            fix.channel_count = channel_count;
+
+        fix.channels = channels;
+        if (channel_count > 0 && channel_count != fix.channel_count)
+        {
+            spark_log_warn("project: fixture '%s' channel-count %d != channels listed %d",
+                fix.id, fix.channel_count, channel_count);
+        }
     }
 
     if (fix.name[0] == '\0')
         strncpy(fix.name, fix.id, SPARK_MAX_NAME_SIZE - 1);
-
-    fix.channels = channels;
-    if (channel_count > 0 && channel_count != fix.channel_count)
-    {
-        spark_log_warn("project: fixture '%s' channel-count %d != channels listed %d",
-            fix.id, fix.channel_count, channel_count);
-    }
 
     return spark_fixture_add(&fix);
 }
@@ -868,6 +931,18 @@ static int s_parse_dmx(yaml_parser_t *p, spark_project_config_t *cfg)
             yaml_event_delete(&ev);
             if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
             strncpy(cfg->dmx_device, s_scalar(&ev), SPARK_SERIAL_PORT_STRLEN - 1);
+            yaml_event_delete(&ev);
+        }
+        else if (strcmp(key, "refresh-rate-hz") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            int val;
+            if (s_scalar_to_int(&ev, &val) == 0 && val >= 1 && val <= 44)
+                cfg->dmx_refresh_rate_hz = (uint8_t)val;
+            else
+                spark_log_warn("project: refresh-rate-hz out of range (1-44) at line %zu, using default",
+                    ev.start_mark.line + 1);
             yaml_event_delete(&ev);
         }
         else

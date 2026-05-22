@@ -76,6 +76,8 @@ static int s_start_dmx(void)
     }
 
     spark_dmx_out_init(&s_dmx_out, &s_dmx_backend, &s_stage);
+    if (s_config.dmx_refresh_rate_hz > 0)
+        s_dmx_out.refresh_rate_hz = s_config.dmx_refresh_rate_hz;
 
     int rc = spark_dmx_out_start(&s_dmx_out);
     if (rc != 0)

@@ -1,6 +1,8 @@
 #include "http.h"
 #include "engine.h"
 #include "scene.h"
+#include "fixture_bank.h"
+#include "env.h"
 #include "consts.h"
 #include "log.h"
 #include "clock.h"
@@ -227,6 +229,15 @@ static void s_handle_project_reload(struct mg_connection *c, struct mg_http_mess
         MG_ESC("status"), MG_ESC("reloaded"));
 }
 
+static void s_handle_fixture_bank_reload(struct mg_connection *c)
+{
+    const char *paths = spark_env_get("SPARK_FIXTURE_BANK_PATH");
+    spark_fixture_bank_reload(paths);
+    mg_http_reply(c, 200, s_json_content_type,
+        "{%m:%m}\n",
+        MG_ESC("status"), MG_ESC("bank reloaded"));
+}
+
 static void s_handle_blackout_get(struct mg_connection *c)
 {
     bool blackout = spark_engine_get_blackout();
@@ -281,7 +292,8 @@ static void s_handle_scenes_list(struct mg_connection *c)
     uint16_t count;
     const spark_scene_def_t *defs = spark_scene_get_defs(&count);
 
-    char buf[8192] = "[";
+    /* The big ass format in snprintf has a size of 96, so at least max scene defs times 128 */
+    char buf[SPARK_SCENE_DEFS_MAX * 128] = "[";
     size_t pos = 1;
 
     for (uint16_t i = 0; i < count && pos < sizeof(buf) - 200; i++)
@@ -407,6 +419,9 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
     else if (mg_match(hm->uri, mg_str("/api/project/reload"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
         s_handle_project_reload(c, hm);
+    else if (mg_match(hm->uri, mg_str("/api/fixtures/bank/reload"), NULL) &&
+             mg_match(hm->method, mg_str("POST"), NULL))
+        s_handle_fixture_bank_reload(c);
     else if (mg_match(hm->uri, mg_str("/api/scenes"), NULL) &&
              mg_match(hm->method, mg_str("GET"), NULL))
         s_handle_scenes_list(c);

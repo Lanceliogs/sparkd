@@ -14,7 +14,7 @@ sparkd [OPTIONS]
 |--------|----------|---------|-------------|
 | `--project` | PATH | none | Project file to load (`.spark.yaml`) |
 | `--auto` | | off | Auto-start the engine after loading the project |
-| `--http` | ADDR | `http://127.0.0.1:7600` | HTTP listen address |
+| `--http` | HOST:PORT | `127.0.0.1:7600` | HTTP listen address |
 | `--log-level` | LEVEL | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
 | `--validate` | | | Validate project file and exit (requires `--project`) |
 | `--version` | | | Print version and exit |
@@ -25,11 +25,14 @@ MIDI and DMX configuration is defined in the project YAML file (not CLI args).
 ## Environment Variables
 
 Environment variables are read before CLI arguments. CLI arguments override them.
+Variables can be defined in a `.spark.env` file (searched in CWD, then `~/.spark/.spark.env`).
+Real env vars always take priority over file values.
 
 | Variable | Description | Equivalent CLI |
 |----------|-------------|----------------|
 | `SPARK_PROJECT_PATH` | Default project file path | `--project` |
-| `SPARK_HTTP_ADDR` | Default HTTP listen address | `--http` |
+| `SPARK_HTTP_ADDR` | HTTP listen address (`host:port`) | `--http` |
+| `SPARK_FIXTURE_BANK_PATH` | Semicolon-separated fixture bank directories | — |
 
 ## Lifecycle Modes
 
@@ -79,18 +82,25 @@ sparkctl start                    # resume MIDI + DMX
 
 ## HTTP API
 
-The daemon listens on the configured HTTP address (default `http://127.0.0.1:7600`).
+The daemon listens on the configured HTTP address (default `127.0.0.1:7600`).
 
 ### Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/healthz` | Health check (version, pid, uptime) |
-| GET | `/api/engine/state` | Engine status (running, backend, devices) |
+| GET | `/api/engine/state` | Engine status (running, blackout, project, active scenes) |
 | POST | `/api/engine/start` | Start the engine (uses config from loaded project) |
 | POST | `/api/engine/stop` | Stop the engine |
+| GET | `/api/engine/blackout` | Get blackout state |
+| POST | `/api/engine/blackout` | Set blackout `{"enabled": true/false}` |
 | POST | `/api/engine/midi/reconnect` | Reconnect MIDI device |
 | POST | `/api/project/reload` | Reload project (engine must be stopped) |
+| POST | `/api/fixtures/bank/reload` | Reload fixture bank from search paths |
+| GET | `/api/scenes` | List scene definitions |
+| POST | `/api/scenes/{id}/activate` | Activate a scene |
+| POST | `/api/scenes/{id}/release` | Release a scene |
+| — | `/ws` | WebSocket for live events |
 
 ### POST /api/engine/start
 
@@ -129,7 +139,7 @@ sparkd --project projects/example/project.spark.yaml --auto --log-level debug
 
 # Production with env vars
 export SPARK_PROJECT_PATH=/opt/show/main.spark.yaml
-export SPARK_HTTP_ADDR=http://0.0.0.0:8080
+export SPARK_HTTP_ADDR=0.0.0.0:8080
 sparkd --auto
 
 # Validate before deploying

@@ -12,7 +12,7 @@ midi:
 dmx:
   device: COM3
   backend: open
-  refresh-rate-hz: 44
+  refresh-rate-hz: 25
 
 fixtures:
   - id: par

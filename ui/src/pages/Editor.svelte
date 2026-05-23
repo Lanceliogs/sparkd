@@ -1,5 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import FileBrowser from '../components/FileBrowser.svelte';
+  import PadGrid from '../components/PadGrid.svelte';
+  import type { PadItem } from '../components/PadGrid.svelte';
+  import HardwareForm from '../components/HardwareForm.svelte';
+  import FixtureForm from '../components/FixtureForm.svelte';
+  import SceneForm from '../components/SceneForm.svelte';
   import {
     editorStatus,
     editorOpen,
@@ -18,7 +24,6 @@
     editorBankSave,
     editorGetBankDirs,
     editorCreateBank,
-    editorBrowse,
     editorGetHardware,
     editorUpdateHardware,
     editorGetScenes,
@@ -29,7 +34,6 @@
     type EditorFixture,
     type EditorBank,
     type BankFixture,
-    type BrowseResult,
     type HardwareConfig,
     type EditorScene,
     type SceneValue,
@@ -57,6 +61,7 @@
   let editDirty = $state(false);
   let showDiscardModal = $state(false);
   let pendingSelection: Selection = $state(null);
+  let pendingAction: (() => void) | null = $state(null);
 
   let editFixture: EditorFixture | null = $state(null);
   let editBankFixture: BankFixture | null = $state(null);
@@ -68,9 +73,7 @@
   let newBankDir = $state('');
 
   /* ---- File browser ---- */
-  let showBrowser = $state(false);
-  let browseResult: BrowseResult | null = $state(null);
-  let openPath = $state('');
+  let browserMode: 'open' | 'save' | null = $state(null);
 
   /* ---- Data loading ---- */
   async function refresh() {
@@ -146,12 +149,20 @@
   function confirmDiscard() {
     editDirty = false;
     showDiscardModal = false;
-    if (pendingSelection !== undefined) applySelection(pendingSelection);
+    if (pendingAction) {
+      const action = pendingAction;
+      pendingAction = null;
+      pendingSelection = null;
+      action();
+    } else if (pendingSelection !== undefined) {
+      applySelection(pendingSelection);
+    }
   }
 
   function cancelDiscard() {
     showDiscardModal = false;
     pendingSelection = null;
+    pendingAction = null;
   }
 
   function closeEdit() {
@@ -163,16 +174,18 @@
   }
 
   /* ---- Project lifecycle ---- */
-  async function handleOpen() {
-    if (!openPath) return;
-    await editorOpen(openPath);
-    showBrowser = false;
-    await refresh();
+  function handleClose() {
+    if (status.dirty || editDirty) {
+      pendingAction = doClose;
+      showDiscardModal = true;
+      return;
+    }
+    doClose();
   }
 
-  async function handleClose() {
+  async function doClose() {
     await editorClose();
-    selection = null; editFixture = null; editBankFixture = null; editDirty = false;
+    selection = null; editFixture = null; editBankFixture = null; editScene = null; editDirty = false;
     await refresh();
   }
 
@@ -181,44 +194,32 @@
     await refresh();
   }
 
-  /* ---- File browser ---- */
-  async function openBrowser() {
-    showBrowser = true;
-    browseResult = await editorBrowse('');
+  /* ---- File browser callbacks ---- */
+  async function handleBrowserConfirm(fullPath: string) {
+    if (browserMode === 'open' && (status.dirty || editDirty)) {
+      browserMode = null;
+      pendingAction = async () => {
+        await editorOpen(fullPath);
+        selection = null; editFixture = null; editBankFixture = null; editScene = null; editDirty = false;
+        await refresh();
+      };
+      showDiscardModal = true;
+      return;
+    }
+    if (browserMode === 'open') {
+      await editorOpen(fullPath);
+    } else if (browserMode === 'save') {
+      await editorSaveAs(fullPath);
+    }
+    browserMode = null;
+    await refresh();
   }
 
-  async function browseTo(path: string) {
-    browseResult = await editorBrowse(path);
-  }
-
-  function joinPath(base: string, name: string): string {
-    const sep = base.endsWith('/') || base.endsWith('\\') ? '' : '/';
-    return base + sep + name;
-  }
-
-  function browseSelect(name: string) {
-    if (!browseResult) return;
-    const full = joinPath(browseResult.path, name);
-    openPath = full;
-    showBrowser = false;
-    editorOpen(full).then(() => refresh());
-  }
-
-  function browseNav(name: string) {
-    if (!browseResult) return;
-    browseTo(joinPath(browseResult.path, name));
-  }
-
-  function browseUp() {
-    if (!browseResult) return;
-    const normalized = browseResult.path.replace(/\\/g, '/');
-    const parts = normalized.split('/').filter(p => p !== '');
-    if (parts.length <= 1) return; /* Already at root (e.g. "E:") */
-    parts.pop();
-    const parent = parts.join('/');
-    /* Preserve drive letter on Windows (e.g. E:/Projects -> E:/) */
-    const result = parent.match(/^[A-Za-z]:$/) ? parent + '/' : parent;
-    browseTo(result);
+  function getProjectBasename(): string {
+    if (!status.project_path) return '';
+    const normalized = status.project_path.replace(/\\/g, '/');
+    const parts = normalized.split('/');
+    return parts[parts.length - 1] || '';
   }
 
   /* ---- Bank actions ---- */
@@ -332,64 +333,12 @@
     await refresh();
   }
 
-  function addSceneValue() {
-    if (!editScene) return;
-    editScene.values = [...editScene.values, { target: '', value: 0 }];
-    markDirty();
-  }
-
-  function removeSceneValue(i: number) {
-    if (!editScene) return;
-    editScene.values = editScene.values.filter((_, idx) => idx !== i);
-    markDirty();
-  }
-
-  function addSceneStep() {
-    if (!editScene) return;
-    editScene.steps = [...editScene.steps, { duration_ms: 1000, transition: 'hold', values: [] }];
-    markDirty();
-  }
-
-  function removeSceneStep(i: number) {
-    if (!editScene) return;
-    editScene.steps = editScene.steps.filter((_, idx) => idx !== i);
-    markDirty();
-  }
-
-  function addStepValue(stepIdx: number) {
-    if (!editScene) return;
-    editScene.steps[stepIdx].values = [...editScene.steps[stepIdx].values, { target: '', value: 0 }];
-    markDirty();
-  }
-
-  function removeStepValue(stepIdx: number, valIdx: number) {
-    if (!editScene) return;
-    editScene.steps[stepIdx].values = editScene.steps[stepIdx].values.filter((_, idx) => idx !== valIdx);
-    markDirty();
-  }
-
   /* ---- Hardware editing ---- */
-  let hwDirty = $state(false);
-
   async function saveHardware() {
     await editorUpdateHardware(hwConfig);
-    hwDirty = false;
     await refresh();
   }
 
-  function markHwDirty() { hwDirty = true; }
-
-  /* ---- Save As ---- */
-  let showSaveAs = $state(false);
-  let saveAsPath = $state('');
-
-  async function handleSaveAs() {
-    if (!saveAsPath) return;
-    await editorSaveAs(saveAsPath);
-    showSaveAs = false;
-    saveAsPath = '';
-    await refresh();
-  }
 
   /* ---- Fixtures sort ---- */
   async function handleFixturesSort() {
@@ -397,51 +346,7 @@
     await refresh();
   }
 
-  /* ---- Fixture/channel target helpers ---- */
-  function getFixtureTargets(): { fixture: string; channel: string; addr: number }[] {
-    const targets: { fixture: string; channel: string; addr: number }[] = [];
-    const sorted = [...fixtures].sort((a, b) => a.start_address - b.start_address);
-    for (const fix of sorted) {
-      for (const ch of fix.channels) {
-        targets.push({ fixture: fix.id, channel: ch.name, addr: fix.start_address });
-      }
-    }
-    return targets;
-  }
 
-  function validateTarget(target: string): 'valid' | 'warn' {
-    if (!target || !target.includes('.')) return 'warn';
-    const [fixId, chName] = target.split('.', 2);
-    const fix = fixtures.find(f => f.id === fixId);
-    if (!fix) return 'warn';
-    if (!fix.channels.some(c => c.name === chName)) return 'warn';
-    return 'valid';
-  }
-
-  /* ---- Channel helpers ---- */
-  function addChannel() {
-    if (editFixture) {
-      editFixture.channels = [...editFixture.channels, { name: '', offset: editFixture.channels.length }];
-      editFixture.channel_count = editFixture.channels.length;
-      markDirty();
-    } else if (editBankFixture) {
-      editBankFixture.channels = [...editBankFixture.channels, { name: '', offset: editBankFixture.channels.length }];
-      editBankFixture.channel_count = editBankFixture.channels.length;
-      markDirty();
-    }
-  }
-
-  function removeChannel(i: number) {
-    if (editFixture) {
-      editFixture.channels = editFixture.channels.filter((_, idx) => idx !== i);
-      editFixture.channel_count = editFixture.channels.length;
-      markDirty();
-    } else if (editBankFixture) {
-      editBankFixture.channels = editBankFixture.channels.filter((_, idx) => idx !== i);
-      editBankFixture.channel_count = editBankFixture.channels.length;
-      markDirty();
-    }
-  }
 
   /* ---- Helpers ---- */
   function isSelected(kind: SelectionKind, bankIdx: number | undefined, itemIdx: number): boolean {
@@ -457,39 +362,21 @@
     {#if status.dirty}<span class="dirty-badge">unsaved</span>{/if}
     <div class="project-actions">
       <button class="btn-sm" onclick={handleSave}>Save</button>
-      <button class="btn-sm btn-muted" onclick={() => showSaveAs = true}>Save As</button>
+      <button class="btn-sm btn-muted" onclick={() => browserMode = 'save'}>Save As</button>
       <button class="btn-sm btn-muted" onclick={handleClose}>Close</button>
     </div>
   {:else}
-    <input class="open-input" type="text" placeholder="Paste path or browse..." bind:value={openPath} onkeydown={(e) => { if (e.key === 'Enter') handleOpen(); }} />
-    <button class="btn-sm" onclick={handleOpen}>Open</button>
-    <button class="btn-sm btn-muted" onclick={openBrowser}>Browse</button>
+    <button class="btn-sm" onclick={() => browserMode = 'open'}>Open Project</button>
   {/if}
 </header>
 
-{#if showBrowser && browseResult}
-<div class="modal-overlay" role="dialog" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') showBrowser = false; }}>
-  <button class="modal-backdrop" aria-label="Close" onclick={() => showBrowser = false} tabindex="-1"></button>
-  <div class="modal">
-    <header class="modal-header">
-      <h3>Open Project</h3>
-      <button class="modal-close" onclick={() => showBrowser = false}>X</button>
-    </header>
-    <div class="browser-path">{browseResult.path}</div>
-    <div class="browser-list">
-      <button class="browser-entry dir" onclick={browseUp}>..</button>
-      {#each browseResult.entries.filter(e => e.type === 'dir').sort((a, b) => a.name.localeCompare(b.name)) as entry}
-        <button class="browser-entry dir" onclick={() => browseNav(entry.name)}>{entry.name}/</button>
-      {/each}
-      {#each browseResult.entries.filter(e => e.type === 'file').sort((a, b) => a.name.localeCompare(b.name)) as entry}
-        <button class="browser-entry file" onclick={() => browseSelect(entry.name)}>{entry.name}</button>
-      {/each}
-      {#if browseResult.entries.length === 0}
-        <span class="empty-msg">Empty directory</span>
-      {/if}
-    </div>
-  </div>
-</div>
+{#if browserMode}
+  <FileBrowser
+    mode={browserMode}
+    initialFilename={browserMode === 'save' ? getProjectBasename() : ''}
+    onconfirm={handleBrowserConfirm}
+    oncancel={() => browserMode = null}
+  />
 {/if}
 
 <!-- Main editor layout -->
@@ -529,17 +416,11 @@
               <button class="btn-xs btn-add" onclick={(e) => { e.stopPropagation(); startAddBankFixture(bank.index); }}>+</button>
             </div>
             {#if !collapsedBanks.has(bank.index)}
-              <div class="pad-grid">
-                {#each bank.fixtures as fix (fix.index)}
-                  <button
-                    class="pad-btn"
-                    class:selected={isSelected('bank_fixture', bank.index, fix.index!)}
-                    onclick={() => trySelect({ kind: 'bank_fixture', bankIdx: bank.index, itemIdx: fix.index! })}
-                  >
-                    {fix.id}
-                  </button>
-                {/each}
-              </div>
+              <PadGrid
+                items={bank.fixtures.map(f => ({ id: String(f.index), label: f.id }))}
+                selected={selection?.kind === 'bank_fixture' && selection.bankIdx === bank.index ? String(selection.itemIdx) : undefined}
+                onselect={(id) => trySelect({ kind: 'bank_fixture', bankIdx: bank.index, itemIdx: Number(id) })}
+              />
             {/if}
           </div>
         {/each}
@@ -554,49 +435,18 @@
             <button class="btn-xs btn-add" onclick={startAddProjectFixture}>+ Add</button>
             <button class="btn-xs" onclick={handleFixturesSort}>Sort</button>
           </div>
-          <div class="pad-grid">
-            {#each fixtures as fix (fix.index)}
-              <button
-                class="pad-btn"
-                class:selected={isSelected('project_fixture', undefined, fix.index!)}
-                onclick={() => trySelect({ kind: 'project_fixture', itemIdx: fix.index! })}
-              >
-                <span class="pad-id">{fix.id}</span>
-                <span class="pad-sub">@{fix.start_address}</span>
-              </button>
-            {/each}
-          </div>
+          <PadGrid
+            items={fixtures.map(f => ({ id: String(f.index), label: f.id, sublabel: '@' + f.start_address }))}
+            selected={selection?.kind === 'project_fixture' ? String(selection.itemIdx) : undefined}
+            onselect={(id) => trySelect({ kind: 'project_fixture', itemIdx: Number(id) })}
+          />
         {:else}
           <p class="empty-msg">Open a project first.</p>
         {/if}
 
       {:else if selectionTab === 'hardware'}
         {#if status.project_loaded}
-          <div class="hw-form">
-            <div class="form-grid">
-              <label>MIDI Device</label>
-              <input type="text" bind:value={hwConfig.midi_device} oninput={markHwDirty} />
-              <label>MIDI Mode</label>
-              <select bind:value={hwConfig.midi_mode} onchange={markHwDirty}>
-                <option value="">none</option>
-                <option value="open-existing">open-existing</option>
-                <option value="create-virtual">create-virtual</option>
-              </select>
-              <label>DMX Device</label>
-              <input type="text" bind:value={hwConfig.dmx_device} oninput={markHwDirty} />
-              <label>DMX Backend</label>
-              <select bind:value={hwConfig.dmx_backend} onchange={markHwDirty}>
-                <option value="">none</option>
-                <option value="open">open</option>
-                <option value="dummy">dummy</option>
-              </select>
-              <label>Refresh Hz</label>
-              <input type="number" min="0" max="60" bind:value={hwConfig.dmx_refresh_hz} oninput={markHwDirty} />
-            </div>
-            {#if hwDirty}
-              <button class="btn-sm btn-save" onclick={saveHardware}>Save Hardware</button>
-            {/if}
-          </div>
+          <HardwareForm bind:config={hwConfig} onsave={saveHardware} />
         {:else}
           <p class="empty-msg">Open a project first.</p>
         {/if}
@@ -606,18 +456,11 @@
           <div class="sel-toolbar">
             <button class="btn-xs btn-add" onclick={startAddScene}>+ Add Scene</button>
           </div>
-          <div class="pad-grid">
-            {#each scenes as scene, i (i)}
-              <button
-                class="pad-btn"
-                class:selected={isSelected('scene', undefined, i)}
-                onclick={() => trySelect({ kind: 'scene', itemIdx: i })}
-              >
-                <span class="pad-id">{scene.id}</span>
-                <span class="pad-sub">{scene.type}</span>
-              </button>
-            {/each}
-          </div>
+          <PadGrid
+            items={scenes.map((s, i) => ({ id: String(i), label: s.id, sublabel: s.type }))}
+            selected={selection?.kind === 'scene' ? String(selection.itemIdx) : undefined}
+            onselect={(id) => trySelect({ kind: 'scene', itemIdx: Number(id) })}
+          />
           {#if scenes.length === 0}
             <p class="empty-msg">No scenes yet.</p>
           {/if}
@@ -659,146 +502,14 @@
       </div>
 
       <div class="edit-body">
-        <!-- Project fixture form -->
         {#if selection.kind === 'project_fixture' && editFixture}
-          <div class="form-grid">
-            <label for="ef-id">ID</label>
-            <input id="ef-id" type="text" bind:value={editFixture.id} oninput={markDirty} />
-            <label for="ef-name">Name</label>
-            <input id="ef-name" type="text" bind:value={editFixture.name} oninput={markDirty} />
-            <label for="ef-addr">Start Addr</label>
-            <input id="ef-addr" type="number" min="1" max="512" bind:value={editFixture.start_address} oninput={markDirty} />
-            <label for="ef-tpl">Template</label>
-            <input id="ef-tpl" type="text" placeholder="bank:fixture" bind:value={editFixture.template} oninput={markDirty} />
-            <label for="ef-copy">Copy From</label>
-            <input id="ef-copy" type="text" placeholder="fixture-id" bind:value={editFixture.copy_from} oninput={markDirty} />
-          </div>
+          <FixtureForm bind:fixture={editFixture} isProject={true} ondirty={markDirty} />
 
-          {#if !editFixture.template && !editFixture.copy_from}
-            <div class="channel-section">
-              <div class="ch-header">
-                <span>Channels ({editFixture.channel_count})</span>
-                <button class="btn-xs btn-add" onclick={addChannel}>+</button>
-              </div>
-              {#each editFixture.channels as ch, i}
-                <div class="channel-row">
-                  <input type="text" placeholder="name" bind:value={ch.name} oninput={markDirty} class="ch-name" />
-                  <input type="number" min="0" max="255" bind:value={ch.offset} oninput={markDirty} class="ch-offset" />
-                  <button class="btn-xs btn-danger" onclick={() => removeChannel(i)}>x</button>
-                </div>
-              {/each}
-            </div>
-          {/if}
-
-        <!-- Bank fixture form -->
         {:else if selection.kind === 'bank_fixture' && editBankFixture}
-          <div class="form-grid">
-            <label for="bf-id">ID</label>
-            <input id="bf-id" type="text" bind:value={editBankFixture.id} oninput={markDirty} />
-            <label for="bf-name">Name</label>
-            <input id="bf-name" type="text" bind:value={editBankFixture.name} oninput={markDirty} />
-          </div>
+          <FixtureForm bind:fixture={editBankFixture} isProject={false} ondirty={markDirty} />
 
-          <div class="channel-section">
-            <div class="ch-header">
-              <span>Channels ({editBankFixture.channel_count})</span>
-              <button class="btn-xs btn-add" onclick={addChannel}>+</button>
-            </div>
-            {#each editBankFixture.channels as ch, i}
-              <div class="channel-row">
-                <input type="text" placeholder="name" bind:value={ch.name} oninput={markDirty} class="ch-name" />
-                <input type="number" min="0" max="255" bind:value={ch.offset} oninput={markDirty} class="ch-offset" />
-                <button class="btn-xs btn-danger" onclick={() => removeChannel(i)}>x</button>
-              </div>
-            {/each}
-          </div>
-
-        <!-- Scene editor -->
         {:else if selection.kind === 'scene' && editScene}
-          <div class="form-grid">
-            <label>ID</label>
-            <input type="text" bind:value={editScene.id} oninput={markDirty} />
-            <label>Name</label>
-            <input type="text" bind:value={editScene.name} oninput={markDirty} />
-            <label>Type</label>
-            <select bind:value={editScene.type} onchange={markDirty}>
-              <option value="static">static</option>
-              <option value="sequence">sequence</option>
-            </select>
-            <label>Trigger</label>
-            <select bind:value={editScene.trigger_mode} onchange={markDirty}>
-              <option value="gate">gate</option>
-              <option value="toggle">toggle</option>
-            </select>
-            <label>Channel</label>
-            <input type="number" min="1" max="16" bind:value={editScene.channel} oninput={markDirty} />
-            <label>Note</label>
-            <input type="number" min="0" max="127" bind:value={editScene.note} oninput={markDirty} />
-            <label>Enabled</label>
-            <input type="checkbox" bind:checked={editScene.enabled} onchange={markDirty} />
-            {#if editScene.type === 'sequence'}
-              <label>Loop</label>
-              <input type="checkbox" bind:checked={editScene.loop} onchange={markDirty} />
-            {/if}
-          </div>
-
-          {#if editScene.type === 'static'}
-            <div class="channel-section">
-              <div class="ch-header">
-                <span>Values ({editScene.values.length})</span>
-                <button class="btn-xs btn-add" onclick={addSceneValue}>+</button>
-              </div>
-              {#each editScene.values as val, i}
-                <div class="channel-row">
-                  <input type="text" placeholder="fixture.channel" bind:value={val.target} oninput={markDirty} class="ch-name"
-                    list="target-opts" />
-                  <input type="number" min="0" max="255" bind:value={val.value} oninput={markDirty} class="ch-offset" />
-                  {#if validateTarget(val.target) === 'warn' && val.target}
-                    <span class="warn-icon" title="Target not found">!</span>
-                  {/if}
-                  <button class="btn-xs btn-danger" onclick={() => removeSceneValue(i)}>x</button>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="channel-section">
-              <div class="ch-header">
-                <span>Steps ({editScene.steps.length})</span>
-                <button class="btn-xs btn-add" onclick={addSceneStep}>+</button>
-              </div>
-              {#each editScene.steps as step, si}
-                <div class="step-card">
-                  <div class="step-header">
-                    <span class="step-label">Step {si + 1}</span>
-                    <input type="number" min="0" placeholder="ms" bind:value={step.duration_ms} oninput={markDirty} class="ch-offset" />
-                    <select bind:value={step.transition} onchange={markDirty} class="input-sm">
-                      <option value="hold">hold</option>
-                      <option value="linear">linear</option>
-                    </select>
-                    <button class="btn-xs btn-danger" onclick={() => removeSceneStep(si)}>x</button>
-                  </div>
-                  {#each step.values as val, vi}
-                    <div class="channel-row">
-                      <input type="text" placeholder="fixture.channel" bind:value={val.target} oninput={markDirty} class="ch-name"
-                        list="target-opts" />
-                      <input type="number" min="0" max="255" bind:value={val.value} oninput={markDirty} class="ch-offset" />
-                      {#if validateTarget(val.target) === 'warn' && val.target}
-                        <span class="warn-icon" title="Target not found">!</span>
-                      {/if}
-                      <button class="btn-xs btn-danger" onclick={() => removeStepValue(si, vi)}>x</button>
-                    </div>
-                  {/each}
-                  <button class="btn-xs btn-add" onclick={() => addStepValue(si)}>+ Value</button>
-                </div>
-              {/each}
-            </div>
-          {/if}
-
-          <datalist id="target-opts">
-            {#each getFixtureTargets() as t}
-              <option value="{t.fixture}.{t.channel}">{t.fixture}.{t.channel} (@{t.addr})</option>
-            {/each}
-          </datalist>
+          <SceneForm bind:scene={editScene} {fixtures} {banks} ondirty={markDirty} />
         {/if}
       </div>
     </div>
@@ -818,18 +529,6 @@
   </div>
 {/if}
 
-{#if showSaveAs}
-  <div class="modal-overlay" onclick={() => showSaveAs = false} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Enter') handleSaveAs(); }} role="dialog" aria-modal="true" tabindex="-1">
-      <p>Save project as:</p>
-      <input type="text" class="open-input" placeholder="Enter path..." bind:value={saveAsPath} />
-      <div class="modal-actions">
-        <button class="btn-sm btn-save" onclick={handleSaveAs}>Save</button>
-        <button class="btn-sm btn-muted" onclick={() => showSaveAs = false}>Cancel</button>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   /* Project bar */
@@ -861,24 +560,8 @@
     letter-spacing: 0.05em;
   }
   .project-actions { margin-left: auto; display: flex; gap: 0.4rem; }
-  .open-input {
-    flex: 1;
-    background: var(--bg);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: var(--radius);
-    color: var(--text);
-    padding: 0.35rem 0.6rem;
-    font-size: 0.75rem;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
-  }
-  .open-input:focus {
-    outline: none;
-    border-color: rgba(233, 69, 96, 0.4);
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.4), 0 0 4px var(--accent-glow);
-  }
-  .open-input::placeholder { color: var(--text-muted); }
 
-  /* File browser modal */
+  /* Discard modal */
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -886,14 +569,6 @@
     align-items: center;
     justify-content: center;
     z-index: 100;
-  }
-  .modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    backdrop-filter: blur(2px);
-    border: none;
-    cursor: default;
   }
   .modal {
     position: relative;
@@ -908,57 +583,6 @@
     overflow: hidden;
     box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(233, 69, 96, 0.2);
   }
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.8rem 1rem;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-  }
-  .modal-header h3 {
-    margin: 0;
-    font-size: 0.85rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .modal-close {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    padding: 0.2rem 0.5rem;
-  }
-  .modal-close:hover { color: var(--accent); box-shadow: none; }
-  .browser-path {
-    padding: 0.5rem 1rem;
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    font-family: monospace;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    word-break: break-all;
-    background: var(--bg);
-  }
-  .browser-list {
-    overflow-y: auto;
-    flex: 1;
-    padding: 0.4rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-  }
-  .browser-entry {
-    text-align: left;
-    padding: 0.35rem 0.8rem;
-    font-size: 0.8rem;
-    border-radius: 4px;
-    background: none;
-    color: var(--text);
-    font-weight: 400;
-    border: none;
-  }
-  .browser-entry:hover { background: var(--bg-card); box-shadow: none; }
-  .browser-entry.dir { color: var(--accent); font-weight: 600; }
 
   /* Main layout */
   .editor-layout {
@@ -1021,58 +645,6 @@
   .sel-toolbar { margin-bottom: 0.5rem; }
 
   /* Pad grid */
-  .pad-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(70px, 90px));
-    gap: 0.35rem;
-    margin-top: 0.4rem;
-  }
-
-  .pad-btn {
-    aspect-ratio: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.15rem;
-    background: var(--bg-pad);
-    border: 1.5px solid rgba(255,255,255,0.06);
-    border-radius: var(--pad-radius);
-    color: var(--text);
-    font-size: 0.65rem;
-    font-weight: 600;
-    padding: 0.3rem;
-    user-select: none;
-    word-break: break-all;
-    text-align: center;
-    min-width: 0;
-    box-shadow:
-      inset 0 2px 4px rgba(0,0,0,0.4),
-      inset 0 -1px 2px rgba(255,255,255,0.03);
-    transition: box-shadow 0.12s, background 0.12s, transform 0.08s, border-color 0.12s;
-  }
-  .pad-btn:hover {
-    border-color: rgba(233, 69, 96, 0.4);
-    box-shadow:
-      inset 0 2px 4px rgba(0,0,0,0.4),
-      0 0 8px var(--accent-glow);
-  }
-  .pad-btn:active {
-    transform: translateY(1px);
-    box-shadow: inset 0 3px 6px rgba(0,0,0,0.6);
-  }
-  .pad-btn.selected {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-    box-shadow:
-      0 0 14px var(--accent-glow),
-      0 0 4px var(--accent-glow),
-      inset 0 1px 2px rgba(255,255,255,0.15);
-  }
-  .pad-id { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.02em; }
-  .pad-sub { font-size: 0.5rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  .pad-btn.selected .pad-sub { color: rgba(255,255,255,0.7); }
 
   /* Bank groups */
   .bank-group { margin-bottom: 0.6rem; }
@@ -1147,70 +719,6 @@
     padding: 0.8rem;
   }
 
-  /* Forms */
-  .form-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.35rem 0.6rem;
-    align-items: center;
-    margin-bottom: 0.6rem;
-  }
-  .form-grid label {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .form-grid input, .form-grid select {
-    background: var(--bg);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 4px;
-    color: var(--text);
-    padding: 0.3rem 0.5rem;
-    font-size: 0.75rem;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
-  }
-  .form-grid input:focus, .form-grid select:focus {
-    outline: none;
-    border-color: rgba(233, 69, 96, 0.4);
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 0 4px var(--accent-glow);
-  }
-  /* Channels */
-  .channel-section { margin-top: 0.6rem; }
-  .ch-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.3rem;
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .channel-row { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.2rem; }
-  .ch-name {
-    flex: 1;
-    background: var(--bg);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 4px;
-    color: var(--text);
-    padding: 0.25rem 0.4rem;
-    font-size: 0.75rem;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
-  }
-  .ch-offset {
-    width: 50px;
-    background: var(--bg);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 4px;
-    color: var(--text);
-    padding: 0.25rem 0.4rem;
-    font-size: 0.75rem;
-    text-align: center;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
-  }
 
 
   /* Buttons */
@@ -1257,11 +765,6 @@
     letter-spacing: 0.03em;
   }
   .btn-xs:hover { box-shadow: 0 0 6px rgba(255,255,255,0.05); }
-  .btn-xs.btn-danger {
-    background: var(--red);
-    color: white;
-    border-color: rgba(233, 69, 96, 0.3);
-  }
   .btn-xs.btn-add {
     background: var(--green);
     color: #111;
@@ -1291,46 +794,7 @@
     box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(233, 69, 96, 0.2);
   }
   .modal p { font-size: 0.8rem; margin-bottom: 1rem; color: var(--text); }
-  .modal input.open-input { width: 100%; margin-bottom: 0.75rem; }
   .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
-  /* Hardware form */
-  .hw-form { padding: 0.75rem; }
-  .hw-form .form-grid { gap: 0.5rem 0.75rem; }
-  .hw-form .btn-save { margin-top: 0.75rem; }
 
-  /* Scene step cards */
-  .step-card {
-    background: var(--bg-surface);
-    border: 1px solid rgba(255,255,255,0.04);
-    border-radius: var(--radius);
-    padding: 0.5rem;
-    margin-bottom: 0.5rem;
-  }
-  .step-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.35rem;
-  }
-  .step-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
-    min-width: 3rem;
-  }
-  .input-sm {
-    font-size: 0.7rem;
-    padding: 2px 4px;
-    width: auto;
-    min-width: 4rem;
-  }
-  .warn-icon {
-    color: var(--yellow);
-    font-weight: bold;
-    font-size: 0.85rem;
-    line-height: 1;
-  }
 </style>

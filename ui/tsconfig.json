@@ -11,7 +11,8 @@
     "moduleDetection": "force",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["svelte"]
   },
   "include": ["src/**/*.ts", "src/**/*.svelte"]
 }

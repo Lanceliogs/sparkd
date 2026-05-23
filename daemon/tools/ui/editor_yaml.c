@@ -1083,12 +1083,14 @@ int editor_yaml_emit_project(const char *path, const editor_project_t *project)
             const editor_raw_section_t *sec = s_find_raw_section(project, section);
             if (!sec) continue;
 
-            if (need_newline)
-            {
-                const char *raw = project->raw_buf + sec->start;
-                if (raw[0] != '\n') fputc('\n', f);
-            }
-            fwrite(project->raw_buf + sec->start, 1, sec->len, f);
+            if (need_newline) fputc('\n', f);
+
+            const char *raw = project->raw_buf + sec->start;
+            size_t len = sec->len;
+            while (len > 0 && (raw[len - 1] == '\n' || raw[len - 1] == '\r'))
+                len--;
+            fwrite(raw, 1, len, f);
+            fputc('\n', f);
             need_newline = 1;
         }
     }
@@ -1104,12 +1106,14 @@ int editor_yaml_emit_project(const char *path, const editor_project_t *project)
         }
         if (found) continue;
 
-        if (need_newline)
-        {
-            const char *raw = project->raw_buf + sec->start;
-            if (raw[0] != '\n') fputc('\n', f);
-        }
-        fwrite(project->raw_buf + sec->start, 1, sec->len, f);
+        if (need_newline) fputc('\n', f);
+
+        const char *raw = project->raw_buf + sec->start;
+        size_t len = sec->len;
+        while (len > 0 && (raw[len - 1] == '\n' || raw[len - 1] == '\r'))
+            len--;
+        fwrite(raw, 1, len, f);
+        fputc('\n', f);
         need_newline = 1;
     }
 

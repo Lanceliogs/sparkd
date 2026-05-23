@@ -75,8 +75,10 @@
   /* Combobox state */
   let openCombo: string | null = $state(null);
   let comboFilter = $state('');
+  let blurTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function openCombobox(id: string, currentValue: string) {
+    if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
     openCombo = id;
     comboFilter = currentValue;
   }
@@ -84,12 +86,6 @@
   function closeCombobox() {
     openCombo = null;
     comboFilter = '';
-  }
-
-  function selectOption(target: string, setter: (val: string) => void) {
-    setter(target);
-    closeCombobox();
-    ondirty();
   }
 
   function filteredTargets(filter: string): TargetEntry[] {
@@ -132,7 +128,7 @@
   function handleComboBlur(e: FocusEvent) {
     const related = e.relatedTarget as HTMLElement | null;
     if (related?.closest('.combo-dropdown')) return;
-    setTimeout(closeCombobox, 150);
+    blurTimeout = setTimeout(() => { blurTimeout = null; closeCombobox(); }, 200);
   }
 </script>
 
@@ -176,35 +172,35 @@
         <div class="combo-wrap">
           <input type="text" placeholder="fixture.channel"
             bind:value={val.target}
-            oninput={(e) => { comboFilter = (e.target as HTMLInputElement).value; ondirty(); }}
-            onfocus={() => openCombobox(comboId, val.target)}
-            onblur={handleComboBlur}
-            class="ch-name"
-            class:warn={validateTarget(val.target) === 'warn' && !!val.target}
-            autocomplete="off" />
-          {#if openCombo === comboId}
-            <div class="combo-dropdown">
-              {#each filteredTargets(comboFilter) as t (t.key)}
-                {@const isUsed = used.has(t.key)}
-                <button class="combo-option" class:used={isUsed}
-                    onmousedown={(e) => { e.preventDefault(); val.target = t.key; closeCombobox(); ondirty(); }}
-                    tabindex="-1">
-                  <span class="opt-key">{t.key}</span>
-                  <span class="opt-addr">DMX {t.dmxAddr}</span>
-                  {#if isUsed}<span class="opt-used">used</span>{/if}
-                </button>
-              {/each}
-              {#if filteredTargets(comboFilter).length === 0}
-                <span class="combo-empty">No matches</span>
+            oninput={(e) => { const v = (e.target as HTMLInputElement).value; comboFilter = v; if (openCombo !== comboId) openCombo = comboId; ondirty(); }}
+                onfocus={() => openCombobox(comboId, val.target)}
+                onblur={handleComboBlur}
+                class="ch-name"
+                class:warn={validateTarget(val.target) === 'warn' && !!val.target}
+                autocomplete="off" />
+              {#if openCombo === comboId}
+                <div class="combo-dropdown">
+                  {#each filteredTargets(comboFilter) as t (t.key)}
+                    {@const isUsed = used.has(t.key)}
+                    <button class="combo-option" class:used={isUsed}
+                        onmousedown={(e) => { e.preventDefault(); val.target = t.key; closeCombobox(); ondirty(); }}
+                        tabindex="-1">
+                      <span class="opt-key">{t.key}</span>
+                      <span class="opt-addr">DMX {t.dmxAddr}</span>
+                      {#if isUsed}<span class="opt-used">used</span>{/if}
+                    </button>
+                  {/each}
+                  {#if filteredTargets(comboFilter).length === 0}
+                    <span class="combo-empty">No matches</span>
+                  {/if}
+                </div>
               {/if}
             </div>
-          {/if}
-        </div>
-        <input type="number" min="0" max="255" bind:value={val.value} oninput={ondirty} class="ch-offset" />
-        <button class="btn-xs btn-danger" onclick={() => removeValue(i)}>x</button>
+            <input type="number" min="0" max="255" bind:value={val.value} oninput={ondirty} class="ch-offset" />
+            <button class="btn-xs btn-danger" onclick={() => removeValue(i)}>x</button>
+          </div>
+        {/each}
       </div>
-    {/each}
-  </div>
 {:else}
   <div class="channel-section">
     <div class="ch-header">
@@ -229,7 +225,7 @@
             <div class="combo-wrap">
               <input type="text" placeholder="fixture.channel"
                 bind:value={val.target}
-                oninput={(e) => { comboFilter = (e.target as HTMLInputElement).value; ondirty(); }}
+                oninput={(e) => { const v = (e.target as HTMLInputElement).value; comboFilter = v; if (openCombo !== comboId) openCombo = comboId; ondirty(); }}
                 onfocus={() => openCombobox(comboId, val.target)}
                 onblur={handleComboBlur}
                 class="ch-name"

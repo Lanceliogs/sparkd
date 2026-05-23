@@ -7,9 +7,8 @@
 #include <stdio.h>
 #include <windows.h>
 #include <setupapi.h>
+#include <initguid.h>
 #include <devguid.h>
-
-#pragma comment(lib, "setupapi.lib")
 
 #define SPARK_SERIAL_WIN32_TIMEOUT 100
 

@@ -4,6 +4,7 @@
     label: string;
     sublabel?: string;
     active?: boolean;
+    warn?: boolean;
   }
 
   interface Props {
@@ -36,6 +37,7 @@
       class="pad"
       class:active={item.active}
       class:selected={selected === item.id}
+      class:warn={item.warn}
       onclick={() => handleClick(item.id)}
       onpointerdown={(ev) => handlePointerDown(item.id, ev)}
       onpointerup={(ev) => handlePointerUp(item.id, ev)}
@@ -90,6 +92,13 @@
   .pad:active {
     transform: translateY(1px);
     box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.6);
+  }
+
+  .pad.warn {
+    border-color: rgba(255, 180, 0, 0.7);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.4),
+      0 0 6px rgba(255, 180, 0, 0.3);
   }
 
   .pad.active,

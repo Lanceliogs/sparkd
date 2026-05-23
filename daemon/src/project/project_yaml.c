@@ -717,6 +717,19 @@ static int s_parse_scene(yaml_parser_t *p)
             strncpy(def.name, s_scalar(&ev), SPARK_MAX_NAME_SIZE - 1);
             yaml_event_delete(&ev);
         }
+        else if (strcmp(key, "enabled") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SCALAR_EVENT) != 0) return -1;
+            if (s_scalar_to_bool(&ev, &def.enabled) != 0)
+            {
+                spark_log_error("project: invalid 'enabled' value at line %zu",
+                    ev.start_mark.line + 1);
+                yaml_event_delete(&ev);
+                return -1;
+            }
+            yaml_event_delete(&ev);
+        }
         else if (strcmp(key, "type") == 0)
         {
             yaml_event_delete(&ev);

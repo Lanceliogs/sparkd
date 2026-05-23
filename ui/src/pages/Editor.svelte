@@ -457,7 +457,10 @@
             <button class="btn-xs btn-add" onclick={startAddScene}>+ Add Scene</button>
           </div>
           <PadGrid
-            items={scenes.map((s, i) => ({ id: String(i), label: s.id, sublabel: s.type }))}
+            items={scenes.map((s, i) => {
+              const dup = scenes.some((other, j) => j !== i && other.id === s.id);
+              return { id: String(i), label: s.id, sublabel: s.type, warn: dup };
+            })}
             selected={selection?.kind === 'scene' ? String(selection.itemIdx) : undefined}
             onselect={(id) => trySelect({ kind: 'scene', itemIdx: Number(id) })}
           />

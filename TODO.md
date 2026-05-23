@@ -42,3 +42,6 @@
 - [ ] Git tag + CHANGELOG for releases
 - [ ] Packaging (at minimum a zip/tar of binaries + ui/dist)
 - [ ] Cross-version sync check (consts.h version == package.json version)
+
+### Open Questions
+- [ ] The routes can activate disabled scenes. Should we keep it that way?

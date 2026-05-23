@@ -213,10 +213,10 @@
 
 <section class="pad-section">
   <PadGrid
-    items={scenes.map(s => ({ id: s.id, label: s.name, sublabel: s.type, active: activeScenes.has(s.id) }))}
+    items={scenes.map((s, i) => ({ id: String(i), label: s.name, sublabel: s.type, active: activeScenes.has(s.id) }))}
     columns="repeat(auto-fill, minmax(var(--pad-size), 1fr))"
-    onactivate={(id, ev) => { const s = scenes.find(x => x.id === id); if (s) handlePadDown(ev, s); }}
-    onrelease={(id, ev) => { const s = scenes.find(x => x.id === id); if (s) handlePadUp(ev, s); }}
+    onactivate={(id, ev) => { const s = scenes[Number(id)]; if (s) handlePadDown(ev, s); }}
+    onrelease={(id, ev) => { const s = scenes[Number(id)]; if (s) handlePadUp(ev, s); }}
   />
 </section>
 

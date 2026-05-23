@@ -221,13 +221,11 @@ static int s_parse_scene_from_json(struct mg_str body, editor_scene_t *scene)
     if (mg_json_get_num(body, "$.note", &val))
         scene->note = (uint8_t)val;
 
-    char en_str[8] = {0};
-    mg_json_get_str_buf(body, "$.enabled", en_str, sizeof(en_str));
-    if (en_str[0] != '\0') scene->enabled = (strcmp(en_str, "false") != 0);
-
-    char lp_str[8] = {0};
-    mg_json_get_str_buf(body, "$.loop", lp_str, sizeof(lp_str));
-    if (lp_str[0] != '\0') scene->loop = (strcmp(lp_str, "true") == 0);
+    bool bval;
+    if (mg_json_get_bool(body, "$.enabled", &bval))
+        scene->enabled = bval;
+    if (mg_json_get_bool(body, "$.loop", &bval))
+        scene->loop = bval;
 
     /* Parse values array */
     char path[64];

@@ -308,52 +308,59 @@
 {/if}
 
 <style>
+  /* Status bar */
   .status-bar {
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    padding: 0.8rem 1rem;
+    padding: 0.7rem 1rem;
     background: var(--bg-surface);
+    border: 1px solid rgba(255,255,255,0.04);
     border-radius: var(--radius);
     margin-bottom: 1rem;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
   }
 
   .status-item {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
 
   .project {
     margin-left: auto;
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    font-family: monospace;
   }
 
   .dot {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
   }
 
-  .dot.green { background: var(--green); }
-  .dot.yellow { background: var(--yellow); }
-  .dot.red { background: var(--red); }
+  .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+  .dot.yellow { background: var(--yellow); box-shadow: 0 0 6px rgba(247, 211, 84, 0.4); }
+  .dot.red { background: var(--red); box-shadow: 0 0 6px var(--accent-glow); }
 
   .badge {
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .badge.blackout {
     background: var(--red);
     color: white;
+    box-shadow: 0 0 8px var(--accent-glow);
   }
 
+  /* Controls */
   .controls {
     display: flex;
     gap: 0.5rem;
@@ -363,31 +370,51 @@
   .btn-start {
     background: var(--green);
     color: #111;
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    box-shadow: 0 2px 6px rgba(78, 205, 196, 0.2);
+  }
+  .btn-start:hover {
+    box-shadow: 0 2px 12px var(--green-glow);
   }
 
   .btn-stop {
     background: var(--red);
     color: white;
+    border: 1px solid rgba(233, 69, 96, 0.3);
+    box-shadow: 0 2px 6px rgba(233, 69, 96, 0.2);
+  }
+  .btn-stop:hover {
+    box-shadow: 0 2px 12px var(--accent-glow);
   }
 
   .btn-blackout {
-    background: var(--bg-card);
+    background: var(--bg-pad);
     color: var(--text);
-    border: 2px solid var(--text-muted);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .btn-blackout:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
   }
 
   .btn-blackout.active {
     background: var(--red);
     color: white;
     border-color: var(--red);
+    box-shadow: 0 0 12px var(--accent-glow);
   }
 
   .btn-reload {
-    background: var(--bg-card);
+    background: var(--bg-pad);
     color: var(--text);
-    border: 2px solid var(--text-muted);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .btn-reload:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
   }
 
+  /* Pad grid */
   .pad-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(var(--pad-size), 1fr));
@@ -401,37 +428,56 @@
     align-items: center;
     justify-content: center;
     gap: 0.3rem;
-    background: var(--bg-card);
-    border: 2px solid var(--text-muted);
+    background: var(--bg-pad);
+    border: 1.5px solid rgba(255,255,255,0.06);
+    border-radius: var(--pad-radius);
     color: var(--text);
     padding: 0.5rem;
     user-select: none;
     touch-action: none;
     min-width: var(--pad-size);
     min-height: var(--pad-size);
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,0.4),
+      inset 0 -1px 2px rgba(255,255,255,0.03);
+    transition: box-shadow 0.12s, background 0.12s, transform 0.08s, border-color 0.12s;
   }
 
   .pad:hover {
-    border-color: var(--accent);
+    border-color: rgba(233, 69, 96, 0.4);
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,0.4),
+      0 0 8px var(--accent-glow);
+  }
+
+  .pad:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 3px 6px rgba(0,0,0,0.6);
   }
 
   .pad.active {
     background: var(--accent);
     color: white;
-    border-color: var(--accent-hover);
+    border-color: var(--accent);
+    box-shadow:
+      0 0 14px var(--accent-glow),
+      0 0 4px var(--accent-glow),
+      inset 0 1px 2px rgba(255,255,255,0.15);
   }
 
   .pad-name {
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.7rem;
+    font-weight: 700;
     text-align: center;
     word-break: break-word;
+    letter-spacing: 0.02em;
   }
 
   .pad-type {
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     color: var(--text-muted);
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   .pad.active .pad-type {
@@ -439,9 +485,13 @@
   }
 
   .btn-load {
-    background: var(--bg-card);
+    background: var(--bg-pad);
     color: var(--text);
-    border: 2px solid var(--accent);
+    border: 1px solid rgba(233, 69, 96, 0.3);
+  }
+  .btn-load:hover {
+    box-shadow: 0 0 10px var(--accent-glow);
+    border-color: var(--accent);
   }
 
   /* Status footer */
@@ -452,30 +502,34 @@
     right: 0;
     display: flex;
     gap: 2rem;
-    padding: 0.6rem 1rem;
+    padding: 0.5rem 1rem;
     background: var(--bg-surface);
-    border-top: 1px solid var(--bg-card);
-    font-size: 0.8rem;
+    border-top: 1px solid rgba(233, 69, 96, 0.15);
+    font-size: 0.75rem;
     z-index: 50;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
   }
 
   .status-group {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.5rem;
   }
 
   .status-label {
     font-weight: 700;
     text-transform: uppercase;
     color: var(--text-muted);
-    font-size: 0.7rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
   }
 
   .status-value {
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    font-family: monospace;
+    font-size: 0.7rem;
   }
 
   .status-value.muted { color: var(--text-muted); }
@@ -488,9 +542,9 @@
     display: inline-block;
   }
 
-  .dot-sm.green { background: var(--green); }
-  .dot-sm.yellow { background: var(--yellow); }
-  .dot-sm.red { background: var(--red); }
+  .dot-sm.green { background: var(--green); box-shadow: 0 0 4px var(--green-glow); }
+  .dot-sm.yellow { background: var(--yellow); box-shadow: 0 0 4px rgba(247, 211, 84, 0.4); }
+  .dot-sm.red { background: var(--red); box-shadow: 0 0 4px var(--accent-glow); }
 
   /* Modal */
   .modal-overlay {
@@ -505,7 +559,8 @@
   .modal-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(2px);
     border: none;
     cursor: default;
   }
@@ -513,6 +568,7 @@
   .modal {
     position: relative;
     background: var(--bg-surface);
+    border: 1px solid rgba(255,255,255,0.06);
     border-radius: var(--radius);
     width: 90%;
     max-width: 500px;
@@ -520,6 +576,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(233, 69, 96, 0.2);
   }
 
   .modal-header {
@@ -527,47 +584,61 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.8rem 1rem;
-    border-bottom: 1px solid var(--bg-card);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
   }
 
-  .modal-header h3 { margin: 0; font-size: 1rem; }
+  .modal-header h3 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 
   .modal-close {
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 1rem;
+    font-size: 0.9rem;
     padding: 0.2rem 0.5rem;
+  }
+  .modal-close:hover {
+    color: var(--accent);
+    box-shadow: none;
   }
 
   .browse-path {
     padding: 0.5rem 1rem;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
-    border-bottom: 1px solid var(--bg-card);
+    font-family: monospace;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
     word-break: break-all;
+    background: var(--bg);
   }
 
   .browse-list {
     overflow-y: auto;
     flex: 1;
-    padding: 0.5rem;
+    padding: 0.4rem;
   }
 
   .browse-item {
     display: block;
     width: 100%;
     text-align: left;
-    padding: 0.4rem 0.8rem;
+    padding: 0.35rem 0.8rem;
     border: none;
     background: none;
     color: var(--text);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     border-radius: 4px;
   }
-
-  .browse-item:hover { background: var(--bg-card); }
-  .browse-item.dir { color: var(--accent); }
+  .browse-item:hover {
+    background: var(--bg-card);
+    box-shadow: none;
+  }
+  .browse-item.dir { color: var(--accent); font-weight: 600; }
   .browse-item.file { font-weight: 500; }
   .browse-item.disabled { color: var(--text-muted); opacity: 0.5; }
 </style>

@@ -28,25 +28,30 @@
     display: flex;
     gap: 0;
     background: var(--bg-surface);
-    border-bottom: 2px solid var(--bg-card);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
     padding: 0 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
   }
 
   .tab {
     background: none;
     border: none;
     border-radius: 0;
-    padding: 0.7rem 1.5rem;
-    font-size: 0.85rem;
-    font-weight: 600;
+    padding: 0.75rem 1.8rem;
+    font-size: 0.75rem;
+    font-weight: 700;
     color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+    transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
   }
 
   .tab:hover {
     color: var(--text);
+    background: none;
+    box-shadow: none;
   }
 
   .tab:active {
@@ -56,6 +61,7 @@
   .tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
+    box-shadow: 0 2px 8px var(--accent-glow);
   }
 
   main {

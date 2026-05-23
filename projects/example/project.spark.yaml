@@ -21,18 +21,20 @@ fixtures:
     template: "stairville:par"
 
 scenes:
-  - id: red-wash
-    name: Red Wash
+  - id: white-strobe
+    name: White Strobe
     type: static
     trigger:
       channel: 1
-      note: 60
+      note: 62
       mode: gate
     values:
       par.dimmer: 255
-      par.red: 255
+      par.red: 0
       par.green: 0
       par.blue: 0
+      par.white: 255
+      par.strobe: 255
   - id: color-cycle
     name: Color Cycle
     type: sequence

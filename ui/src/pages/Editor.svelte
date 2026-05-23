@@ -271,7 +271,7 @@
       await editorUpdateFixture(selection.itemIdx, data);
     }
     editDirty = false;
-    selection = null; editFixture = null;
+    editIsNew = false;
     await refresh();
   }
 
@@ -285,7 +285,7 @@
       await editorBankUpdateFixture(selection.bankIdx!, selection.itemIdx, data);
     }
     editDirty = false;
-    selection = null; editBankFixture = null;
+    editIsNew = false;
     await refresh();
   }
 
@@ -321,7 +321,7 @@
       await editorUpdateScene(selection.itemIdx, data);
     }
     editDirty = false;
-    selection = null; editScene = null;
+    editIsNew = false;
     await refresh();
   }
 
@@ -647,7 +647,7 @@
   /* Pad grid */
 
   /* Bank groups */
-  .bank-group { margin-bottom: 0.6rem; }
+  .bank-group { margin-bottom: 0.6rem; display: flex; flex-direction: column; gap: 0.35rem; }
   .bank-group-header {
     display: flex;
     align-items: center;

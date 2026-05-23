@@ -235,7 +235,8 @@
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    padding: 0.7rem 1rem;
+    min-height: 2.5rem;
+    padding: 0 1rem;
     background: var(--bg-surface);
     border: 1px solid rgba(255,255,255,0.04);
     border-radius: var(--radius);

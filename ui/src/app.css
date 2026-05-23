@@ -77,17 +77,29 @@ input::placeholder {
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 2rem;
-  height: 1.1rem;
+  width: 2.2rem;
+  height: 1.2rem;
   background: var(--bg-pad);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.6rem;
   position: relative;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: background 0.25s, border-color 0.25s, box-shadow 0.25s;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
   padding: 0;
   flex-shrink: 0;
+}
+
+input[type="checkbox"]::before {
+  content: 'OFF';
+  position: absolute;
+  right: -1.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 input[type="checkbox"]::after {
@@ -95,23 +107,31 @@ input[type="checkbox"]::after {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: calc(1.1rem - 6px);
-  height: calc(1.1rem - 6px);
-  background: var(--text-muted);
+  width: calc(1.2rem - 6px);
+  height: calc(1.2rem - 6px);
+  background: rgba(100, 100, 120, 0.6);
   border-radius: 50%;
-  transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+  transition: transform 0.25s, background 0.25s, box-shadow 0.25s;
 }
 
 input[type="checkbox"]:checked {
-  background: var(--accent);
+  background: linear-gradient(135deg, rgba(233, 69, 96, 0.6), rgba(233, 69, 96, 0.9));
   border-color: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow), inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    inset 0 0 8px rgba(233, 69, 96, 0.4),
+    0 0 12px var(--accent-glow),
+    0 0 4px var(--accent-glow);
+}
+
+input[type="checkbox"]:checked::before {
+  content: 'ON';
+  color: var(--accent);
 }
 
 input[type="checkbox"]:checked::after {
-  transform: translateX(calc(2rem - 1.1rem));
+  transform: translateX(calc(2.2rem - 1.2rem));
   background: white;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Number input: hide default spinners */

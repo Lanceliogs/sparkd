@@ -18,6 +18,9 @@
 #define EDITOR_MAX_BANK_FIXTURES 256
 #define EDITOR_PATH_MAX 1024
 #define EDITOR_MAX_RAW_SECTIONS 16
+#define EDITOR_MAX_SCENES 64
+#define EDITOR_MAX_SCENE_VALUES 64
+#define EDITOR_MAX_SCENE_STEPS 32
 
 typedef struct {
     char name[SPARK_MAX_NAME_SIZE];
@@ -40,13 +43,57 @@ typedef struct {
     size_t len;
 } editor_raw_section_t;
 
+/* Hardware config (midi + dmx sections) */
+typedef struct {
+    char midi_device[128];
+    char midi_mode[32];
+    char dmx_device[128];
+    char dmx_backend[32];
+    uint8_t dmx_refresh_hz;
+} editor_hw_config_t;
+
+/* Scene value: "fixture.channel" -> value */
+typedef struct {
+    char target[128];
+    uint8_t value;
+} editor_scene_value_t;
+
+/* Scene step (for sequence type) */
+typedef struct {
+    uint32_t duration_ms;
+    char transition[16];
+    uint8_t value_count;
+    editor_scene_value_t values[EDITOR_MAX_SCENE_VALUES];
+} editor_scene_step_t;
+
+/* Scene definition */
+typedef struct {
+    char id[SPARK_MAX_ID_SIZE];
+    char name[SPARK_MAX_NAME_SIZE];
+    char type[16];
+    char trigger_mode[16];
+    uint8_t channel;
+    uint8_t note;
+    bool enabled;
+    bool loop;
+    uint8_t value_count;
+    editor_scene_value_t values[EDITOR_MAX_SCENE_VALUES];
+    uint8_t step_count;
+    editor_scene_step_t steps[EDITOR_MAX_SCENE_STEPS];
+} editor_scene_t;
+
 typedef struct {
     char path[EDITOR_PATH_MAX];
     bool loaded;
     bool dirty;
     uint16_t fixture_count;
     editor_fixture_t fixtures[EDITOR_MAX_FIXTURES];
-    /* Preserved raw YAML for sections we don't edit */
+    /* Hardware config */
+    editor_hw_config_t hw;
+    /* Scenes */
+    uint16_t scene_count;
+    editor_scene_t scenes[EDITOR_MAX_SCENES];
+    /* Preserved raw YAML for sections we don't edit (format, app) */
     char *raw_buf;
     size_t raw_buf_len;
     uint16_t raw_section_count;
@@ -87,6 +134,15 @@ int  editor_save_project_as(editor_state_t *state, const char *path);
 int  editor_fixture_add(editor_state_t *state, const editor_fixture_t *fixture);
 int  editor_fixture_update(editor_state_t *state, int index, const editor_fixture_t *fixture);
 int  editor_fixture_remove(editor_state_t *state, int index);
+void editor_fixtures_sort(editor_state_t *state);
+
+/* Hardware config */
+int  editor_hw_update(editor_state_t *state, const editor_hw_config_t *hw);
+
+/* Scenes */
+int  editor_scene_add(editor_state_t *state, const editor_scene_t *scene);
+int  editor_scene_update(editor_state_t *state, int index, const editor_scene_t *scene);
+int  editor_scene_remove(editor_state_t *state, int index);
 
 /* Banks */
 int  editor_load_banks(editor_state_t *state, const char *search_paths);

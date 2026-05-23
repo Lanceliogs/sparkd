@@ -12,7 +12,13 @@ midi:
 dmx:
   device: COM3
   backend: open
-  refresh-rate-hz: 25
+  refresh-rate-hz: 44
+
+fixtures:
+  - id: par
+    name: Stairville PAR
+    start-address: 1
+    template: "stairville:par"
 
 scenes:
   - id: red-wash
@@ -27,7 +33,6 @@ scenes:
       par.red: 255
       par.green: 0
       par.blue: 0
-
   - id: color-cycle
     name: Color Cycle
     type: sequence
@@ -58,7 +63,6 @@ scenes:
           par.red: 0
           par.green: 0
           par.blue: 255
-
   - id: white-strobe
     name: White Strobe
     type: static
@@ -73,7 +77,6 @@ scenes:
       par.blue: 0
       par.white: 255
       par.strobe: 255
-
   - id: epileptic-cycle
     name: Epileptic Cycle
     type: sequence
@@ -107,8 +110,3 @@ scenes:
           par.green: 0
           par.blue: 255
           par.strobe: 255
-fixtures:
-  - id: par
-    name: Stairville PAR
-    start-address: 1
-    template: "stairville:par"

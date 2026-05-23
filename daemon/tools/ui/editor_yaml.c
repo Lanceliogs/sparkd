@@ -57,6 +57,301 @@ static void s_skip_value(yaml_parser_t *p)
     }
 }
 
+/* ---- Parse hardware config ---- */
+
+static int s_parse_midi(yaml_parser_t *p, editor_hw_config_t *hw)
+{
+    yaml_event_t ev;
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
+        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+
+        const char *key = s_scalar(&ev);
+        yaml_event_t val_ev;
+
+        if (strcmp(key, "device") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            strncpy(hw->midi_device, s_scalar(&val_ev), sizeof(hw->midi_device) - 1);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "mode") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            strncpy(hw->midi_mode, s_scalar(&val_ev), sizeof(hw->midi_mode) - 1);
+            yaml_event_delete(&val_ev);
+        }
+        else
+        {
+            yaml_event_delete(&ev);
+            s_skip_value(p);
+        }
+    }
+}
+
+static int s_parse_dmx(yaml_parser_t *p, editor_hw_config_t *hw)
+{
+    yaml_event_t ev;
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
+        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+
+        const char *key = s_scalar(&ev);
+        yaml_event_t val_ev;
+
+        if (strcmp(key, "device") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            strncpy(hw->dmx_device, s_scalar(&val_ev), sizeof(hw->dmx_device) - 1);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "backend") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            strncpy(hw->dmx_backend, s_scalar(&val_ev), sizeof(hw->dmx_backend) - 1);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "refresh-rate-hz") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            hw->dmx_refresh_hz = (uint8_t)atoi(s_scalar(&val_ev));
+            yaml_event_delete(&val_ev);
+        }
+        else
+        {
+            yaml_event_delete(&ev);
+            s_skip_value(p);
+        }
+    }
+}
+
+/* ---- Parse scene values (mapping of "fixture.channel": value) ---- */
+
+static int s_parse_scene_values(yaml_parser_t *p, editor_scene_value_t *values,
+                                uint8_t *count)
+{
+    yaml_event_t ev;
+    *count = 0;
+
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
+        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+
+        if (*count >= EDITOR_MAX_SCENE_VALUES)
+        {
+            yaml_event_delete(&ev);
+            s_skip_value(p);
+            continue;
+        }
+
+        editor_scene_value_t *v = &values[*count];
+        strncpy(v->target, s_scalar(&ev), sizeof(v->target) - 1);
+        yaml_event_delete(&ev);
+
+        yaml_event_t val_ev;
+        if (s_next(p, &val_ev) != 0) return -1;
+        v->value = (uint8_t)atoi(s_scalar(&val_ev));
+        yaml_event_delete(&val_ev);
+        (*count)++;
+    }
+}
+
+/* ---- Parse scene steps ---- */
+
+static int s_parse_scene_steps(yaml_parser_t *p, editor_scene_step_t *steps,
+                               uint8_t *count)
+{
+    yaml_event_t ev;
+    *count = 0;
+
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_SEQUENCE_END_EVENT) { yaml_event_delete(&ev); return 0; }
+        if (ev.type != YAML_MAPPING_START_EVENT) { yaml_event_delete(&ev); return -1; }
+        yaml_event_delete(&ev);
+
+        if (*count >= EDITOR_MAX_SCENE_STEPS)
+        {
+            s_skip_value(p);
+            continue;
+        }
+
+        editor_scene_step_t *step = &steps[*count];
+        memset(step, 0, sizeof(*step));
+        strncpy(step->transition, "hold", sizeof(step->transition) - 1);
+
+        for (;;)
+        {
+            if (s_next(p, &ev) != 0) return -1;
+            if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
+            if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+
+            const char *key = s_scalar(&ev);
+            yaml_event_t val_ev;
+
+            if (strcmp(key, "duration-ms") == 0)
+            {
+                yaml_event_delete(&ev);
+                if (s_next(p, &val_ev) != 0) return -1;
+                step->duration_ms = (uint32_t)atoi(s_scalar(&val_ev));
+                yaml_event_delete(&val_ev);
+            }
+            else if (strcmp(key, "transition") == 0)
+            {
+                yaml_event_delete(&ev);
+                if (s_next(p, &val_ev) != 0) return -1;
+                strncpy(step->transition, s_scalar(&val_ev), sizeof(step->transition) - 1);
+                yaml_event_delete(&val_ev);
+            }
+            else if (strcmp(key, "values") == 0)
+            {
+                yaml_event_delete(&ev);
+                if (s_expect(p, &ev, YAML_MAPPING_START_EVENT) != 0) return -1;
+                yaml_event_delete(&ev);
+                if (s_parse_scene_values(p, step->values, &step->value_count) != 0)
+                    return -1;
+            }
+            else
+            {
+                yaml_event_delete(&ev);
+                s_skip_value(p);
+            }
+        }
+        (*count)++;
+    }
+}
+
+/* ---- Parse a single scene ---- */
+
+static int s_parse_scene(yaml_parser_t *p, editor_scene_t *scene)
+{
+    yaml_event_t ev;
+    memset(scene, 0, sizeof(*scene));
+    scene->enabled = true;
+    strncpy(scene->type, "static", sizeof(scene->type) - 1);
+    strncpy(scene->trigger_mode, "gate", sizeof(scene->trigger_mode) - 1);
+
+    for (;;)
+    {
+        if (s_next(p, &ev) != 0) return -1;
+        if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
+        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+
+        const char *key = s_scalar(&ev);
+        yaml_event_t val_ev;
+
+        if (strcmp(key, "id") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            strncpy(scene->id, s_scalar(&val_ev), SPARK_MAX_ID_SIZE - 1);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "name") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            strncpy(scene->name, s_scalar(&val_ev), SPARK_MAX_NAME_SIZE - 1);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "type") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            strncpy(scene->type, s_scalar(&val_ev), sizeof(scene->type) - 1);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "enabled") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            scene->enabled = (strcmp(s_scalar(&val_ev), "false") != 0);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "loop") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_next(p, &val_ev) != 0) return -1;
+            scene->loop = (strcmp(s_scalar(&val_ev), "true") == 0);
+            yaml_event_delete(&val_ev);
+        }
+        else if (strcmp(key, "trigger") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_MAPPING_START_EVENT) != 0) return -1;
+            yaml_event_delete(&ev);
+
+            for (;;)
+            {
+                if (s_next(p, &ev) != 0) return -1;
+                if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
+                if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+
+                const char *tkey = s_scalar(&ev);
+                if (strcmp(tkey, "channel") == 0)
+                {
+                    yaml_event_delete(&ev);
+                    if (s_next(p, &val_ev) != 0) return -1;
+                    scene->channel = (uint8_t)atoi(s_scalar(&val_ev));
+                    yaml_event_delete(&val_ev);
+                }
+                else if (strcmp(tkey, "note") == 0)
+                {
+                    yaml_event_delete(&ev);
+                    if (s_next(p, &val_ev) != 0) return -1;
+                    scene->note = (uint8_t)atoi(s_scalar(&val_ev));
+                    yaml_event_delete(&val_ev);
+                }
+                else if (strcmp(tkey, "mode") == 0)
+                {
+                    yaml_event_delete(&ev);
+                    if (s_next(p, &val_ev) != 0) return -1;
+                    strncpy(scene->trigger_mode, s_scalar(&val_ev), sizeof(scene->trigger_mode) - 1);
+                    yaml_event_delete(&val_ev);
+                }
+                else
+                {
+                    yaml_event_delete(&ev);
+                    s_skip_value(p);
+                }
+            }
+        }
+        else if (strcmp(key, "values") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_MAPPING_START_EVENT) != 0) return -1;
+            yaml_event_delete(&ev);
+            if (s_parse_scene_values(p, scene->values, &scene->value_count) != 0)
+                return -1;
+        }
+        else if (strcmp(key, "steps") == 0)
+        {
+            yaml_event_delete(&ev);
+            if (s_expect(p, &ev, YAML_SEQUENCE_START_EVENT) != 0) return -1;
+            yaml_event_delete(&ev);
+            if (s_parse_scene_steps(p, scene->steps, &scene->step_count) != 0)
+                return -1;
+        }
+        else
+        {
+            yaml_event_delete(&ev);
+            s_skip_value(p);
+        }
+    }
+}
+
 /* ---- Parse project fixtures ---- */
 
 static int s_parse_channels(yaml_parser_t *p, editor_channel_t *channels,
@@ -233,7 +528,7 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
 
     size_t prev_section_start = 0;
     char prev_key[64] = {0};
-    int prev_is_fixtures = 0;
+    int prev_is_structured = 0;
     int has_prev = 0;
 
     for (;;)
@@ -242,8 +537,7 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
 
         if (ev.type == YAML_MAPPING_END_EVENT)
         {
-            /* Finalize previous section */
-            if (has_prev && !prev_is_fixtures &&
+            if (has_prev && !prev_is_structured &&
                 project->raw_section_count < EDITOR_MAX_RAW_SECTIONS)
             {
                 editor_raw_section_t *sec = &project->raw_sections[project->raw_section_count];
@@ -258,9 +552,8 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
 
         if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); goto done; }
 
-        /* Finalize previous section now that we know where it ends */
         size_t this_key_start = ev.start_mark.index;
-        if (has_prev && !prev_is_fixtures &&
+        if (has_prev && !prev_is_structured &&
             project->raw_section_count < EDITOR_MAX_RAW_SECTIONS)
         {
             editor_raw_section_t *sec = &project->raw_sections[project->raw_section_count];
@@ -278,7 +571,7 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
 
         if (strcmp(key, "fixtures") == 0)
         {
-            prev_is_fixtures = 1;
+            prev_is_structured = 1;
             yaml_event_delete(&ev);
             if (s_expect(&parser, &ev, YAML_SEQUENCE_START_EVENT) != 0) goto done;
             yaml_event_delete(&ev);
@@ -300,9 +593,49 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
                 project->fixture_count++;
             }
         }
+        else if (strcmp(key, "midi") == 0)
+        {
+            prev_is_structured = 1;
+            yaml_event_delete(&ev);
+            if (s_expect(&parser, &ev, YAML_MAPPING_START_EVENT) != 0) goto done;
+            yaml_event_delete(&ev);
+            if (s_parse_midi(&parser, &project->hw) != 0) goto done;
+        }
+        else if (strcmp(key, "dmx") == 0)
+        {
+            prev_is_structured = 1;
+            yaml_event_delete(&ev);
+            if (s_expect(&parser, &ev, YAML_MAPPING_START_EVENT) != 0) goto done;
+            yaml_event_delete(&ev);
+            if (s_parse_dmx(&parser, &project->hw) != 0) goto done;
+        }
+        else if (strcmp(key, "scenes") == 0)
+        {
+            prev_is_structured = 1;
+            yaml_event_delete(&ev);
+            if (s_expect(&parser, &ev, YAML_SEQUENCE_START_EVENT) != 0) goto done;
+            yaml_event_delete(&ev);
+
+            for (;;)
+            {
+                if (s_next(&parser, &ev) != 0) goto done;
+                if (ev.type == YAML_SEQUENCE_END_EVENT) { yaml_event_delete(&ev); break; }
+                if (ev.type != YAML_MAPPING_START_EVENT) { yaml_event_delete(&ev); goto done; }
+                yaml_event_delete(&ev);
+
+                if (project->scene_count >= EDITOR_MAX_SCENES)
+                {
+                    spark_log_error("editor: too many scenes");
+                    goto done;
+                }
+                if (s_parse_scene(&parser, &project->scenes[project->scene_count]) != 0)
+                    goto done;
+                project->scene_count++;
+            }
+        }
         else
         {
-            prev_is_fixtures = 0;
+            prev_is_structured = 0;
             yaml_event_delete(&ev);
             s_skip_value(&parser);
         }
@@ -570,131 +903,225 @@ static const editor_raw_section_t *s_find_raw_section(
     return NULL;
 }
 
-static int s_emit_fixtures_to_buf(const editor_project_t *project,
-                                  char **out_buf, size_t *out_len)
+/* ---- Section emitters (produce YAML text into a buffer) ---- */
+
+static void s_buf_emit_fixtures(const editor_project_t *project,
+                                char *buf, size_t cap, size_t *pos)
 {
-    /* Emit fixtures section as YAML text into a memory buffer */
-    size_t cap = 32 * 1024;
-    char *buf = (char *)malloc(cap);
-    if (!buf) return -1;
-    size_t pos = 0;
-
-    pos += (size_t)snprintf(buf + pos, cap - pos, "fixtures:\n");
-
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos, "fixtures:\n");
     for (uint16_t i = 0; i < project->fixture_count; i++)
     {
         const editor_fixture_t *fix = &project->fixtures[i];
-        pos += (size_t)snprintf(buf + pos, cap - pos, "  - id: %s\n", fix->id);
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "  - id: %s\n", fix->id);
         if (fix->name[0] != '\0')
-            pos += (size_t)snprintf(buf + pos, cap - pos, "    name: %s\n", fix->name);
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    name: %s\n", fix->name);
         if (fix->start_address > 0)
-            pos += (size_t)snprintf(buf + pos, cap - pos, "    start-address: %d\n", fix->start_address);
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    start-address: %d\n", fix->start_address);
 
         if (fix->template_ref[0] != '\0')
-        {
-            pos += (size_t)snprintf(buf + pos, cap - pos, "    template: \"%s\"\n", fix->template_ref);
-        }
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    template: \"%s\"\n", fix->template_ref);
         else if (fix->copy_from[0] != '\0')
-        {
-            pos += (size_t)snprintf(buf + pos, cap - pos, "    copy-from: \"%s\"\n", fix->copy_from);
-        }
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    copy-from: \"%s\"\n", fix->copy_from);
         else if (fix->channel_count > 0)
         {
-            pos += (size_t)snprintf(buf + pos, cap - pos, "    channel-count: %d\n", fix->channel_count);
-            pos += (size_t)snprintf(buf + pos, cap - pos, "    channels:\n");
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    channel-count: %d\n", fix->channel_count);
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    channels:\n");
             for (uint8_t j = 0; j < fix->channel_count; j++)
             {
-                pos += (size_t)snprintf(buf + pos, cap - pos,
+                *pos += (size_t)snprintf(buf + *pos, cap - *pos,
                     "      - name: %s\n        offset: %d\n",
                     fix->channels[j].name, fix->channels[j].offset);
             }
         }
     }
+}
 
-    *out_buf = buf;
-    *out_len = pos;
-    return 0;
+static void s_buf_emit_midi(const editor_hw_config_t *hw,
+                            char *buf, size_t cap, size_t *pos)
+{
+    if (hw->midi_device[0] == '\0' && hw->midi_mode[0] == '\0') return;
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos, "midi:\n");
+    if (hw->midi_device[0] != '\0')
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "  device: %s\n", hw->midi_device);
+    if (hw->midi_mode[0] != '\0')
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "  mode: %s\n", hw->midi_mode);
+}
+
+static void s_buf_emit_dmx(const editor_hw_config_t *hw,
+                           char *buf, size_t cap, size_t *pos)
+{
+    if (hw->dmx_device[0] == '\0' && hw->dmx_backend[0] == '\0' && hw->dmx_refresh_hz == 0)
+        return;
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos, "dmx:\n");
+    if (hw->dmx_device[0] != '\0')
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "  device: %s\n", hw->dmx_device);
+    if (hw->dmx_backend[0] != '\0')
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "  backend: %s\n", hw->dmx_backend);
+    if (hw->dmx_refresh_hz > 0)
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "  refresh-rate-hz: %d\n", hw->dmx_refresh_hz);
+}
+
+static void s_buf_emit_scene_values(const editor_scene_value_t *values, uint8_t count,
+                                    const char *indent, char *buf, size_t cap, size_t *pos)
+{
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos, "%svalues:\n", indent);
+    for (uint8_t i = 0; i < count; i++)
+    {
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "%s  %s: %d\n",
+                                 indent, values[i].target, values[i].value);
+    }
+}
+
+static void s_buf_emit_scenes(const editor_project_t *project,
+                              char *buf, size_t cap, size_t *pos)
+{
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos, "scenes:\n");
+    for (uint16_t i = 0; i < project->scene_count; i++)
+    {
+        const editor_scene_t *sc = &project->scenes[i];
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "  - id: %s\n", sc->id);
+        if (sc->name[0] != '\0')
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    name: %s\n", sc->name);
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    type: %s\n", sc->type);
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    trigger:\n");
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "      channel: %d\n", sc->channel);
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "      note: %d\n", sc->note);
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "      mode: %s\n", sc->trigger_mode);
+        if (!sc->enabled)
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    enabled: false\n");
+        if (sc->loop)
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    loop: true\n");
+
+        if (strcmp(sc->type, "static") == 0 && sc->value_count > 0)
+        {
+            s_buf_emit_scene_values(sc->values, sc->value_count, "    ", buf, cap, pos);
+        }
+        else if (strcmp(sc->type, "sequence") == 0 && sc->step_count > 0)
+        {
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos, "    steps:\n");
+            for (uint8_t s = 0; s < sc->step_count; s++)
+            {
+                const editor_scene_step_t *step = &sc->steps[s];
+                *pos += (size_t)snprintf(buf + *pos, cap - *pos, "      - duration-ms: %u\n", step->duration_ms);
+                *pos += (size_t)snprintf(buf + *pos, cap - *pos, "        transition: %s\n", step->transition);
+                if (step->value_count > 0)
+                    s_buf_emit_scene_values(step->values, step->value_count, "        ", buf, cap, pos);
+            }
+        }
+    }
 }
 
 int editor_yaml_emit_project(const char *path, const editor_project_t *project)
 {
-    /* Generate the fixtures section text */
-    char *fix_buf = NULL;
-    size_t fix_len = 0;
-    if (project->fixture_count > 0)
-    {
-        if (s_emit_fixtures_to_buf(project, &fix_buf, &fix_len) != 0)
-            return -1;
-    }
+    size_t cap = 64 * 1024;
+    char *buf = (char *)malloc(cap);
+    if (!buf) return -1;
+    size_t pos = 0;
 
     FILE *f = fopen(path, "wb");
     if (!f)
     {
         spark_log_error("editor: cannot write '%s'", path);
-        free(fix_buf);
+        free(buf);
         return -1;
     }
 
-    if (project->raw_buf && project->raw_section_count > 0)
+    int need_newline = 0;
+
+    /* Write sections in canonical key order */
+    for (int k = 0; s_key_order[k] != NULL; k++)
     {
-        int need_newline = 0;
+        const char *section = s_key_order[k];
 
-        /* Write sections in canonical key order */
-        for (int k = 0; s_key_order[k] != NULL; k++)
+        if (strcmp(section, "fixtures") == 0)
         {
-            if (strcmp(s_key_order[k], "fixtures") == 0)
+            if (project->fixture_count > 0)
             {
-                if (fix_buf)
-                {
-                    if (need_newline) fprintf(f, "\n");
-                    fwrite(fix_buf, 1, fix_len, f);
-                    need_newline = 1;
-                }
-                continue;
+                if (need_newline) fputc('\n', f);
+                pos = 0;
+                s_buf_emit_fixtures(project, buf, cap, &pos);
+                fwrite(buf, 1, pos, f);
+                need_newline = 1;
             }
-
-            const editor_raw_section_t *sec = s_find_raw_section(project, s_key_order[k]);
+        }
+        else if (strcmp(section, "midi") == 0)
+        {
+            if (project->hw.midi_device[0] != '\0' || project->hw.midi_mode[0] != '\0')
+            {
+                if (need_newline) fputc('\n', f);
+                pos = 0;
+                s_buf_emit_midi(&project->hw, buf, cap, &pos);
+                fwrite(buf, 1, pos, f);
+                need_newline = 1;
+            }
+        }
+        else if (strcmp(section, "dmx") == 0)
+        {
+            if (project->hw.dmx_device[0] != '\0' || project->hw.dmx_backend[0] != '\0' || project->hw.dmx_refresh_hz > 0)
+            {
+                if (need_newline) fputc('\n', f);
+                pos = 0;
+                s_buf_emit_dmx(&project->hw, buf, cap, &pos);
+                fwrite(buf, 1, pos, f);
+                need_newline = 1;
+            }
+        }
+        else if (strcmp(section, "scenes") == 0)
+        {
+            if (project->scene_count > 0)
+            {
+                if (need_newline) fputc('\n', f);
+                pos = 0;
+                s_buf_emit_scenes(project, buf, cap, &pos);
+                fwrite(buf, 1, pos, f);
+                need_newline = 1;
+            }
+        }
+        else
+        {
+            /* Raw-preserved section (format, app) */
+            const editor_raw_section_t *sec = s_find_raw_section(project, section);
             if (!sec) continue;
 
             if (need_newline)
             {
                 const char *raw = project->raw_buf + sec->start;
-                if (raw[0] != '\n') fprintf(f, "\n");
-            }
-            fwrite(project->raw_buf + sec->start, 1, sec->len, f);
-            need_newline = 1;
-        }
-
-        /* Append any raw sections not in s_key_order (forward compatibility) */
-        for (uint16_t i = 0; i < project->raw_section_count; i++)
-        {
-            const editor_raw_section_t *sec = &project->raw_sections[i];
-            int found = 0;
-            for (int k = 0; s_key_order[k] != NULL; k++)
-            {
-                if (strcmp(sec->key, s_key_order[k]) == 0) { found = 1; break; }
-            }
-            if (found) continue;
-
-            if (need_newline)
-            {
-                const char *raw = project->raw_buf + sec->start;
-                if (raw[0] != '\n') fprintf(f, "\n");
+                if (raw[0] != '\n') fputc('\n', f);
             }
             fwrite(project->raw_buf + sec->start, 1, sec->len, f);
             need_newline = 1;
         }
     }
-    else
+
+    /* Append any raw sections not in s_key_order (forward compatibility) */
+    for (uint16_t i = 0; i < project->raw_section_count; i++)
     {
-        /* No raw buffer (new project) — emit everything from scratch */
-        fprintf(f, "format:\n  name: spark-project\n  version: 1\n\n");
-        if (fix_buf)
-            fwrite(fix_buf, 1, fix_len, f);
+        const editor_raw_section_t *sec = &project->raw_sections[i];
+        int found = 0;
+        for (int k = 0; s_key_order[k] != NULL; k++)
+        {
+            if (strcmp(sec->key, s_key_order[k]) == 0) { found = 1; break; }
+        }
+        if (found) continue;
+
+        if (need_newline)
+        {
+            const char *raw = project->raw_buf + sec->start;
+            if (raw[0] != '\n') fputc('\n', f);
+        }
+        fwrite(project->raw_buf + sec->start, 1, sec->len, f);
+        need_newline = 1;
+    }
+
+    /* Fallback: no raw sections at all (brand new project) */
+    if (!project->raw_buf || project->raw_section_count == 0)
+    {
+        if (pos == 0 && !need_newline)
+            fprintf(f, "format:\n  name: spark-project\n  version: 1\n\n");
     }
 
     fclose(f);
-    free(fix_buf);
+    free(buf);
     return 0;
 }
 

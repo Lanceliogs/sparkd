@@ -90,6 +90,241 @@ static void s_handle_save(struct mg_connection *c)
     mg_json_reply(c, 200, "{\"ok\":true}");
 }
 
+static void s_handle_save_as(struct mg_connection *c, struct mg_http_message *hm)
+{
+    char path[EDITOR_PATH_MAX] = {0};
+    int n = mg_json_get_str_buf(hm->body, "$.path", path, sizeof(path));
+    if (n <= 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"missing path\"}");
+        return;
+    }
+    if (editor_save_project_as(&s_editor, path) != 0)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"save-as failed\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+/* ---- Hardware config ---- */
+
+static void s_handle_hardware_get(struct mg_connection *c)
+{
+    const editor_hw_config_t *hw = &s_editor.project.hw;
+    char buf[1024];
+    snprintf(buf, sizeof(buf),
+        "{\"midi_device\":\"%s\",\"midi_mode\":\"%s\","
+        "\"dmx_device\":\"%s\",\"dmx_backend\":\"%s\",\"dmx_refresh_hz\":%d}",
+        hw->midi_device, hw->midi_mode,
+        hw->dmx_device, hw->dmx_backend, hw->dmx_refresh_hz);
+    mg_json_reply(c, 200, buf);
+}
+
+static void s_handle_hardware_put(struct mg_connection *c, struct mg_http_message *hm)
+{
+    editor_hw_config_t hw = {0};
+    mg_json_get_str_buf(hm->body, "$.midi_device", hw.midi_device, sizeof(hw.midi_device));
+    mg_json_get_str_buf(hm->body, "$.midi_mode", hw.midi_mode, sizeof(hw.midi_mode));
+    mg_json_get_str_buf(hm->body, "$.dmx_device", hw.dmx_device, sizeof(hw.dmx_device));
+    mg_json_get_str_buf(hm->body, "$.dmx_backend", hw.dmx_backend, sizeof(hw.dmx_backend));
+    double hz;
+    if (mg_json_get_num(hm->body, "$.dmx_refresh_hz", &hz))
+        hw.dmx_refresh_hz = (uint8_t)hz;
+
+    editor_hw_update(&s_editor, &hw);
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+/* ---- Scenes ---- */
+
+static void s_emit_scene_json(char *buf, size_t cap, size_t *pos, const editor_scene_t *sc, int idx)
+{
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos,
+        "{\"index\":%d,\"id\":\"%s\",\"name\":\"%s\",\"type\":\"%s\","
+        "\"trigger_mode\":\"%s\",\"channel\":%d,\"note\":%d,"
+        "\"enabled\":%s,\"loop\":%s,\"values\":[",
+        idx, sc->id, sc->name, sc->type,
+        sc->trigger_mode, sc->channel, sc->note,
+        sc->enabled ? "true" : "false",
+        sc->loop ? "true" : "false");
+
+    for (uint8_t v = 0; v < sc->value_count; v++)
+    {
+        if (v > 0) buf[(*pos)++] = ',';
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos,
+            "{\"target\":\"%s\",\"value\":%d}",
+            sc->values[v].target, sc->values[v].value);
+    }
+
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos, "],\"steps\":[");
+
+    for (uint8_t s = 0; s < sc->step_count; s++)
+    {
+        const editor_scene_step_t *step = &sc->steps[s];
+        if (s > 0) buf[(*pos)++] = ',';
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos,
+            "{\"duration_ms\":%u,\"transition\":\"%s\",\"values\":[",
+            step->duration_ms, step->transition);
+        for (uint8_t v = 0; v < step->value_count; v++)
+        {
+            if (v > 0) buf[(*pos)++] = ',';
+            *pos += (size_t)snprintf(buf + *pos, cap - *pos,
+                "{\"target\":\"%s\",\"value\":%d}",
+                step->values[v].target, step->values[v].value);
+        }
+        *pos += (size_t)snprintf(buf + *pos, cap - *pos, "]}");
+    }
+
+    *pos += (size_t)snprintf(buf + *pos, cap - *pos, "]}");
+}
+
+static void s_handle_scenes_get(struct mg_connection *c)
+{
+    size_t cap = 64 * 1024;
+    char *buf = (char *)malloc(cap);
+    if (!buf) { mg_json_reply(c, 500, "{\"error\":\"alloc\"}"); return; }
+    size_t pos = 0;
+    buf[pos++] = '[';
+
+    for (uint16_t i = 0; i < s_editor.project.scene_count; i++)
+    {
+        if (i > 0) buf[pos++] = ',';
+        s_emit_scene_json(buf, cap, &pos, &s_editor.project.scenes[i], i);
+    }
+    buf[pos++] = ']';
+    buf[pos] = '\0';
+
+    mg_http_reply(c, 200,
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: application/json\r\n",
+        "%s", buf);
+    free(buf);
+}
+
+static int s_parse_scene_from_json(struct mg_str body, editor_scene_t *scene)
+{
+    memset(scene, 0, sizeof(*scene));
+    scene->enabled = true;
+    strncpy(scene->type, "static", sizeof(scene->type) - 1);
+    strncpy(scene->trigger_mode, "gate", sizeof(scene->trigger_mode) - 1);
+
+    mg_json_get_str_buf(body, "$.id", scene->id, sizeof(scene->id));
+    mg_json_get_str_buf(body, "$.name", scene->name, sizeof(scene->name));
+    mg_json_get_str_buf(body, "$.type", scene->type, sizeof(scene->type));
+    mg_json_get_str_buf(body, "$.trigger_mode", scene->trigger_mode, sizeof(scene->trigger_mode));
+
+    double val;
+    if (mg_json_get_num(body, "$.channel", &val))
+        scene->channel = (uint8_t)val;
+    if (mg_json_get_num(body, "$.note", &val))
+        scene->note = (uint8_t)val;
+
+    char en_str[8] = {0};
+    mg_json_get_str_buf(body, "$.enabled", en_str, sizeof(en_str));
+    if (en_str[0] != '\0') scene->enabled = (strcmp(en_str, "false") != 0);
+
+    char lp_str[8] = {0};
+    mg_json_get_str_buf(body, "$.loop", lp_str, sizeof(lp_str));
+    if (lp_str[0] != '\0') scene->loop = (strcmp(lp_str, "true") == 0);
+
+    /* Parse values array */
+    char path[64];
+    for (int v = 0; v < EDITOR_MAX_SCENE_VALUES; v++)
+    {
+        snprintf(path, sizeof(path), "$.values[%d].target", v);
+        char target[128] = {0};
+        if (mg_json_get_str_buf(body, path, target, sizeof(target)) <= 0) break;
+        strncpy(scene->values[v].target, target, sizeof(scene->values[v].target) - 1);
+        snprintf(path, sizeof(path), "$.values[%d].value", v);
+        double vv;
+        if (mg_json_get_num(body, path, &vv))
+            scene->values[v].value = (uint8_t)vv;
+        scene->value_count++;
+    }
+
+    /* Parse steps array */
+    for (int s = 0; s < EDITOR_MAX_SCENE_STEPS; s++)
+    {
+        snprintf(path, sizeof(path), "$.steps[%d].duration_ms", s);
+        double dur;
+        if (!mg_json_get_num(body, path, &dur)) break;
+
+        editor_scene_step_t *step = &scene->steps[s];
+        step->duration_ms = (uint32_t)dur;
+        snprintf(path, sizeof(path), "$.steps[%d].transition", s);
+        mg_json_get_str_buf(body, path, step->transition, sizeof(step->transition));
+        if (step->transition[0] == '\0')
+            strncpy(step->transition, "hold", sizeof(step->transition) - 1);
+
+        for (int v = 0; v < EDITOR_MAX_SCENE_VALUES; v++)
+        {
+            char vpath[96];
+            snprintf(vpath, sizeof(vpath), "$.steps[%d].values[%d].target", s, v);
+            char t[128] = {0};
+            if (mg_json_get_str_buf(body, vpath, t, sizeof(t)) <= 0) break;
+            strncpy(step->values[v].target, t, sizeof(step->values[v].target) - 1);
+            snprintf(vpath, sizeof(vpath), "$.steps[%d].values[%d].value", s, v);
+            double sv;
+            if (mg_json_get_num(body, vpath, &sv))
+                step->values[v].value = (uint8_t)sv;
+            step->value_count++;
+        }
+        scene->step_count++;
+    }
+
+    return (scene->id[0] != '\0') ? 0 : -1;
+}
+
+static void s_handle_scene_add(struct mg_connection *c, struct mg_http_message *hm)
+{
+    editor_scene_t scene;
+    if (s_parse_scene_from_json(hm->body, &scene) != 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"invalid scene\"}");
+        return;
+    }
+    if (editor_scene_add(&s_editor, &scene) != 0)
+    {
+        mg_json_reply(c, 500, "{\"error\":\"too many scenes\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_scene_update(struct mg_connection *c,
+                                  struct mg_http_message *hm, int index)
+{
+    editor_scene_t scene;
+    if (s_parse_scene_from_json(hm->body, &scene) != 0)
+    {
+        mg_json_reply(c, 400, "{\"error\":\"invalid scene\"}");
+        return;
+    }
+    if (editor_scene_update(&s_editor, index, &scene) != 0)
+    {
+        mg_json_reply(c, 404, "{\"error\":\"scene not found\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_scene_delete(struct mg_connection *c, int index)
+{
+    if (editor_scene_remove(&s_editor, index) != 0)
+    {
+        mg_json_reply(c, 404, "{\"error\":\"scene not found\"}");
+        return;
+    }
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
+static void s_handle_fixtures_sort(struct mg_connection *c)
+{
+    editor_fixtures_sort(&s_editor);
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
 /* ---- Project fixtures ---- */
 
 static void s_handle_fixtures_get(struct mg_connection *c)
@@ -579,6 +814,60 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
         s_handle_save(c);
         return true;
     }
+    if (mg_match(hm->uri, mg_str("/api/editor/save-as"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_save_as(c, hm);
+        return true;
+    }
+
+    /* Hardware config */
+    if (mg_match(hm->uri, mg_str("/api/editor/hardware"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_hardware_get(c);
+        return true;
+    }
+    if (mg_match(hm->uri, mg_str("/api/editor/hardware"), NULL) &&
+        mg_method_is(hm, "PUT"))
+    {
+        s_handle_hardware_put(c, hm);
+        return true;
+    }
+
+    /* Scenes */
+    if (mg_match(hm->uri, mg_str("/api/editor/scenes"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_scenes_get(c);
+        return true;
+    }
+    if (mg_match(hm->uri, mg_str("/api/editor/scenes"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_scene_add(c, hm);
+        return true;
+    }
+
+    /* /api/editor/scenes/:index */
+    if (mg_match(hm->uri, mg_str("/api/editor/scenes/#"), NULL))
+    {
+        struct mg_str tail = hm->uri;
+        tail.buf += 20; /* skip "/api/editor/scenes/" */
+        tail.len -= 20;
+        int idx = (int)strtoul(tail.buf, NULL, 10);
+
+        if (mg_method_is(hm, "PUT"))
+        {
+            s_handle_scene_update(c, hm, idx);
+            return true;
+        }
+        if (mg_method_is(hm, "DELETE"))
+        {
+            s_handle_scene_delete(c, idx);
+            return true;
+        }
+    }
 
     /* Bank dirs + create */
     if (mg_match(hm->uri, mg_str("/api/editor/bank-dirs"), NULL) &&
@@ -603,6 +892,12 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
     }
 
     /* Project fixtures */
+    if (mg_match(hm->uri, mg_str("/api/editor/fixtures/sort"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_fixtures_sort(c);
+        return true;
+    }
     if (mg_match(hm->uri, mg_str("/api/editor/fixtures"), NULL) &&
         mg_method_is(hm, "GET"))
     {

@@ -5,10 +5,12 @@
     editorOpen,
     editorClose,
     editorSave,
+    editorSaveAs,
     editorGetFixtures,
     editorAddFixture,
     editorUpdateFixture,
     editorDeleteFixture,
+    editorFixturesSort,
     editorGetBanks,
     editorBankAddFixture,
     editorBankUpdateFixture,
@@ -17,13 +19,21 @@
     editorGetBankDirs,
     editorCreateBank,
     editorBrowse,
-    getScenes,
+    editorGetHardware,
+    editorUpdateHardware,
+    editorGetScenes,
+    editorAddScene,
+    editorUpdateScene,
+    editorDeleteScene,
     type EditorStatus,
     type EditorFixture,
     type EditorBank,
     type BankFixture,
     type BrowseResult,
-    type SceneDef,
+    type HardwareConfig,
+    type EditorScene,
+    type SceneValue,
+    type SceneStep,
     type Channel,
   } from '../lib/api';
 
@@ -31,8 +41,9 @@
   let status: EditorStatus = $state({ project_loaded: false, project_path: '', dirty: false, fixture_count: 0, bank_count: 0 });
   let fixtures: EditorFixture[] = $state([]);
   let banks: EditorBank[] = $state([]);
-  let scenes: SceneDef[] = $state([]);
+  let scenes: EditorScene[] = $state([]);
   let bankDirs: string[] = $state([]);
+  let hwConfig: HardwareConfig = $state({ midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 });
 
   /* ---- Selection / navigation ---- */
   type SelectionKind = 'bank_fixture' | 'project_fixture' | 'scene';
@@ -49,6 +60,7 @@
 
   let editFixture: EditorFixture | null = $state(null);
   let editBankFixture: BankFixture | null = $state(null);
+  let editScene: EditorScene | null = $state(null);
   let editIsNew = $state(false);
 
   /* ---- New bank form ---- */
@@ -65,10 +77,12 @@
     status = await editorStatus();
     if (status.project_loaded) {
       fixtures = await editorGetFixtures();
-      try { scenes = await getScenes(); } catch { scenes = []; }
+      scenes = await editorGetScenes();
+      hwConfig = await editorGetHardware();
     } else {
       fixtures = [];
       scenes = [];
+      hwConfig = { midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 };
     }
     banks = await editorGetBanks();
     bankDirs = await editorGetBankDirs();
@@ -115,6 +129,15 @@
         editIsNew = false;
       }
     } else if (sel.kind === 'scene') {
+      const sc = scenes[sel.itemIdx];
+      if (sc) {
+        editScene = {
+          ...sc,
+          values: sc.values.map(v => ({ ...v })),
+          steps: sc.steps.map(s => ({ ...s, values: s.values.map(v => ({ ...v })) })),
+        };
+        editIsNew = false;
+      }
       editFixture = null;
       editBankFixture = null;
     }
@@ -277,6 +300,124 @@
     await refresh();
   }
 
+  /* ---- Scene editing ---- */
+  function startAddScene() {
+    editScene = { id: '', name: '', type: 'static', trigger_mode: 'gate', channel: 1, note: 60, enabled: true, loop: false, values: [], steps: [] };
+    editFixture = null;
+    editBankFixture = null;
+    editIsNew = true;
+    editDirty = false;
+    selection = { kind: 'scene', itemIdx: -1 };
+  }
+
+  async function saveEditScene() {
+    if (!editScene) return;
+    const data = { ...editScene };
+    delete (data as any).index;
+    if (editIsNew) {
+      await editorAddScene(data);
+    } else if (selection?.kind === 'scene') {
+      await editorUpdateScene(selection.itemIdx, data);
+    }
+    editDirty = false;
+    selection = null; editScene = null;
+    await refresh();
+  }
+
+  async function deleteEditScene() {
+    if (!selection || selection.kind !== 'scene' || selection.itemIdx < 0) return;
+    await editorDeleteScene(selection.itemIdx);
+    editDirty = false;
+    selection = null; editScene = null;
+    await refresh();
+  }
+
+  function addSceneValue() {
+    if (!editScene) return;
+    editScene.values = [...editScene.values, { target: '', value: 0 }];
+    markDirty();
+  }
+
+  function removeSceneValue(i: number) {
+    if (!editScene) return;
+    editScene.values = editScene.values.filter((_, idx) => idx !== i);
+    markDirty();
+  }
+
+  function addSceneStep() {
+    if (!editScene) return;
+    editScene.steps = [...editScene.steps, { duration_ms: 1000, transition: 'hold', values: [] }];
+    markDirty();
+  }
+
+  function removeSceneStep(i: number) {
+    if (!editScene) return;
+    editScene.steps = editScene.steps.filter((_, idx) => idx !== i);
+    markDirty();
+  }
+
+  function addStepValue(stepIdx: number) {
+    if (!editScene) return;
+    editScene.steps[stepIdx].values = [...editScene.steps[stepIdx].values, { target: '', value: 0 }];
+    markDirty();
+  }
+
+  function removeStepValue(stepIdx: number, valIdx: number) {
+    if (!editScene) return;
+    editScene.steps[stepIdx].values = editScene.steps[stepIdx].values.filter((_, idx) => idx !== valIdx);
+    markDirty();
+  }
+
+  /* ---- Hardware editing ---- */
+  let hwDirty = $state(false);
+
+  async function saveHardware() {
+    await editorUpdateHardware(hwConfig);
+    hwDirty = false;
+    await refresh();
+  }
+
+  function markHwDirty() { hwDirty = true; }
+
+  /* ---- Save As ---- */
+  let showSaveAs = $state(false);
+  let saveAsPath = $state('');
+
+  async function handleSaveAs() {
+    if (!saveAsPath) return;
+    await editorSaveAs(saveAsPath);
+    showSaveAs = false;
+    saveAsPath = '';
+    await refresh();
+  }
+
+  /* ---- Fixtures sort ---- */
+  async function handleFixturesSort() {
+    await editorFixturesSort();
+    await refresh();
+  }
+
+  /* ---- Fixture/channel target helpers ---- */
+  function getFixtureTargets(): { fixture: string; channel: string; addr: number }[] {
+    const targets: { fixture: string; channel: string; addr: number }[] = [];
+    const sorted = [...fixtures].sort((a, b) => a.start_address - b.start_address);
+    for (const fix of sorted) {
+      for (const ch of fix.channels) {
+        targets.push({ fixture: fix.id, channel: ch.name, addr: fix.start_address });
+      }
+    }
+    return targets;
+  }
+
+  function validateTarget(target: string): 'valid' | 'warn' {
+    if (!target || !target.includes('.')) return 'warn';
+    const [fixId, chName] = target.split('.', 2);
+    const fix = fixtures.find(f => f.id === fixId);
+    if (!fix) return 'warn';
+    if (!fix.channels.some(c => c.name === chName)) return 'warn';
+    return 'valid';
+  }
+
   /* ---- Channel helpers ---- */
   function addChannel() {
     if (editFixture) {
@@ -316,6 +457,7 @@
     {#if status.dirty}<span class="dirty-badge">unsaved</span>{/if}
     <div class="project-actions">
       <button class="btn-sm" onclick={handleSave}>Save</button>
+      <button class="btn-sm btn-muted" onclick={() => showSaveAs = true}>Save As</button>
       <button class="btn-sm btn-muted" onclick={handleClose}>Close</button>
     </div>
   {:else}
@@ -409,7 +551,8 @@
       {:else if selectionTab === 'fixtures'}
         {#if status.project_loaded}
           <div class="sel-toolbar">
-            <button class="btn-xs btn-add" onclick={startAddProjectFixture}>+ Add Fixture</button>
+            <button class="btn-xs btn-add" onclick={startAddProjectFixture}>+ Add</button>
+            <button class="btn-xs" onclick={handleFixturesSort}>Sort</button>
           </div>
           <div class="pad-grid">
             {#each fixtures as fix (fix.index)}
@@ -429,12 +572,30 @@
 
       {:else if selectionTab === 'hardware'}
         {#if status.project_loaded}
-          <div class="hw-display">
-            <p class="hw-note">Read-only. Edit in project YAML.</p>
-            <div class="hw-grid">
-              <span class="hw-label">Project</span>
-              <span class="hw-value">{status.project_path}</span>
+          <div class="hw-form">
+            <div class="form-grid">
+              <label>MIDI Device</label>
+              <input type="text" bind:value={hwConfig.midi_device} oninput={markHwDirty} />
+              <label>MIDI Mode</label>
+              <select bind:value={hwConfig.midi_mode} onchange={markHwDirty}>
+                <option value="">none</option>
+                <option value="open-existing">open-existing</option>
+                <option value="create-virtual">create-virtual</option>
+              </select>
+              <label>DMX Device</label>
+              <input type="text" bind:value={hwConfig.dmx_device} oninput={markHwDirty} />
+              <label>DMX Backend</label>
+              <select bind:value={hwConfig.dmx_backend} onchange={markHwDirty}>
+                <option value="">none</option>
+                <option value="open">open</option>
+                <option value="dummy">dummy</option>
+              </select>
+              <label>Refresh Hz</label>
+              <input type="number" min="0" max="60" bind:value={hwConfig.dmx_refresh_hz} oninput={markHwDirty} />
             </div>
+            {#if hwDirty}
+              <button class="btn-sm btn-save" onclick={saveHardware}>Save Hardware</button>
+            {/if}
           </div>
         {:else}
           <p class="empty-msg">Open a project first.</p>
@@ -442,8 +603,11 @@
 
       {:else if selectionTab === 'scenes'}
         {#if status.project_loaded}
+          <div class="sel-toolbar">
+            <button class="btn-xs btn-add" onclick={startAddScene}>+ Add Scene</button>
+          </div>
           <div class="pad-grid">
-            {#each scenes as scene, i}
+            {#each scenes as scene, i (i)}
               <button
                 class="pad-btn"
                 class:selected={isSelected('scene', undefined, i)}
@@ -455,7 +619,7 @@
             {/each}
           </div>
           {#if scenes.length === 0}
-            <p class="empty-msg">No scenes loaded.</p>
+            <p class="empty-msg">No scenes yet.</p>
           {/if}
         {:else}
           <p class="empty-msg">Open a project first.</p>
@@ -474,12 +638,17 @@
           {:else if selection.kind === 'bank_fixture'}
             {editIsNew ? 'New Bank Fixture' : `Bank Fixture: ${editBankFixture?.id ?? ''}`}
           {:else if selection.kind === 'scene'}
-            Scene: {scenes[selection.itemIdx]?.id ?? ''}
+            {editIsNew ? 'New Scene' : `Scene: ${editScene?.id ?? ''}`}
           {/if}
         </span>
         {#if editDirty}<span class="dirty-badge">modified</span>{/if}
         <div class="edit-actions">
-          {#if selection.kind !== 'scene'}
+          {#if selection.kind === 'scene'}
+            <button class="btn-sm btn-save" onclick={saveEditScene}>Save</button>
+            {#if !editIsNew}
+              <button class="btn-sm btn-danger" onclick={deleteEditScene}>Delete</button>
+            {/if}
+          {:else}
             <button class="btn-sm btn-save" onclick={() => { if (editFixture) saveEditFixture(); else saveEditBankFixture(); }}>Save</button>
             {#if !editIsNew}
               <button class="btn-sm btn-danger" onclick={deleteEditFixture}>Delete</button>
@@ -544,21 +713,92 @@
             {/each}
           </div>
 
-        <!-- Scene read-only view -->
-        {:else if selection.kind === 'scene'}
-          {@const scene = scenes[selection.itemIdx]}
-          {#if scene}
-            <div class="scene-view">
-              <div class="form-grid">
-                <span class="hw-label">ID</span><span class="hw-value">{scene.id}</span>
-                <span class="hw-label">Name</span><span class="hw-value">{scene.name}</span>
-                <span class="hw-label">Type</span><span class="hw-value">{scene.type}</span>
-                <span class="hw-label">Trigger</span><span class="hw-value">{scene.trigger_mode} ch{scene.channel} note{scene.note}</span>
-                <span class="hw-label">Enabled</span><span class="hw-value">{scene.enabled ? 'yes' : 'no'}</span>
+        <!-- Scene editor -->
+        {:else if selection.kind === 'scene' && editScene}
+          <div class="form-grid">
+            <label>ID</label>
+            <input type="text" bind:value={editScene.id} oninput={markDirty} />
+            <label>Name</label>
+            <input type="text" bind:value={editScene.name} oninput={markDirty} />
+            <label>Type</label>
+            <select bind:value={editScene.type} onchange={markDirty}>
+              <option value="static">static</option>
+              <option value="sequence">sequence</option>
+            </select>
+            <label>Trigger</label>
+            <select bind:value={editScene.trigger_mode} onchange={markDirty}>
+              <option value="gate">gate</option>
+              <option value="toggle">toggle</option>
+            </select>
+            <label>Channel</label>
+            <input type="number" min="1" max="16" bind:value={editScene.channel} oninput={markDirty} />
+            <label>Note</label>
+            <input type="number" min="0" max="127" bind:value={editScene.note} oninput={markDirty} />
+            <label>Enabled</label>
+            <input type="checkbox" bind:checked={editScene.enabled} onchange={markDirty} />
+            {#if editScene.type === 'sequence'}
+              <label>Loop</label>
+              <input type="checkbox" bind:checked={editScene.loop} onchange={markDirty} />
+            {/if}
+          </div>
+
+          {#if editScene.type === 'static'}
+            <div class="channel-section">
+              <div class="ch-header">
+                <span>Values ({editScene.values.length})</span>
+                <button class="btn-xs btn-add" onclick={addSceneValue}>+</button>
               </div>
-              <p class="hw-note">Scene editing coming soon.</p>
+              {#each editScene.values as val, i}
+                <div class="channel-row">
+                  <input type="text" placeholder="fixture.channel" bind:value={val.target} oninput={markDirty} class="ch-name"
+                    list="target-opts" />
+                  <input type="number" min="0" max="255" bind:value={val.value} oninput={markDirty} class="ch-offset" />
+                  {#if validateTarget(val.target) === 'warn' && val.target}
+                    <span class="warn-icon" title="Target not found">!</span>
+                  {/if}
+                  <button class="btn-xs btn-danger" onclick={() => removeSceneValue(i)}>x</button>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="channel-section">
+              <div class="ch-header">
+                <span>Steps ({editScene.steps.length})</span>
+                <button class="btn-xs btn-add" onclick={addSceneStep}>+</button>
+              </div>
+              {#each editScene.steps as step, si}
+                <div class="step-card">
+                  <div class="step-header">
+                    <span class="step-label">Step {si + 1}</span>
+                    <input type="number" min="0" placeholder="ms" bind:value={step.duration_ms} oninput={markDirty} class="ch-offset" />
+                    <select bind:value={step.transition} onchange={markDirty} class="input-sm">
+                      <option value="hold">hold</option>
+                      <option value="linear">linear</option>
+                    </select>
+                    <button class="btn-xs btn-danger" onclick={() => removeSceneStep(si)}>x</button>
+                  </div>
+                  {#each step.values as val, vi}
+                    <div class="channel-row">
+                      <input type="text" placeholder="fixture.channel" bind:value={val.target} oninput={markDirty} class="ch-name"
+                        list="target-opts" />
+                      <input type="number" min="0" max="255" bind:value={val.value} oninput={markDirty} class="ch-offset" />
+                      {#if validateTarget(val.target) === 'warn' && val.target}
+                        <span class="warn-icon" title="Target not found">!</span>
+                      {/if}
+                      <button class="btn-xs btn-danger" onclick={() => removeStepValue(si, vi)}>x</button>
+                    </div>
+                  {/each}
+                  <button class="btn-xs btn-add" onclick={() => addStepValue(si)}>+ Value</button>
+                </div>
+              {/each}
             </div>
           {/if}
+
+          <datalist id="target-opts">
+            {#each getFixtureTargets() as t}
+              <option value="{t.fixture}.{t.channel}">{t.fixture}.{t.channel} (@{t.addr})</option>
+            {/each}
+          </datalist>
         {/if}
       </div>
     </div>
@@ -573,6 +813,19 @@
       <div class="modal-actions">
         <button class="btn-sm btn-danger" onclick={confirmDiscard}>Discard</button>
         <button class="btn-sm btn-muted" onclick={cancelDiscard}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showSaveAs}
+  <div class="modal-overlay" onclick={() => showSaveAs = false} role="presentation">
+    <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Enter') handleSaveAs(); }} role="dialog" aria-modal="true" tabindex="-1">
+      <p>Save project as:</p>
+      <input type="text" class="open-input" placeholder="Enter path..." bind:value={saveAsPath} />
+      <div class="modal-actions">
+        <button class="btn-sm btn-save" onclick={handleSaveAs}>Save</button>
+        <button class="btn-sm btn-muted" onclick={() => showSaveAs = false}>Cancel</button>
       </div>
     </div>
   </div>
@@ -902,7 +1155,7 @@
     align-items: center;
     margin-bottom: 0.6rem;
   }
-  .form-grid label, .hw-label {
+  .form-grid label {
     font-size: 0.7rem;
     color: var(--text-muted);
     font-weight: 600;
@@ -923,11 +1176,6 @@
     border-color: rgba(233, 69, 96, 0.4);
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 0 4px var(--accent-glow);
   }
-  .hw-value { font-size: 0.75rem; color: var(--text); font-family: monospace; }
-  .hw-note { font-size: 0.65rem; color: var(--text-muted); font-style: italic; margin-top: 0.5rem; }
-  .hw-display { padding: 0.3rem; }
-  .hw-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.6rem; align-items: center; }
-
   /* Channels */
   .channel-section { margin-top: 0.6rem; }
   .ch-header {
@@ -964,8 +1212,6 @@
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
   }
 
-  /* Scene view */
-  .scene-view { padding: 0.2rem; }
 
   /* Buttons */
   .btn-sm {
@@ -1045,5 +1291,46 @@
     box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(233, 69, 96, 0.2);
   }
   .modal p { font-size: 0.8rem; margin-bottom: 1rem; color: var(--text); }
+  .modal input.open-input { width: 100%; margin-bottom: 0.75rem; }
   .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+  /* Hardware form */
+  .hw-form { padding: 0.75rem; }
+  .hw-form .form-grid { gap: 0.5rem 0.75rem; }
+  .hw-form .btn-save { margin-top: 0.75rem; }
+
+  /* Scene step cards */
+  .step-card {
+    background: var(--bg-surface);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: var(--radius);
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
+  .step-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    min-width: 3rem;
+  }
+  .input-sm {
+    font-size: 0.7rem;
+    padding: 2px 4px;
+    width: auto;
+    min-width: 4rem;
+  }
+  .warn-icon {
+    color: var(--yellow);
+    font-weight: bold;
+    font-size: 0.85rem;
+    line-height: 1;
+  }
 </style>

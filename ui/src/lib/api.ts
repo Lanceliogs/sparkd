@@ -249,3 +249,100 @@ export async function editorBrowse(path: string): Promise<BrowseResult> {
     return await res.json();
   } catch { return { path: path || '.', entries: [] }; }
 }
+
+/* ---- Save As ---- */
+
+export async function editorSaveAs(path: string): Promise<void> {
+  await fetch(`${BASE}/api/editor/save-as`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+}
+
+/* ---- Fixtures Sort ---- */
+
+export async function editorFixturesSort(): Promise<void> {
+  await fetch(`${BASE}/api/editor/fixtures/sort`, { method: 'POST' });
+}
+
+/* ---- Hardware Config ---- */
+
+export interface HardwareConfig {
+  midi_device: string;
+  midi_mode: string;
+  dmx_device: string;
+  dmx_backend: string;
+  dmx_refresh_hz: number;
+}
+
+export async function editorGetHardware(): Promise<HardwareConfig> {
+  try {
+    const res = await fetch(`${BASE}/api/editor/hardware`);
+    if (!res.ok) return { midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 };
+    return await res.json();
+  } catch { return { midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 }; }
+}
+
+export async function editorUpdateHardware(hw: HardwareConfig): Promise<void> {
+  await fetch(`${BASE}/api/editor/hardware`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(hw),
+  });
+}
+
+/* ---- Editor Scenes ---- */
+
+export interface SceneValue {
+  target: string;
+  value: number;
+}
+
+export interface SceneStep {
+  duration_ms: number;
+  transition: string;
+  values: SceneValue[];
+}
+
+export interface EditorScene {
+  index?: number;
+  id: string;
+  name: string;
+  type: 'static' | 'sequence';
+  trigger_mode: 'gate' | 'toggle';
+  channel: number;
+  note: number;
+  enabled: boolean;
+  loop: boolean;
+  values: SceneValue[];
+  steps: SceneStep[];
+}
+
+export async function editorGetScenes(): Promise<EditorScene[]> {
+  try {
+    const res = await fetch(`${BASE}/api/editor/scenes`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch { return []; }
+}
+
+export async function editorAddScene(scene: Omit<EditorScene, 'index'>): Promise<void> {
+  await fetch(`${BASE}/api/editor/scenes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(scene),
+  });
+}
+
+export async function editorUpdateScene(index: number, scene: Omit<EditorScene, 'index'>): Promise<void> {
+  await fetch(`${BASE}/api/editor/scenes/${index}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(scene),
+  });
+}
+
+export async function editorDeleteScene(index: number): Promise<void> {
+  await fetch(`${BASE}/api/editor/scenes/${index}`, { method: 'DELETE' });
+}

@@ -101,6 +101,66 @@ int editor_fixture_remove(editor_state_t *state, int index)
     return 0;
 }
 
+/* ---- Fixtures sort ---- */
+
+static int s_cmp_fixture_addr(const void *a, const void *b)
+{
+    const editor_fixture_t *fa = (const editor_fixture_t *)a;
+    const editor_fixture_t *fb = (const editor_fixture_t *)b;
+    return (int)fa->start_address - (int)fb->start_address;
+}
+
+void editor_fixtures_sort(editor_state_t *state)
+{
+    if (state->project.fixture_count < 2) return;
+    qsort(state->project.fixtures, state->project.fixture_count,
+          sizeof(editor_fixture_t), s_cmp_fixture_addr);
+    state->project.dirty = true;
+}
+
+/* ---- Hardware config ---- */
+
+int editor_hw_update(editor_state_t *state, const editor_hw_config_t *hw)
+{
+    state->project.hw = *hw;
+    state->project.dirty = true;
+    return 0;
+}
+
+/* ---- Scenes CRUD ---- */
+
+int editor_scene_add(editor_state_t *state, const editor_scene_t *scene)
+{
+    if (state->project.scene_count >= EDITOR_MAX_SCENES)
+        return -1;
+    state->project.scenes[state->project.scene_count++] = *scene;
+    state->project.dirty = true;
+    return 0;
+}
+
+int editor_scene_update(editor_state_t *state, int index, const editor_scene_t *scene)
+{
+    if (index < 0 || index >= state->project.scene_count)
+        return -1;
+    state->project.scenes[index] = *scene;
+    state->project.dirty = true;
+    return 0;
+}
+
+int editor_scene_remove(editor_state_t *state, int index)
+{
+    if (index < 0 || index >= state->project.scene_count)
+        return -1;
+    int remaining = state->project.scene_count - index - 1;
+    if (remaining > 0)
+        memmove(&state->project.scenes[index],
+                &state->project.scenes[index + 1],
+                remaining * sizeof(editor_scene_t));
+    state->project.scene_count--;
+    state->project.dirty = true;
+    return 0;
+}
+
 /* ---- Bank loading ---- */
 
 static int s_load_bank_file(editor_state_t *state, const char *dir_path, const char *filename)

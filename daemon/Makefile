@@ -69,7 +69,7 @@ TOOL_BINS := $(TOOL_SRCS:tools/%.c=$(BUILDDIR)/tools/%$(EXE))
 STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) $(BUILDDIR)/tools/spark-midi$(EXE) $(BUILDDIR)/tools/spark-ui$(EXE)
 
 # Editor UI objects
-UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c
+UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c tools/ui/editor_places.c
 UI_OBJS := $(UI_SRCS:tools/ui/%.c=$(BUILDDIR)/tools/ui/%.o)
 EDITOR_OBJS := $(BUILDDIR)/tools/ui/editor.o $(BUILDDIR)/tools/ui/editor_yaml.o
 

@@ -250,6 +250,19 @@ export async function editorBrowse(path: string): Promise<BrowseResult> {
   } catch { return { path: path || '.', entries: [] }; }
 }
 
+export interface BrowseRoots {
+  places: { label: string; path: string }[];
+  drives: { label: string; path: string }[];
+}
+
+export async function editorBrowseRoots(): Promise<BrowseRoots> {
+  try {
+    const res = await fetch(`${BASE}/api/editor/browse/roots`);
+    if (!res.ok) return { places: [], drives: [] };
+    return await res.json();
+  } catch { return { places: [], drives: [] }; }
+}
+
 /* ---- Save As ---- */
 
 export async function editorSaveAs(path: string): Promise<void> {

@@ -1,6 +1,7 @@
 #include "editor_http.h"
 #include "mg_helpers.h"
 #include "editor.h"
+#include "editor_places.h"
 #include "env.h"
 #include "log.h"
 
@@ -647,6 +648,44 @@ static void s_handle_bank_create(struct mg_connection *c, struct mg_http_message
 
 /* ---- File browser ---- */
 
+static void s_handle_browse_roots(struct mg_connection *c)
+{
+    editor_roots_t roots;
+    editor_get_roots(&roots);
+
+    char *out = (char *)malloc(16 * 1024);
+    int pos = 0;
+    pos += snprintf(out + pos, 16 * 1024 - pos, "{\"places\":[");
+    for (uint8_t i = 0; i < roots.place_count; i++)
+    {
+        char esc_label[EDITOR_PLACE_LABEL_MAX * 2];
+        char esc_path[EDITOR_PLACE_PATH_MAX * 2];
+        s_escape_json_str(roots.places[i].label, esc_label, sizeof(esc_label));
+        s_escape_json_str(roots.places[i].path, esc_path, sizeof(esc_path));
+        if (i > 0) pos += snprintf(out + pos, 16 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 16 * 1024 - pos,
+            "{\"label\":\"%s\",\"path\":\"%s\"}", esc_label, esc_path);
+    }
+    pos += snprintf(out + pos, 16 * 1024 - pos, "],\"drives\":[");
+    for (uint8_t i = 0; i < roots.drive_count; i++)
+    {
+        char esc_label[EDITOR_PLACE_LABEL_MAX * 2];
+        char esc_path[EDITOR_PLACE_PATH_MAX * 2];
+        s_escape_json_str(roots.drives[i].label, esc_label, sizeof(esc_label));
+        s_escape_json_str(roots.drives[i].path, esc_path, sizeof(esc_path));
+        if (i > 0) pos += snprintf(out + pos, 16 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 16 * 1024 - pos,
+            "{\"label\":\"%s\",\"path\":\"%s\"}", esc_label, esc_path);
+    }
+    pos += snprintf(out + pos, 16 * 1024 - pos, "]}");
+
+    mg_http_reply(c, 200,
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: application/json\r\n",
+        "%.*s", pos, out);
+    free(out);
+}
+
 static int s_is_hidden(const char *name)
 {
     return name[0] == '.';
@@ -670,6 +709,12 @@ static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
     if (path[0] == '\0' || (path[0] == '/' && path[1] == '\0'))
     {
         _getcwd(path, sizeof(path));
+    }
+    else
+    {
+        char abs[EDITOR_PATH_MAX];
+        if (_fullpath(abs, path, sizeof(abs)) != NULL)
+            strncpy(path, abs, sizeof(path) - 1);
     }
 
     size_t plen = strlen(path);
@@ -731,6 +776,12 @@ static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
     if (path[0] == '\0')
     {
         getcwd(path, sizeof(path));
+    }
+    else if (path[0] != '/')
+    {
+        char abs[EDITOR_PATH_MAX];
+        if (realpath(path, abs) != NULL)
+            strncpy(path, abs, sizeof(path) - 1);
     }
 
     DIR *dir = opendir(path);
@@ -884,6 +935,12 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
     }
 
     /* File browser */
+    if (mg_match(hm->uri, mg_str("/api/editor/browse/roots"), NULL) &&
+        mg_method_is(hm, "GET"))
+    {
+        s_handle_browse_roots(c);
+        return true;
+    }
     if (mg_match(hm->uri, mg_str("/api/editor/browse"), NULL) &&
         mg_method_is(hm, "GET"))
     {

@@ -915,6 +915,8 @@ static int s_parse_dmx(yaml_parser_t *p, spark_project_config_t *cfg)
             const char *v = s_scalar(&ev);
             if (strcmp(v, "open") == 0)
                 cfg->dmx_backend = SPARK_DMX_BACKEND_OPEN;
+            else if (strcmp(v, "pro") == 0)
+                cfg->dmx_backend = SPARK_DMX_BACKEND_PRO;
             else if (strcmp(v, "dummy") == 0)
                 cfg->dmx_backend = SPARK_DMX_BACKEND_DUMMY;
             else

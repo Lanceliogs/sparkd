@@ -6,6 +6,7 @@
 #include "clock.h"
 #include "dmx/dmx.h"
 #include "dmx/dmx_out.h"
+#include "serial/serial.h"
 #include "log.h"
 
 #include <stdbool.h>
@@ -60,13 +61,45 @@ static int s_start_midi(void)
     }
 }
 
+static int s_resolve_dmx_auto(void)
+{
+    const char *cfg = s_config.dmx_device;
+    if (strncmp(cfg, "auto", 4) != 0)
+        return 0;
+
+    const char *tag = NULL;
+    if (cfg[4] == ':' && cfg[5] != '\0')
+        tag = cfg + 5;
+
+    spark_serial_device_info_t info;
+    if (spark_serial_find_dmx(tag, &info) != 0)
+    {
+        spark_log_error("engine: DMX auto-detect failed (tag=%s)",
+                        tag ? tag : "any");
+        return -1;
+    }
+
+    strncpy(s_config.dmx_device, info.port, SPARK_SERIAL_PORT_STRLEN - 1);
+    spark_log_info("engine: DMX auto-detected '%s' (SN=%s, VID=%04x PID=%04x)",
+                   info.port, info.serial_number, info.vid, info.pid);
+    return 0;
+}
+
 static int s_start_dmx(void)
 {
     switch (s_config.dmx_backend)
     {
     case SPARK_DMX_BACKEND_OPEN:
+        if (s_resolve_dmx_auto() != 0)
+            return -1;
         spark_dmx_open_init(&s_dmx_backend, s_config.dmx_device);
         spark_log_info("engine: DMX backend Open DMX on '%s'", s_config.dmx_device);
+        break;
+    case SPARK_DMX_BACKEND_PRO:
+        if (s_resolve_dmx_auto() != 0)
+            return -1;
+        spark_dmx_pro_init(&s_dmx_backend, s_config.dmx_device);
+        spark_log_info("engine: DMX backend Pro on '%s'", s_config.dmx_device);
         break;
     case SPARK_DMX_BACKEND_DUMMY:
     default:

@@ -13,11 +13,12 @@ YAMLDIR     := ../vendor/libyaml
 # Platform detection
 ifeq ($(OS),Windows_NT)
   EXE      := .exe
-  LDFLAGS  += -lws2_32 -lwinmm
+  LDFLAGS  += -lws2_32 -lwinmm -lsetupapi
   PM_CFLAGS := -DWIN32
   PM_SRCS  := $(PORTMIDIDIR)/portmidi.c $(PORTMIDIDIR)/pmutil.c \
               $(PORTMIDIDIR)/pmwin.c $(PORTMIDIDIR)/pmwinmm.c \
               $(PORTMIDIDIR)/ptwinmm.c
+  SERIAL_SRCS := src/serial/serial_win32.c
 else
   CFLAGS   += -D_DEFAULT_SOURCE -DPMALSA
   LDFLAGS  += -lpthread -lasound
@@ -25,6 +26,7 @@ else
   PM_SRCS  := $(PORTMIDIDIR)/portmidi.c $(PORTMIDIDIR)/pmutil.c \
               $(PORTMIDIDIR)/pmlinux.c $(PORTMIDIDIR)/pmlinuxalsa.c \
               $(PORTMIDIDIR)/ptlinux.c
+  SERIAL_SRCS := src/serial/serial_posix.c
 endif
 
 TARGET := $(BUILDDIR)/sparkd$(EXE)
@@ -32,8 +34,9 @@ TARGET := $(BUILDDIR)/sparkd$(EXE)
 # Source files (add as modules are implemented)
 SRCS := src/main.c src/log.c src/clock.c src/env.c src/engine.c src/http.c
 SRCS += src/project/project.c src/project/project_yaml.c
-SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/fixture_bank.c src/dmx/dmx_out.c src/serial/serial.c
-SRCS += src/dmx/dmx.c src/dmx/dmx_dummy.c src/dmx/dmx_open.c
+SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/fixture_bank.c src/dmx/dmx_out.c
+SRCS += src/serial/serial_common.c $(SERIAL_SRCS)
+SRCS += src/dmx/dmx.c src/dmx/dmx_dummy.c src/dmx/dmx_open.c src/dmx/dmx_pro.c
 
 OBJS := $(SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
@@ -62,11 +65,11 @@ LIB_SRCS := $(filter-out src/main.c, $(SRCS))
 LIB_OBJS := $(LIB_SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
 # Tools (linked against daemon libs)
-TOOL_SRCS := $(filter-out tools/sparkctl.c tools/midi_list.c tools/midi_monitor.c tools/spark_midi.c, $(wildcard tools/*.c))
+TOOL_SRCS := $(filter-out tools/sparkctl.c tools/midi_list.c tools/midi_monitor.c tools/spark_midi.c tools/spark_serial.c, $(wildcard tools/*.c))
 TOOL_BINS := $(TOOL_SRCS:tools/%.c=$(BUILDDIR)/tools/%$(EXE))
 
 # Standalone tools (no daemon deps)
-STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) $(BUILDDIR)/tools/spark-midi$(EXE) $(BUILDDIR)/tools/spark-ui$(EXE)
+STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) $(BUILDDIR)/tools/spark-midi$(EXE) $(BUILDDIR)/tools/spark-serial$(EXE) $(BUILDDIR)/tools/spark-ui$(EXE)
 
 # Editor UI objects
 UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c tools/ui/editor_places.c
@@ -133,6 +136,12 @@ $(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ) $(ENV_OBJS)
 $(BUILDDIR)/tools/spark-midi$(EXE): tools/spark_midi.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
+
+SERIAL_OBJS := $(BUILDDIR)/daemon/serial/serial_common.o $(SERIAL_SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
+
+$(BUILDDIR)/tools/spark-serial$(EXE): tools/spark_serial.c $(SERIAL_OBJS) $(BUILDDIR)/daemon/log.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $< $(SERIAL_OBJS) $(BUILDDIR)/daemon/log.o $(LDFLAGS)
 
 $(BUILDDIR)/tools/ui/%.o: tools/ui/%.c
 	@mkdir -p $(dir $@)

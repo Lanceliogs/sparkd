@@ -24,6 +24,7 @@
 typedef enum {
     SPARK_DMX_BACKEND_DUMMY,
     SPARK_DMX_BACKEND_OPEN,
+    SPARK_DMX_BACKEND_PRO,
 } spark_dmx_backend_type_t;
 
 typedef enum
@@ -72,6 +73,7 @@ void spark_dmx_dummy_init(spark_dmx_backend_t *backend);
 /* Open DMX */
 void spark_dmx_open_init(spark_dmx_backend_t *backend, const char *port);
 
-/* Pro DMX */
+/* Pro DMX (Enttec DMX USB Pro widget protocol) */
+void spark_dmx_pro_init(spark_dmx_backend_t *backend, const char *port);
 
 #endif

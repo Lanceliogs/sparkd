@@ -114,8 +114,8 @@ static void s_handle_engine_state(struct mg_connection *c)
 
     const spark_project_config_t *cfg = spark_engine_get_config();
     const char *backend = "dummy";
-    if (cfg->dmx_backend == SPARK_DMX_BACKEND_OPEN)
-        backend = "open";
+    if (cfg->dmx_backend == SPARK_DMX_BACKEND_OPEN) backend = "open";
+    else if (cfg->dmx_backend == SPARK_DMX_BACKEND_PRO) backend = "pro";
 
     uint16_t active_count;
     spark_scene_t **active = spark_scene_get_active(&active_count);
@@ -420,7 +420,9 @@ static void s_handle_dmx_status(struct mg_connection *c)
     }
 
     const spark_project_config_t *cfg = spark_engine_get_config();
-    const char *backend_name = cfg->dmx_backend == SPARK_DMX_BACKEND_OPEN ? "open" : "dummy";
+    const char *backend_name = "dummy";
+    if (cfg->dmx_backend == SPARK_DMX_BACKEND_OPEN) backend_name = "open";
+    else if (cfg->dmx_backend == SPARK_DMX_BACKEND_PRO) backend_name = "pro";
     spark_dmx_state_t state = spark_atomic_load(&backend->state);
     uint64_t frames = spark_atomic_load_u64(&backend->frames_sent);
     uint64_t errors = spark_atomic_load_u64(&backend->write_errors);

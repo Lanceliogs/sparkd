@@ -17,7 +17,9 @@
     type SceneDef,
     type MidiStatus,
     type DmxStatus,
+    getEngineState,
   } from '../lib/api';
+  import { showError } from '../lib/toast';
 
   let engine: EngineState = $state({ running: false, blackout: false, project: '' });
   let scenes: SceneDef[] = $state([]);
@@ -44,10 +46,13 @@
 
     ws.onopen = () => {
       connected = true;
+      loadScenes();
     };
 
     ws.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
+      let msg;
+      try { msg = JSON.parse(ev.data); }
+      catch { return; }
       switch (msg.type) {
         case 'state':
           engine = { running: msg.running, blackout: msg.blackout, project: msg.project ?? '' };
@@ -119,22 +124,28 @@
   });
 
   async function handleStart() {
-    await engineStart();
+    try { await engineStart(); }
+    catch (e: any) { showError(e.message || 'Start failed'); }
   }
 
   async function handleStop() {
-    await engineStop();
+    try { await engineStop(); }
+    catch (e: any) { showError(e.message || 'Stop failed'); }
   }
 
   async function handleBlackout() {
-    await setBlackout(!engine.blackout);
+    try { await setBlackout(!engine.blackout); }
+    catch (e: any) { showError(e.message || 'Blackout toggle failed'); }
   }
 
   async function handleReload() {
-    await engineStop();
-    await reloadProject();
-    await engineStart();
-    loadScenes();
+    try {
+      const oldState = await getEngineState();
+      if (oldState.running) await engineStop();
+      await reloadProject();
+      if (oldState.running) await engineStart();
+      loadScenes();
+    } catch (e: any) { showError(e.message || 'Reload failed'); }
   }
 
   function getBrowserInitialPath(): string {
@@ -149,23 +160,27 @@
   }
 
   async function handlePadDown(ev: PointerEvent, scene: SceneDef) {
-    if (scene.trigger_mode === 'gate') {
-      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
-      await activateScene(scene.id);
-    } else {
-      if (activeScenes.has(scene.id)) {
-        await releaseScene(scene.id);
-      } else {
+    try {
+      if (scene.trigger_mode === 'gate') {
+        (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
         await activateScene(scene.id);
+      } else {
+        if (activeScenes.has(scene.id)) {
+          await releaseScene(scene.id);
+        } else {
+          await activateScene(scene.id);
+        }
       }
-    }
+    } catch (e: any) { showError(e.message || 'Scene activation failed'); }
   }
 
   async function handlePadUp(ev: PointerEvent, scene: SceneDef) {
-    if (scene.trigger_mode === 'gate') {
-      (ev.currentTarget as HTMLElement).releasePointerCapture(ev.pointerId);
-      await releaseScene(scene.id);
-    }
+    try {
+      if (scene.trigger_mode === 'gate') {
+        (ev.currentTarget as HTMLElement).releasePointerCapture(ev.pointerId);
+        await releaseScene(scene.id);
+      }
+    } catch (e: any) { showError(e.message || 'Scene release failed'); }
   }
 </script>
 
@@ -200,8 +215,8 @@
     <button class="btn-blackout" class:active={engine.blackout} onclick={handleBlackout}>
       {engine.blackout ? 'Clear Blackout' : 'Blackout'}
     </button>
+    <button class="btn-reload" onclick={handleReload}>Reload</button>
     {#if !engine.running}
-      <button class="btn-reload" onclick={handleReload}>Reload & Start</button>
       <button class="btn-load" onclick={() => showBrowser = true}>Load Project</button>
     {/if}
   {/if}
@@ -213,7 +228,7 @@
 
 <section class="pad-section">
   <PadGrid
-    items={scenes.map((s, i) => ({ id: String(i), label: s.name, sublabel: s.type, active: activeScenes.has(s.id) }))}
+    items={scenes.map((s, i) => ({ id: String(i), label: s.name, sublabel: s.type, active: activeScenes.has(s.id), dim: !s.enabled }))}
     columns="repeat(auto-fill, minmax(var(--pad-size), 1fr))"
     onactivate={(id, ev) => { const s = scenes[Number(id)]; if (s) handlePadDown(ev, s); }}
     onrelease={(id, ev) => { const s = scenes[Number(id)]; if (s) handlePadUp(ev, s); }}

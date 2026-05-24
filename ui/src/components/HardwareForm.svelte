@@ -4,13 +4,14 @@
   interface Props {
     config: HardwareConfig;
     onsave: () => void;
+    ondirty?: () => void;
   }
 
-  let { config = $bindable(), onsave }: Props = $props();
+  let { config = $bindable(), onsave, ondirty }: Props = $props();
 
   let dirty = $state(false);
 
-  function markDirty() { dirty = true; }
+  function markDirty() { dirty = true; ondirty?.(); }
 
   function handleSave() {
     onsave();
@@ -34,10 +35,11 @@
     <select id="hw-dmx-backend" bind:value={config.dmx_backend} onchange={markDirty}>
       <option value="">none</option>
       <option value="open">open</option>
+      <option value="pro">pro</option>
       <option value="dummy">dummy</option>
     </select>
     <label for="hw-refresh">Refresh Hz</label>
-    <input id="hw-refresh" type="number" min="0" max="60" bind:value={config.dmx_refresh_hz} oninput={markDirty} />
+    <input id="hw-refresh" type="number" min="1" max="44" bind:value={config.dmx_refresh_hz} oninput={markDirty} />
   </div>
   {#if dirty}
     <button class="btn-sm btn-save" onclick={handleSave}>Save Hardware</button>

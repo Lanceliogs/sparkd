@@ -6,6 +6,8 @@
   import HardwareForm from '../components/HardwareForm.svelte';
   import FixtureForm from '../components/FixtureForm.svelte';
   import SceneForm from '../components/SceneForm.svelte';
+  import { validateId } from '../lib/validate';
+  import { showError } from '../lib/toast';
   import {
     editorStatus,
     editorOpen,
@@ -48,10 +50,14 @@
   let scenes: EditorScene[] = $state([]);
   let bankDirs: string[] = $state([]);
   let hwConfig: HardwareConfig = $state({ midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 });
+  let hwDirty = $state(false);
 
   /* ---- Selection / navigation ---- */
-  type SelectionKind = 'bank_fixture' | 'project_fixture' | 'scene';
-  type Selection = { kind: SelectionKind; bankIdx?: number; itemIdx: number } | null;
+  type Selection =
+    | { kind: 'project_fixture'; index: number }
+    | { kind: 'bank_fixture'; bankIdx: number; index: number }
+    | { kind: 'scene'; index: number }
+    | null;
 
   let selectionTab: 'banks' | 'fixtures' | 'hardware' | 'scenes' = $state('banks');
   let selection: Selection = $state(null);
@@ -60,6 +66,8 @@
   /* ---- Edit card state ---- */
   let editDirty = $state(false);
   let showDiscardModal = $state(false);
+  let showDeleteModal = $state(false);
+  let pendingDelete: (() => Promise<void>) | null = $state(null);
   let pendingSelection: Selection = $state(null);
   let pendingAction: (() => void) | null = $state(null);
 
@@ -67,6 +75,22 @@
   let editBankFixture: BankFixture | null = $state(null);
   let editScene: EditorScene | null = $state(null);
   let editIsNew = $state(false);
+
+  let editIdValid = $derived.by(() => {
+    const idx = editIsNew ? undefined : selection?.index;
+    if (editScene) {
+      return validateId(editScene.id, scenes.map(s => s.id), idx) === 'valid';
+    }
+    if (editFixture) {
+      return validateId(editFixture.id, fixtures.map(f => f.id), idx) === 'valid';
+    }
+    if (editBankFixture && selection?.kind === 'bank_fixture') {
+      const bank = banks[selection.bankIdx];
+      const ids = bank ? bank.fixtures.map(f => f.id) : [];
+      return validateId(editBankFixture.id, ids, idx) === 'valid';
+    }
+    return true;
+  });
 
   /* ---- New bank form ---- */
   let newBankId = $state('');
@@ -76,23 +100,43 @@
   let browserMode: 'open' | 'save' | null = $state(null);
 
   /* ---- Data loading ---- */
+  let loading = $state(false);
+
   async function refresh() {
-    status = await editorStatus();
-    if (status.project_loaded) {
-      fixtures = await editorGetFixtures();
-      scenes = await editorGetScenes();
-      hwConfig = await editorGetHardware();
-    } else {
-      fixtures = [];
-      scenes = [];
-      hwConfig = { midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 };
+    loading = true;
+    try {
+      status = await editorStatus();
+      if (status.project_loaded) {
+        fixtures = await editorGetFixtures();
+        scenes = await editorGetScenes();
+        hwConfig = await editorGetHardware();
+      } else {
+        fixtures = [];
+        scenes = [];
+        hwConfig = { midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 };
+      }
+      banks = await editorGetBanks();
+      bankDirs = await editorGetBankDirs();
+      if (bankDirs.length > 0 && !newBankDir) newBankDir = bankDirs[0];
+    } finally {
+      loading = false;
     }
-    banks = await editorGetBanks();
-    bankDirs = await editorGetBankDirs();
-    if (bankDirs.length > 0 && !newBankDir) newBankDir = bankDirs[0];
   }
 
   onMount(() => { refresh(); });
+
+  function handleBeforeUnload(ev: BeforeUnloadEvent) {
+    ev.preventDefault();
+  }
+
+  $effect(() => {
+    if (editDirty || status.dirty || hwDirty) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    } else {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  });
 
   /* ---- Selection logic ---- */
   function trySelect(sel: Selection) {
@@ -117,7 +161,7 @@
     }
 
     if (sel.kind === 'project_fixture') {
-      const f = fixtures.find(fx => fx.index === sel.itemIdx);
+      const f = fixtures.find(fx => fx.index === sel.index);
       if (f) {
         editFixture = { ...f, channels: f.channels.map(c => ({ ...c })) };
         editBankFixture = null;
@@ -125,14 +169,14 @@
       }
     } else if (sel.kind === 'bank_fixture') {
       const bank = banks.find(b => b.index === sel.bankIdx);
-      const f = bank?.fixtures.find(fx => fx.index === sel.itemIdx);
+      const f = bank?.fixtures.find(fx => fx.index === sel.index);
       if (f) {
         editBankFixture = { ...f, channels: f.channels.map(c => ({ ...c })) };
         editFixture = null;
         editIsNew = false;
       }
     } else if (sel.kind === 'scene') {
-      const sc = scenes[sel.itemIdx];
+      const sc = scenes[sel.index];
       if (sc) {
         editScene = {
           ...sc,
@@ -190,8 +234,10 @@
   }
 
   async function handleSave() {
-    await editorSave();
-    await refresh();
+    try {
+      await editorSave();
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Save failed'); }
   }
 
   /* ---- File browser callbacks ---- */
@@ -199,20 +245,24 @@
     if (browserMode === 'open' && (status.dirty || editDirty)) {
       browserMode = null;
       pendingAction = async () => {
-        await editorOpen(fullPath);
-        selection = null; editFixture = null; editBankFixture = null; editScene = null; editDirty = false;
-        await refresh();
+        try {
+          await editorOpen(fullPath);
+          selection = null; editFixture = null; editBankFixture = null; editScene = null; editDirty = false;
+          await refresh();
+        } catch (e: any) { showError(e.message || 'Open failed'); }
       };
       showDiscardModal = true;
       return;
     }
-    if (browserMode === 'open') {
-      await editorOpen(fullPath);
-    } else if (browserMode === 'save') {
-      await editorSaveAs(fullPath);
-    }
-    browserMode = null;
-    await refresh();
+    try {
+      if (browserMode === 'open') {
+        await editorOpen(fullPath);
+      } else if (browserMode === 'save') {
+        await editorSaveAs(fullPath);
+      }
+      browserMode = null;
+      await refresh();
+    } catch (e: any) { showError(e.message || 'File operation failed'); }
   }
 
   function getProjectBasename(): string {
@@ -249,7 +299,7 @@
     editBankFixture = null;
     editIsNew = true;
     editDirty = false;
-    selection = { kind: 'project_fixture', itemIdx: -1 };
+    selection = { kind: 'project_fixture', index: -1 };
   }
 
   function startAddBankFixture(bankIdx: number) {
@@ -257,7 +307,7 @@
     editFixture = null;
     editIsNew = true;
     editDirty = false;
-    selection = { kind: 'bank_fixture', bankIdx, itemIdx: -1 };
+    selection = { kind: 'bank_fixture', bankIdx, index: -1 };
   }
 
   /* ---- Save edit card ---- */
@@ -265,40 +315,46 @@
     if (!editFixture) return;
     const data = { ...editFixture };
     delete (data as any).index;
-    if (editIsNew) {
-      await editorAddFixture(data);
-    } else if (selection?.kind === 'project_fixture') {
-      await editorUpdateFixture(selection.itemIdx, data);
-    }
-    editDirty = false;
-    editIsNew = false;
-    await refresh();
+    try {
+      if (editIsNew) {
+        await editorAddFixture(data);
+      } else if (selection?.kind === 'project_fixture') {
+        await editorUpdateFixture(selection.index, data);
+      }
+      editDirty = false;
+      editIsNew = false;
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Save failed'); }
   }
 
   async function saveEditBankFixture() {
     if (!editBankFixture || !selection || selection.kind !== 'bank_fixture') return;
     const data = { ...editBankFixture };
     delete (data as any).index;
-    if (editIsNew) {
-      await editorBankAddFixture(selection.bankIdx!, data);
-    } else {
-      await editorBankUpdateFixture(selection.bankIdx!, selection.itemIdx, data);
-    }
-    editDirty = false;
-    editIsNew = false;
-    await refresh();
+    try {
+      if (editIsNew) {
+        await editorBankAddFixture(selection.bankIdx, data);
+      } else {
+        await editorBankUpdateFixture(selection.bankIdx, selection.index, data);
+      }
+      editDirty = false;
+      editIsNew = false;
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Save failed'); }
   }
 
   async function deleteEditFixture() {
     if (!selection) return;
-    if (selection.kind === 'project_fixture' && selection.itemIdx >= 0) {
-      await editorDeleteFixture(selection.itemIdx);
-    } else if (selection.kind === 'bank_fixture' && selection.itemIdx >= 0) {
-      await editorBankDeleteFixture(selection.bankIdx!, selection.itemIdx);
-    }
-    editDirty = false;
-    selection = null; editFixture = null; editBankFixture = null;
-    await refresh();
+    try {
+      if (selection.kind === 'project_fixture' && selection.index >= 0) {
+        await editorDeleteFixture(selection.index);
+      } else if (selection.kind === 'bank_fixture' && selection.index >= 0) {
+        await editorBankDeleteFixture(selection.bankIdx, selection.index);
+      }
+      editDirty = false;
+      selection = null; editFixture = null; editBankFixture = null;
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Delete failed'); }
   }
 
   /* ---- Scene editing ---- */
@@ -308,55 +364,76 @@
     editBankFixture = null;
     editIsNew = true;
     editDirty = false;
-    selection = { kind: 'scene', itemIdx: -1 };
+    selection = { kind: 'scene', index: -1 };
   }
 
   async function saveEditScene() {
     if (!editScene) return;
     const data = { ...editScene };
     delete (data as any).index;
-    if (editIsNew) {
-      await editorAddScene(data);
-    } else if (selection?.kind === 'scene') {
-      await editorUpdateScene(selection.itemIdx, data);
-    }
-    editDirty = false;
-    editIsNew = false;
-    await refresh();
+    try {
+      if (editIsNew) {
+        await editorAddScene(data);
+      } else if (selection?.kind === 'scene') {
+        await editorUpdateScene(selection.index, data);
+      }
+      editDirty = false;
+      editIsNew = false;
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Save failed'); }
   }
 
   async function deleteEditScene() {
-    if (!selection || selection.kind !== 'scene' || selection.itemIdx < 0) return;
-    await editorDeleteScene(selection.itemIdx);
-    editDirty = false;
-    selection = null; editScene = null;
-    await refresh();
+    if (!selection || selection.kind !== 'scene' || selection.index < 0) return;
+    try {
+      await editorDeleteScene(selection.index);
+      editDirty = false;
+      selection = null; editScene = null;
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Delete failed'); }
   }
+
+  function confirmDeleteScene() { pendingDelete = deleteEditScene; showDeleteModal = true; }
+  function confirmDeleteFixture() { pendingDelete = deleteEditFixture; showDeleteModal = true; }
+  async function executeDelete() {
+    showDeleteModal = false;
+    if (pendingDelete) { await pendingDelete(); pendingDelete = null; }
+  }
+  function cancelDelete() { showDeleteModal = false; pendingDelete = null; }
 
   /* ---- Hardware editing ---- */
   async function saveHardware() {
-    await editorUpdateHardware(hwConfig);
-    await refresh();
+    try {
+      await editorUpdateHardware(hwConfig);
+      hwDirty = false;
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Save hardware failed'); }
   }
-
 
   /* ---- Fixtures sort ---- */
   async function handleFixturesSort() {
-    await editorFixturesSort();
-    await refresh();
+    try {
+      await editorFixturesSort();
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Sort failed'); }
   }
 
 
 
   /* ---- Helpers ---- */
-  function isSelected(kind: SelectionKind, bankIdx: number | undefined, itemIdx: number): boolean {
-    if (!selection) return false;
-    return selection.kind === kind && selection.bankIdx === bankIdx && selection.itemIdx === itemIdx;
+  function isSelected(sel: Selection): boolean {
+    if (!selection || !sel) return false;
+    if (selection.kind !== sel.kind) return false;
+    if (selection.kind === 'bank_fixture' && sel.kind === 'bank_fixture') {
+      return selection.bankIdx === sel.bankIdx && selection.index === sel.index;
+    }
+    return selection.index === sel.index;
   }
 </script>
 
 <!-- Project bar -->
 <header class="project-bar">
+  {#if loading}<span class="loading-dot"></span>{/if}
   {#if status.project_loaded}
     <span class="project-path">{status.project_path}</span>
     {#if status.dirty}<span class="dirty-badge">unsaved</span>{/if}
@@ -418,8 +495,8 @@
             {#if !collapsedBanks.has(bank.index)}
               <PadGrid
                 items={bank.fixtures.map(f => ({ id: String(f.index), label: f.id }))}
-                selected={selection?.kind === 'bank_fixture' && selection.bankIdx === bank.index ? String(selection.itemIdx) : undefined}
-                onselect={(id) => trySelect({ kind: 'bank_fixture', bankIdx: bank.index, itemIdx: Number(id) })}
+                selected={selection?.kind === 'bank_fixture' && selection.bankIdx === bank.index ? String(selection.index) : undefined}
+                onselect={(id) => trySelect({ kind: 'bank_fixture', bankIdx: bank.index, index: Number(id) })}
               />
             {/if}
           </div>
@@ -437,8 +514,8 @@
           </div>
           <PadGrid
             items={fixtures.map(f => ({ id: String(f.index), label: f.id, sublabel: '@' + f.start_address }))}
-            selected={selection?.kind === 'project_fixture' ? String(selection.itemIdx) : undefined}
-            onselect={(id) => trySelect({ kind: 'project_fixture', itemIdx: Number(id) })}
+            selected={selection?.kind === 'project_fixture' ? String(selection.index) : undefined}
+            onselect={(id) => trySelect({ kind: 'project_fixture', index: Number(id) })}
           />
         {:else}
           <p class="empty-msg">Open a project first.</p>
@@ -446,7 +523,7 @@
 
       {:else if selectionTab === 'hardware'}
         {#if status.project_loaded}
-          <HardwareForm bind:config={hwConfig} onsave={saveHardware} />
+          <HardwareForm bind:config={hwConfig} onsave={saveHardware} ondirty={() => { hwDirty = true; }} />
         {:else}
           <p class="empty-msg">Open a project first.</p>
         {/if}
@@ -459,10 +536,10 @@
           <PadGrid
             items={scenes.map((s, i) => {
               const dup = scenes.some((other, j) => j !== i && other.id === s.id);
-              return { id: String(i), label: s.id, sublabel: s.type, warn: dup };
+              return { id: String(i), label: s.id, sublabel: s.type, warn: dup, dim: !s.enabled };
             })}
-            selected={selection?.kind === 'scene' ? String(selection.itemIdx) : undefined}
-            onselect={(id) => trySelect({ kind: 'scene', itemIdx: Number(id) })}
+            selected={selection?.kind === 'scene' ? String(selection.index) : undefined}
+            onselect={(id) => trySelect({ kind: 'scene', index: Number(id) })}
           />
           {#if scenes.length === 0}
             <p class="empty-msg">No scenes yet.</p>
@@ -490,14 +567,14 @@
         {#if editDirty}<span class="dirty-badge">modified</span>{/if}
         <div class="edit-actions">
           {#if selection.kind === 'scene'}
-            <button class="btn-sm btn-save" onclick={saveEditScene}>Save</button>
+            <button class="btn-sm btn-save" onclick={saveEditScene} disabled={!editIdValid}>Save</button>
             {#if !editIsNew}
-              <button class="btn-sm btn-danger" onclick={deleteEditScene}>Delete</button>
+              <button class="btn-sm btn-danger" onclick={confirmDeleteScene}>Delete</button>
             {/if}
           {:else}
-            <button class="btn-sm btn-save" onclick={() => { if (editFixture) saveEditFixture(); else saveEditBankFixture(); }}>Save</button>
+            <button class="btn-sm btn-save" onclick={() => { if (editFixture) saveEditFixture(); else saveEditBankFixture(); }} disabled={!editIdValid}>Save</button>
             {#if !editIsNew}
-              <button class="btn-sm btn-danger" onclick={deleteEditFixture}>Delete</button>
+              <button class="btn-sm btn-danger" onclick={confirmDeleteFixture}>Delete</button>
             {/if}
           {/if}
           <button class="btn-sm btn-muted" onclick={closeEdit}>Close</button>
@@ -506,13 +583,23 @@
 
       <div class="edit-body">
         {#if selection.kind === 'project_fixture' && editFixture}
-          <FixtureForm bind:fixture={editFixture} isProject={true} ondirty={markDirty} />
+          <FixtureForm bind:fixture={editFixture} isProject={true}
+            existingIds={fixtures.map(f => f.id)}
+            currentIndex={editIsNew ? undefined : selection.index}
+            ondirty={markDirty} />
 
         {:else if selection.kind === 'bank_fixture' && editBankFixture}
-          <FixtureForm bind:fixture={editBankFixture} isProject={false} ondirty={markDirty} />
+          {@const bank = banks[selection.bankIdx]}
+          <FixtureForm bind:fixture={editBankFixture} isProject={false}
+            existingIds={bank ? bank.fixtures.map(f => f.id) : []}
+            currentIndex={editIsNew ? undefined : selection.index}
+            ondirty={markDirty} />
 
         {:else if selection.kind === 'scene' && editScene}
-          <SceneForm bind:scene={editScene} {fixtures} {banks} ondirty={markDirty} />
+          <SceneForm bind:scene={editScene} {fixtures} {banks}
+            existingIds={scenes.map(s => s.id)}
+            currentIndex={editIsNew ? undefined : selection.index}
+            ondirty={markDirty} />
         {/if}
       </div>
     </div>
@@ -527,6 +614,18 @@
       <div class="modal-actions">
         <button class="btn-sm btn-danger" onclick={confirmDiscard}>Discard</button>
         <button class="btn-sm btn-muted" onclick={cancelDiscard}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showDeleteModal}
+  <div class="modal-overlay" onclick={cancelDelete} role="presentation">
+    <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}} role="dialog" aria-modal="true" tabindex="-1">
+      <p>Delete this item? This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn-sm btn-danger" onclick={executeDelete}>Delete</button>
+        <button class="btn-sm btn-muted" onclick={cancelDelete}>Cancel</button>
       </div>
     </div>
   </div>
@@ -799,5 +898,15 @@
   .modal p { font-size: 0.8rem; margin-bottom: 1rem; color: var(--text); }
   .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
-
+  .loading-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 0.8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
 </style>

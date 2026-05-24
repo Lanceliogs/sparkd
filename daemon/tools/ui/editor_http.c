@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #include <direct.h>
@@ -37,6 +41,59 @@ static void s_escape_json_str(const char *src, char *dst, size_t dst_size)
         dst[j++] = src[i];
     }
     dst[j] = '\0';
+}
+
+/* ---- ID validation ---- */
+
+static int s_is_valid_id_char(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
+}
+
+/* Returns 0=valid, 1=invalid format, 2=duplicate */
+static int s_validate_id(const char *id)
+{
+    if (id[0] == '\0') return 1;
+    if (id[0] == '-') return 1;
+    for (size_t i = 0; id[i]; i++)
+    {
+        if (!s_is_valid_id_char(id[i])) return 1;
+    }
+    size_t len = strlen(id);
+    if (id[len - 1] == '-') return 1;
+    return 0;
+}
+
+static bool s_fixture_id_exists(const char *id, int exclude_index)
+{
+    for (int i = 0; i < s_editor.project.fixture_count; i++)
+    {
+        if (i == exclude_index) continue;
+        if (strcasecmp(s_editor.project.fixtures[i].id, id) == 0) return true;
+    }
+    return false;
+}
+
+static bool s_scene_id_exists(const char *id, int exclude_index)
+{
+    for (int i = 0; i < s_editor.project.scene_count; i++)
+    {
+        if (i == exclude_index) continue;
+        if (strcasecmp(s_editor.project.scenes[i].id, id) == 0) return true;
+    }
+    return false;
+}
+
+static bool s_bank_fixture_id_exists(int bank_index, const char *id, int exclude_index)
+{
+    if (bank_index < 0 || bank_index >= s_editor.bank_count) return false;
+    editor_bank_t *bank = &s_editor.banks[bank_index];
+    for (int i = 0; i < bank->fixture_count; i++)
+    {
+        if (i == exclude_index) continue;
+        if (strcasecmp(bank->fixtures[i].id, id) == 0) return true;
+    }
+    return false;
 }
 
 /* ---- Project lifecycle ---- */
@@ -283,6 +340,16 @@ static void s_handle_scene_add(struct mg_connection *c, struct mg_http_message *
         mg_json_reply(c, 400, "{\"error\":\"invalid scene\"}");
         return;
     }
+    if (s_validate_id(scene.id) != 0)
+    {
+        mg_json_reply(c, 422, "{\"error\":\"invalid_id\",\"message\":\"ID must be lowercase [a-z0-9-], no leading/trailing hyphens\"}");
+        return;
+    }
+    if (s_scene_id_exists(scene.id, -1))
+    {
+        mg_json_reply(c, 422, "{\"error\":\"duplicate_id\",\"message\":\"A scene with this ID already exists\"}");
+        return;
+    }
     if (editor_scene_add(&s_editor, &scene) != 0)
     {
         mg_json_reply(c, 500, "{\"error\":\"too many scenes\"}");
@@ -298,6 +365,16 @@ static void s_handle_scene_update(struct mg_connection *c,
     if (s_parse_scene_from_json(hm->body, &scene) != 0)
     {
         mg_json_reply(c, 400, "{\"error\":\"invalid scene\"}");
+        return;
+    }
+    if (s_validate_id(scene.id) != 0)
+    {
+        mg_json_reply(c, 422, "{\"error\":\"invalid_id\",\"message\":\"ID must be lowercase [a-z0-9-], no leading/trailing hyphens\"}");
+        return;
+    }
+    if (s_scene_id_exists(scene.id, index))
+    {
+        mg_json_reply(c, 422, "{\"error\":\"duplicate_id\",\"message\":\"A scene with this ID already exists\"}");
         return;
     }
     if (editor_scene_update(&s_editor, index, &scene) != 0)
@@ -401,6 +478,16 @@ static void s_handle_fixture_add(struct mg_connection *c, struct mg_http_message
         mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
         return;
     }
+    if (s_validate_id(fix.id) != 0)
+    {
+        mg_json_reply(c, 422, "{\"error\":\"invalid_id\",\"message\":\"ID must be lowercase [a-z0-9-], no leading/trailing hyphens\"}");
+        return;
+    }
+    if (s_fixture_id_exists(fix.id, -1))
+    {
+        mg_json_reply(c, 422, "{\"error\":\"duplicate_id\",\"message\":\"A fixture with this ID already exists\"}");
+        return;
+    }
     if (editor_fixture_add(&s_editor, &fix) != 0)
     {
         mg_json_reply(c, 500, "{\"error\":\"add failed\"}");
@@ -416,6 +503,16 @@ static void s_handle_fixture_update(struct mg_connection *c,
     if (s_parse_fixture_json(hm->body, &fix) != 0)
     {
         mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
+        return;
+    }
+    if (s_validate_id(fix.id) != 0)
+    {
+        mg_json_reply(c, 422, "{\"error\":\"invalid_id\",\"message\":\"ID must be lowercase [a-z0-9-], no leading/trailing hyphens\"}");
+        return;
+    }
+    if (s_fixture_id_exists(fix.id, index))
+    {
+        mg_json_reply(c, 422, "{\"error\":\"duplicate_id\",\"message\":\"A fixture with this ID already exists\"}");
         return;
     }
     if (editor_fixture_update(&s_editor, index, &fix) != 0)
@@ -522,6 +619,16 @@ static void s_handle_bank_fixture_add(struct mg_connection *c,
         mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
         return;
     }
+    if (s_validate_id(fix.id) != 0)
+    {
+        mg_json_reply(c, 422, "{\"error\":\"invalid_id\",\"message\":\"ID must be lowercase [a-z0-9-], no leading/trailing hyphens\"}");
+        return;
+    }
+    if (s_bank_fixture_id_exists(bank_idx, fix.id, -1))
+    {
+        mg_json_reply(c, 422, "{\"error\":\"duplicate_id\",\"message\":\"A fixture with this ID already exists in this bank\"}");
+        return;
+    }
     if (editor_bank_fixture_add(&s_editor, bank_idx, &fix) != 0)
     {
         mg_json_reply(c, 500, "{\"error\":\"add failed\"}");
@@ -538,6 +645,16 @@ static void s_handle_bank_fixture_update(struct mg_connection *c,
     if (s_parse_bank_fixture_json(hm->body, &fix) != 0)
     {
         mg_json_reply(c, 400, "{\"error\":\"invalid fixture data\"}");
+        return;
+    }
+    if (s_validate_id(fix.id) != 0)
+    {
+        mg_json_reply(c, 422, "{\"error\":\"invalid_id\",\"message\":\"ID must be lowercase [a-z0-9-], no leading/trailing hyphens\"}");
+        return;
+    }
+    if (s_bank_fixture_id_exists(bank_idx, fix.id, fix_idx))
+    {
+        mg_json_reply(c, 422, "{\"error\":\"duplicate_id\",\"message\":\"A fixture with this ID already exists in this bank\"}");
         return;
     }
     if (editor_bank_fixture_update(&s_editor, bank_idx, fix_idx, &fix) != 0)

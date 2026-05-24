@@ -2,6 +2,7 @@
   import './app.css';
   import Live from './pages/Live.svelte';
   import Editor from './pages/Editor.svelte';
+  import Toasts from './components/Toasts.svelte';
 
   let currentTab: 'live' | 'editor' = $state('live');
 </script>
@@ -22,6 +23,8 @@
     <Editor />
   {/if}
 </main>
+
+<Toasts />
 
 <style>
   .tab-bar {

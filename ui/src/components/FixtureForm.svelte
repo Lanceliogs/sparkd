@@ -1,13 +1,18 @@
 <script lang="ts">
   import type { EditorFixture, BankFixture, Channel } from '../lib/api';
+  import { validateId, type IdStatus } from '../lib/validate';
 
   interface Props {
     fixture: EditorFixture | BankFixture;
     isProject: boolean;
+    existingIds?: string[];
+    currentIndex?: number;
     ondirty: () => void;
   }
 
-  let { fixture = $bindable(), isProject, ondirty }: Props = $props();
+  let { fixture = $bindable(), isProject, existingIds = [], currentIndex, ondirty }: Props = $props();
+
+  let idStatus: IdStatus = $derived(validateId(fixture.id, existingIds, currentIndex));
 
   function isEditorFixture(f: EditorFixture | BankFixture): f is EditorFixture {
     return 'start_address' in f;
@@ -29,7 +34,12 @@
 {#if isProject && isEditorFixture(fixture)}
   <div class="form-grid">
     <label for="ef-id">ID</label>
-    <input id="ef-id" type="text" bind:value={fixture.id} oninput={ondirty} />
+    <div class="id-field">
+      <input id="ef-id" type="text" bind:value={fixture.id} oninput={ondirty} class:id-invalid={idStatus === 'invalid' || idStatus === 'empty'} class:id-duplicate={idStatus === 'duplicate'} />
+      <span class="id-status" class:valid={idStatus === 'valid'} class:invalid={idStatus === 'invalid' || idStatus === 'empty'} class:duplicate={idStatus === 'duplicate'}>
+        {#if idStatus === 'valid'}Valid{:else if idStatus === 'duplicate'}Already used{:else}Invalid{/if}
+      </span>
+    </div>
     <label for="ef-name">Name</label>
     <input id="ef-name" type="text" bind:value={fixture.name} oninput={ondirty} />
     <label for="ef-addr">Start Addr</label>
@@ -59,7 +69,12 @@
 {:else}
   <div class="form-grid">
     <label for="bf-id">ID</label>
-    <input id="bf-id" type="text" bind:value={fixture.id} oninput={ondirty} />
+    <div class="id-field">
+      <input id="bf-id" type="text" bind:value={fixture.id} oninput={ondirty} class:id-invalid={idStatus === 'invalid' || idStatus === 'empty'} class:id-duplicate={idStatus === 'duplicate'} />
+      <span class="id-status" class:valid={idStatus === 'valid'} class:invalid={idStatus === 'invalid' || idStatus === 'empty'} class:duplicate={idStatus === 'duplicate'}>
+        {#if idStatus === 'valid'}Valid{:else if idStatus === 'duplicate'}Already used{:else}Invalid{/if}
+      </span>
+    </div>
     <label for="bf-name">Name</label>
     <input id="bf-name" type="text" bind:value={fixture.name} oninput={ondirty} />
   </div>
@@ -158,4 +173,23 @@
   }
   .btn-xs.btn-danger { background: var(--red); color: white; border-color: rgba(233, 69, 96, 0.3); }
   .btn-xs.btn-add { background: var(--green); color: #111; border-color: rgba(78, 205, 196, 0.3); }
+
+  .id-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .id-field input { flex: 1; }
+  .id-field input.id-invalid { border-color: rgba(233, 69, 96, 0.6); }
+  .id-field input.id-duplicate { border-color: rgba(255, 180, 0, 0.6); }
+  .id-status {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .id-status.valid { color: var(--green); }
+  .id-status.invalid { color: var(--red); }
+  .id-status.duplicate { color: rgb(255, 180, 0); }
 </style>

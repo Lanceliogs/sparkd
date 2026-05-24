@@ -5,6 +5,7 @@
     sublabel?: string;
     active?: boolean;
     warn?: boolean;
+    dim?: boolean;
   }
 
   interface Props {
@@ -38,6 +39,7 @@
       class:active={item.active}
       class:selected={selected === item.id}
       class:warn={item.warn}
+      class:dim={item.dim}
       onclick={() => handleClick(item.id)}
       onpointerdown={(ev) => handlePointerDown(item.id, ev)}
       onpointerup={(ev) => handlePointerUp(item.id, ev)}
@@ -99,6 +101,10 @@
     box-shadow:
       inset 0 2px 4px rgba(0, 0, 0, 0.4),
       0 0 6px rgba(255, 180, 0, 0.3);
+  }
+
+  .pad.dim {
+    opacity: 0.4;
   }
 
   .pad.active,

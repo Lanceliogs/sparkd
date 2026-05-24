@@ -1,14 +1,19 @@
 <script lang="ts">
   import type { EditorScene, EditorFixture, EditorBank, Channel } from '../lib/api';
+  import { validateId, type IdStatus } from '../lib/validate';
 
   interface Props {
     scene: EditorScene;
     fixtures: EditorFixture[];
     banks: EditorBank[];
+    existingIds?: string[];
+    currentIndex?: number;
     ondirty: () => void;
   }
 
-  let { scene = $bindable(), fixtures, banks, ondirty }: Props = $props();
+  let { scene = $bindable(), fixtures, banks, existingIds = [], currentIndex, ondirty }: Props = $props();
+
+  let idStatus: IdStatus = $derived(validateId(scene.id, existingIds, currentIndex));
 
   interface TargetEntry {
     key: string;
@@ -134,7 +139,12 @@
 
 <div class="form-grid">
   <label for="sc-id">ID</label>
-  <input id="sc-id" type="text" bind:value={scene.id} oninput={ondirty} />
+  <div class="id-field">
+    <input id="sc-id" type="text" bind:value={scene.id} oninput={ondirty} class:id-invalid={idStatus === 'invalid' || idStatus === 'empty'} class:id-duplicate={idStatus === 'duplicate'} />
+    <span class="id-status" class:valid={idStatus === 'valid'} class:invalid={idStatus === 'invalid' || idStatus === 'empty'} class:duplicate={idStatus === 'duplicate'}>
+      {#if idStatus === 'valid'}Valid{:else if idStatus === 'duplicate'}Already used{:else}Invalid{/if}
+    </span>
+  </div>
   <label for="sc-name">Name</label>
   <input id="sc-name" type="text" bind:value={scene.name} oninput={ondirty} />
   <label for="sc-type">Type</label>
@@ -442,4 +452,23 @@
   }
   .btn-xs.btn-danger { background: var(--red); color: white; border-color: rgba(233, 69, 96, 0.3); }
   .btn-xs.btn-add { background: var(--green); color: #111; border-color: rgba(78, 205, 196, 0.3); }
+
+  .id-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .id-field input { flex: 1; }
+  .id-field input.id-invalid { border-color: rgba(233, 69, 96, 0.6); }
+  .id-field input.id-duplicate { border-color: rgba(255, 180, 0, 0.6); }
+  .id-status {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .id-status.valid { color: var(--green); }
+  .id-status.invalid { color: var(--red); }
+  .id-status.duplicate { color: rgb(255, 180, 0); }
 </style>

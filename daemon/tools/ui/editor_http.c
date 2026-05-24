@@ -124,9 +124,18 @@ static void s_handle_open(struct mg_connection *c, struct mg_http_message *hm)
         mg_json_reply(c, 400, "{\"error\":\"missing path\"}");
         return;
     }
-    if (editor_open_project(&s_editor, path) != 0)
+
+    editor_parse_error_t err;
+    int rc = editor_open_project(&s_editor, path, &err);
+    if (rc < 0)
     {
-        mg_json_reply(c, 500, "{\"error\":\"failed to open project\"}");
+        char buf[512];
+        char escaped_msg[256];
+        s_escape_json_str(err.message, escaped_msg, sizeof(escaped_msg));
+        snprintf(buf, sizeof(buf),
+            "{\"error\":\"parse_error\",\"message\":\"%s\",\"line\":%lu,\"column\":%lu}",
+            escaped_msg, (unsigned long)err.line, (unsigned long)err.column);
+        mg_json_reply(c, 422, buf);
         return;
     }
     mg_json_reply(c, 200, "{\"ok\":true}");

@@ -3,11 +3,13 @@ const BASE = '';
 export class ApiError extends Error {
   status: number;
   code: string;
+  detail: Record<string, unknown>;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, detail: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
     this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -15,13 +17,16 @@ async function assertOk(res: Response): Promise<void> {
   if (res.ok) return;
   let code = 'unknown';
   let msg = `Request failed (${res.status})`;
+  let detail: Record<string, unknown> = {};
   try {
     const body = await res.json();
     if (body.error) code = body.error;
     if (body.message) msg = body.message;
-    else if (body.error) msg = body.error;
+    else if (body.error) msg = body.error.replace(/_/g, ' ');
+    const { error: _e, message: _m, ...rest } = body;
+    detail = rest;
   } catch { /* ignore parse failures */ }
-  throw new ApiError(res.status, code, msg);
+  throw new ApiError(res.status, code, msg, detail);
 }
 
 export interface EngineState {
@@ -43,11 +48,13 @@ export interface SceneDef {
 
 export async function getEngineState(): Promise<EngineState> {
   const res = await fetch(`${BASE}/api/engine/state`);
+  if (!res.ok) return { running: false, blackout: false, project: '' };
   return res.json();
 }
 
 export async function getScenes(): Promise<SceneDef[]> {
   const res = await fetch(`${BASE}/api/scenes`);
+  if (!res.ok) return [];
   return res.json();
 }
 
@@ -81,11 +88,12 @@ export async function releaseScene(id: string): Promise<void> {
 }
 
 export async function reloadProject(path?: string): Promise<void> {
-  await fetch(`${BASE}/api/project/reload`, {
+  const res = await fetch(`${BASE}/api/project/reload`, {
     method: 'POST',
     headers: path ? { 'Content-Type': 'application/json' } : {},
     body: path ? JSON.stringify({ path }) : undefined,
   });
+  await assertOk(res);
 }
 
 /* ---- MIDI / DMX Status ---- */

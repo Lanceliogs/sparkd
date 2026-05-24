@@ -13,14 +13,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define EDITOR_MAX_FIXTURES 128
-#define EDITOR_MAX_CHANNELS 64
-#define EDITOR_MAX_BANK_FIXTURES 256
-#define EDITOR_PATH_MAX 1024
-#define EDITOR_MAX_RAW_SECTIONS 16
-#define EDITOR_MAX_SCENES 64
-#define EDITOR_MAX_SCENE_VALUES 64
-#define EDITOR_MAX_SCENE_STEPS 32
+#define EDITOR_MAX_FIXTURES      SPARK_EDITOR_MAX_FIXTURES
+#define EDITOR_MAX_CHANNELS      SPARK_EDITOR_MAX_CHANNELS
+#define EDITOR_MAX_BANK_FIXTURES SPARK_EDITOR_MAX_BANK_FIXTURES
+#define EDITOR_PATH_MAX          SPARK_EDITOR_PATH_MAX
+#define EDITOR_MAX_RAW_SECTIONS  SPARK_EDITOR_MAX_RAW_SECTIONS
+#define EDITOR_MAX_SCENES        SPARK_EDITOR_MAX_SCENES
+#define EDITOR_MAX_SCENE_VALUES  SPARK_EDITOR_MAX_SCENE_VALUES
+#define EDITOR_MAX_SCENE_STEPS   SPARK_EDITOR_MAX_SCENE_STEPS
 
 typedef struct {
     char name[SPARK_MAX_NAME_SIZE];
@@ -116,7 +116,7 @@ typedef struct {
     editor_bank_fixture_t fixtures[EDITOR_MAX_BANK_FIXTURES];
 } editor_bank_t;
 
-#define EDITOR_MAX_BANKS 32
+#define EDITOR_MAX_BANKS SPARK_EDITOR_MAX_BANKS
 
 typedef struct {
     editor_project_t project;
@@ -124,8 +124,15 @@ typedef struct {
     editor_bank_t banks[EDITOR_MAX_BANKS];
 } editor_state_t;
 
-/* Lifecycle */
-int  editor_open_project(editor_state_t *state, const char *path);
+/* Parse error detail (populated on failure) */
+typedef struct {
+    char message[256];
+    size_t line;
+    size_t column;
+} editor_parse_error_t;
+
+/* Lifecycle — editor_open_project returns -1 (fatal), 0 (clean), or N>0 (problems) */
+int  editor_open_project(editor_state_t *state, const char *path, editor_parse_error_t *err);
 void editor_close_project(editor_state_t *state);
 int  editor_save_project(editor_state_t *state);
 int  editor_save_project_as(editor_state_t *state, const char *path);
@@ -152,7 +159,7 @@ int  editor_bank_fixture_remove(editor_state_t *state, int bank_index, int fixtu
 int  editor_save_bank(editor_state_t *state, int bank_index);
 
 /* YAML I/O (implemented in editor_yaml.c) */
-int  editor_yaml_parse_project(const char *path, editor_project_t *project);
+int  editor_yaml_parse_project(const char *path, editor_project_t *project, editor_parse_error_t *err);
 int  editor_yaml_emit_project(const char *path, const editor_project_t *project);
 int  editor_yaml_parse_bank(const char *path, editor_bank_t *bank);
 int  editor_yaml_emit_bank(const char *path, const editor_bank_t *bank);

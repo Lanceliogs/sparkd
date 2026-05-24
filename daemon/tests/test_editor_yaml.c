@@ -72,7 +72,7 @@ static int files_equal(const char *a, const char *b)
 void test_parse_project(void)
 {
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project), 0);
+    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project, NULL), 0);
     ASSERT_TRUE(project.loaded);
     ASSERT_EQ(project.fixture_count, 1);
     ASSERT_STR_EQ(project.fixtures[0].id, "par");
@@ -86,7 +86,7 @@ void test_parse_project(void)
 void test_parse_project_raw_sections(void)
 {
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project), 0);
+    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project, NULL), 0);
     ASSERT_EQ(project.raw_section_count, 5);
     ASSERT_STR_EQ(project.raw_sections[0].key, "format");
     ASSERT_STR_EQ(project.raw_sections[1].key, "app");
@@ -102,7 +102,7 @@ void test_parse_project_raw_sections(void)
 void test_parse_project_raw_section_content(void)
 {
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project), 0);
+    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project, NULL), 0);
 
     /* Verify the raw slice for 'app' contains "name: example" */
     editor_raw_section_t *app = &project.raw_sections[1];
@@ -120,7 +120,7 @@ void test_parse_project_raw_section_content(void)
 void test_parse_nonexistent(void)
 {
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project("/nonexistent/path.yaml", &project), -1);
+    ASSERT_EQ(editor_yaml_parse_project("/nonexistent/path.yaml", &project, NULL), -1);
     ASSERT_TRUE(!project.loaded);
 }
 
@@ -129,7 +129,7 @@ void test_parse_nonexistent(void)
 void test_emit_preserves_sections(void)
 {
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project), 0);
+    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project, NULL), 0);
     ASSERT_EQ(editor_yaml_emit_project(TMP_OUT, &project), 0);
 
     ASSERT_TRUE(file_contains(TMP_OUT, "format:"));
@@ -148,14 +148,14 @@ void test_emit_preserves_sections(void)
 void test_emit_roundtrip_stable(void)
 {
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project), 0);
+    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project, NULL), 0);
     ASSERT_EQ(editor_yaml_emit_project(TMP_OUT, &project), 0);
     free(project.raw_buf);
     project.raw_buf = NULL;
 
     /* Second roundtrip */
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project(TMP_OUT, &project), 0);
+    ASSERT_EQ(editor_yaml_parse_project(TMP_OUT, &project, NULL), 0);
     ASSERT_EQ(editor_yaml_emit_project(TMP_RT, &project), 0);
     free(project.raw_buf);
     project.raw_buf = NULL;
@@ -193,7 +193,7 @@ void test_emit_no_raw_buf(void)
 void test_emit_preserves_fixture_data(void)
 {
     reset_project();
-    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project), 0);
+    ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project, NULL), 0);
     ASSERT_EQ(editor_yaml_emit_project(TMP_OUT, &project), 0);
 
     ASSERT_TRUE(file_contains(TMP_OUT, "id: par"));
@@ -259,7 +259,7 @@ void test_emit_bank_roundtrip(void)
 void test_open_edit_save_preserves(void)
 {
     reset_state();
-    ASSERT_EQ(editor_open_project(&state, PROJECT_PATH), 0);
+    ASSERT_EQ(editor_open_project(&state, PROJECT_PATH, NULL), 0);
 
     /* Add a fixture */
     editor_fixture_t fix = {0};

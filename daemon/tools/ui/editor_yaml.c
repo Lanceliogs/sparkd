@@ -28,10 +28,35 @@ static int s_expect(yaml_parser_t *p, yaml_event_t *ev, yaml_event_type_t expect
     if (s_next(p, ev) != 0) return -1;
     if (ev->type != expected)
     {
+        p->problem = "unexpected structure";
+        p->problem_mark = ev->start_mark;
         yaml_event_delete(ev);
         return -1;
     }
     return 0;
+}
+
+static char s_error_buf[256];
+
+static int s_unexpected(yaml_parser_t *p, yaml_event_t *ev, const char *context)
+{
+    if (ev->type == YAML_SCALAR_EVENT)
+    {
+        snprintf(s_error_buf, sizeof(s_error_buf), "%s: \"%s\"",
+            context, (const char *)ev->data.scalar.value);
+        spark_log_warn("editor_yaml: %s at line %zu col %zu",
+            s_error_buf, ev->start_mark.line + 1, ev->start_mark.column + 1);
+        p->problem = s_error_buf;
+    }
+    else
+    {
+        spark_log_warn("editor_yaml: %s at line %zu col %zu",
+            context, ev->start_mark.line + 1, ev->start_mark.column + 1);
+        p->problem = context;
+    }
+    p->problem_mark = ev->start_mark;
+    yaml_event_delete(ev);
+    return -1;
 }
 
 static void s_skip_value(yaml_parser_t *p)
@@ -66,7 +91,7 @@ static int s_parse_midi(yaml_parser_t *p, editor_hw_config_t *hw)
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
         const char *key = s_scalar(&ev);
         yaml_event_t val_ev;
@@ -87,8 +112,7 @@ static int s_parse_midi(yaml_parser_t *p, editor_hw_config_t *hw)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "unknown key in midi section");
         }
     }
 }
@@ -100,7 +124,7 @@ static int s_parse_dmx(yaml_parser_t *p, editor_hw_config_t *hw)
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
         const char *key = s_scalar(&ev);
         yaml_event_t val_ev;
@@ -128,8 +152,7 @@ static int s_parse_dmx(yaml_parser_t *p, editor_hw_config_t *hw)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "unknown key in dmx section");
         }
     }
 }
@@ -146,7 +169,7 @@ static int s_parse_scene_values(yaml_parser_t *p, editor_scene_value_t *values,
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
         if (*count >= EDITOR_MAX_SCENE_VALUES)
         {
@@ -179,7 +202,7 @@ static int s_parse_scene_steps(yaml_parser_t *p, editor_scene_step_t *steps,
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_SEQUENCE_END_EVENT) { yaml_event_delete(&ev); return 0; }
-        if (ev.type != YAML_MAPPING_START_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_MAPPING_START_EVENT) return s_unexpected(p, &ev, "expected mapping");
         yaml_event_delete(&ev);
 
         if (*count >= EDITOR_MAX_SCENE_STEPS)
@@ -196,7 +219,7 @@ static int s_parse_scene_steps(yaml_parser_t *p, editor_scene_step_t *steps,
         {
             if (s_next(p, &ev) != 0) return -1;
             if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
-            if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+            if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
             const char *key = s_scalar(&ev);
             yaml_event_t val_ev;
@@ -225,8 +248,7 @@ static int s_parse_scene_steps(yaml_parser_t *p, editor_scene_step_t *steps,
             }
             else
             {
-                yaml_event_delete(&ev);
-                s_skip_value(p);
+                return s_unexpected(p, &ev, "unknown key in step");
             }
         }
         (*count)++;
@@ -247,7 +269,7 @@ static int s_parse_scene(yaml_parser_t *p, editor_scene_t *scene)
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); return 0; }
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
         const char *key = s_scalar(&ev);
         yaml_event_t val_ev;
@@ -297,7 +319,7 @@ static int s_parse_scene(yaml_parser_t *p, editor_scene_t *scene)
             {
                 if (s_next(p, &ev) != 0) return -1;
                 if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
-                if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+                if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
                 const char *tkey = s_scalar(&ev);
                 if (strcmp(tkey, "channel") == 0)
@@ -323,8 +345,7 @@ static int s_parse_scene(yaml_parser_t *p, editor_scene_t *scene)
                 }
                 else
                 {
-                    yaml_event_delete(&ev);
-                    s_skip_value(p);
+                    return s_unexpected(p, &ev, "unknown key in trigger");
                 }
             }
         }
@@ -346,8 +367,7 @@ static int s_parse_scene(yaml_parser_t *p, editor_scene_t *scene)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "unknown key in scene");
         }
     }
 }
@@ -364,10 +384,10 @@ static int s_parse_channels(yaml_parser_t *p, editor_channel_t *channels,
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_SEQUENCE_END_EVENT) { yaml_event_delete(&ev); return 0; }
-        if (ev.type != YAML_MAPPING_START_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_MAPPING_START_EVENT) return s_unexpected(p, &ev, "expected mapping");
         yaml_event_delete(&ev);
 
-        if (*count >= EDITOR_MAX_CHANNELS) return -1;
+        if (*count >= EDITOR_MAX_CHANNELS) { p->problem = "too many channels (limit reached)"; p->problem_mark = ev.start_mark; return -1; }
         editor_channel_t *ch = &channels[*count];
         memset(ch, 0, sizeof(*ch));
 
@@ -375,7 +395,7 @@ static int s_parse_channels(yaml_parser_t *p, editor_channel_t *channels,
         {
             if (s_next(p, &ev) != 0) return -1;
             if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
-            if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+            if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
             const char *key = s_scalar(&ev);
             yaml_event_t val_ev;
@@ -396,8 +416,7 @@ static int s_parse_channels(yaml_parser_t *p, editor_channel_t *channels,
             }
             else
             {
-                yaml_event_delete(&ev);
-                s_skip_value(p);
+                return s_unexpected(p, &ev, "unknown key in channel");
             }
         }
         (*count)++;
@@ -413,7 +432,7 @@ static int s_parse_fixture(yaml_parser_t *p, editor_fixture_t *fix)
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
         const char *key = s_scalar(&ev);
         yaml_event_t val_ev;
@@ -470,19 +489,19 @@ static int s_parse_fixture(yaml_parser_t *p, editor_fixture_t *fix)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "unknown key in fixture");
         }
     }
     return 0;
 }
 
-int editor_yaml_parse_project(const char *path, editor_project_t *project)
+static int s_read_file(const char *path, char **buf_out, size_t *len_out, editor_parse_error_t *err)
 {
     FILE *f = fopen(path, "rb");
     if (!f)
     {
         spark_log_error("editor: cannot open '%s'", path);
+        if (err) snprintf(err->message, sizeof(err->message), "Cannot open file");
         return -1;
     }
 
@@ -493,19 +512,41 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
     if (file_size <= 0)
     {
         fclose(f);
+        if (err) snprintf(err->message, sizeof(err->message), "File is empty");
         return -1;
     }
 
     char *buf = (char *)malloc((size_t)file_size + 1);
-    if (!buf) { fclose(f); return -1; }
+    if (!buf)
+    {
+        fclose(f);
+        if (err) snprintf(err->message, sizeof(err->message), "Out of memory");
+        return -1;
+    }
+
     size_t nread = fread(buf, 1, (size_t)file_size, f);
     buf[nread] = '\0';
     fclose(f);
+
+    *buf_out = buf;
+    *len_out = nread;
+    return 0;
+}
+
+int editor_yaml_parse_project(const char *path, editor_project_t *project, editor_parse_error_t *err)
+{
+    if (err) memset(err, 0, sizeof(*err));
+
+    char *buf = NULL;
+    size_t nread = 0;
+    if (s_read_file(path, &buf, &nread, err) != 0)
+        return -1;
 
     yaml_parser_t parser;
     if (!yaml_parser_initialize(&parser))
     {
         free(buf);
+        if (err) snprintf(err->message, sizeof(err->message), "YAML parser init failed");
         return -1;
     }
     yaml_parser_set_input_string(&parser, (const unsigned char *)buf, nread);
@@ -550,7 +591,7 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
             break;
         }
 
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); goto done; }
+        if (ev.type != YAML_SCALAR_EVENT) { s_unexpected(&parser, &ev, "expected key"); goto done; }
 
         size_t this_key_start = ev.start_mark.index;
         if (has_prev && !prev_is_structured &&
@@ -580,12 +621,13 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
             {
                 if (s_next(&parser, &ev) != 0) goto done;
                 if (ev.type == YAML_SEQUENCE_END_EVENT) { yaml_event_delete(&ev); break; }
-                if (ev.type != YAML_MAPPING_START_EVENT) { yaml_event_delete(&ev); goto done; }
+                if (ev.type != YAML_MAPPING_START_EVENT) { s_unexpected(&parser, &ev, "expected mapping"); goto done; }
                 yaml_event_delete(&ev);
 
                 if (project->fixture_count >= EDITOR_MAX_FIXTURES)
                 {
-                    spark_log_error("editor: too many fixtures");
+                    parser.problem = "too many fixtures (limit reached)";
+                    parser.problem_mark = ev.start_mark;
                     goto done;
                 }
                 if (s_parse_fixture(&parser, &project->fixtures[project->fixture_count]) != 0)
@@ -620,12 +662,13 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
             {
                 if (s_next(&parser, &ev) != 0) goto done;
                 if (ev.type == YAML_SEQUENCE_END_EVENT) { yaml_event_delete(&ev); break; }
-                if (ev.type != YAML_MAPPING_START_EVENT) { yaml_event_delete(&ev); goto done; }
+                if (ev.type != YAML_MAPPING_START_EVENT) { s_unexpected(&parser, &ev, "expected mapping"); goto done; }
                 yaml_event_delete(&ev);
 
                 if (project->scene_count >= EDITOR_MAX_SCENES)
                 {
-                    spark_log_error("editor: too many scenes");
+                    parser.problem = "too many scenes (limit reached)";
+                    parser.problem_mark = ev.start_mark;
                     goto done;
                 }
                 if (s_parse_scene(&parser, &project->scenes[project->scene_count]) != 0)
@@ -645,6 +688,19 @@ int editor_yaml_parse_project(const char *path, editor_project_t *project)
     rc = 0;
 
 done:
+    if (rc != 0 && err && err->message[0] == '\0')
+    {
+        if (parser.problem)
+        {
+            snprintf(err->message, sizeof(err->message), "%s", parser.problem);
+            err->line = parser.problem_mark.line + 1;
+            err->column = parser.problem_mark.column + 1;
+        }
+        else
+        {
+            snprintf(err->message, sizeof(err->message), "Unknown parse error");
+        }
+    }
     yaml_parser_delete(&parser);
     if (rc != 0)
     {
@@ -666,7 +722,7 @@ static int s_parse_bank_fixture(yaml_parser_t *p, editor_bank_fixture_t *fix)
     {
         if (s_next(p, &ev) != 0) return -1;
         if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); return -1; }
+        if (ev.type != YAML_SCALAR_EVENT) return s_unexpected(p, &ev, "expected key");
 
         const char *key = s_scalar(&ev);
         yaml_event_t val_ev;
@@ -702,8 +758,7 @@ static int s_parse_bank_fixture(yaml_parser_t *p, editor_bank_fixture_t *fix)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "unknown key in bank fixture");
         }
     }
     return 0;
@@ -743,7 +798,7 @@ int editor_yaml_parse_bank(const char *path, editor_bank_t *bank)
     {
         if (s_next(&parser, &ev) != 0) goto done;
         if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
-        if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); goto done; }
+        if (ev.type != YAML_SCALAR_EVENT) { s_unexpected(&parser, &ev, "expected key"); goto done; }
 
         const char *key = s_scalar(&ev);
 
@@ -757,7 +812,7 @@ int editor_yaml_parse_bank(const char *path, editor_bank_t *bank)
             {
                 if (s_next(&parser, &ev) != 0) goto done;
                 if (ev.type == YAML_MAPPING_END_EVENT) { yaml_event_delete(&ev); break; }
-                if (ev.type != YAML_SCALAR_EVENT) { yaml_event_delete(&ev); goto done; }
+                if (ev.type != YAML_SCALAR_EVENT) { s_unexpected(&parser, &ev, "expected key"); goto done; }
 
                 const char *bkey = s_scalar(&ev);
                 yaml_event_t val_ev;
@@ -778,8 +833,8 @@ int editor_yaml_parse_bank(const char *path, editor_bank_t *bank)
                 }
                 else
                 {
-                    yaml_event_delete(&ev);
-                    s_skip_value(&parser);
+                    s_unexpected(&parser, &ev, "unknown key in bank");
+                    goto done;
                 }
             }
         }
@@ -793,12 +848,13 @@ int editor_yaml_parse_bank(const char *path, editor_bank_t *bank)
             {
                 if (s_next(&parser, &ev) != 0) goto done;
                 if (ev.type == YAML_SEQUENCE_END_EVENT) { yaml_event_delete(&ev); break; }
-                if (ev.type != YAML_MAPPING_START_EVENT) { yaml_event_delete(&ev); goto done; }
+                if (ev.type != YAML_MAPPING_START_EVENT) { s_unexpected(&parser, &ev, "expected mapping"); goto done; }
                 yaml_event_delete(&ev);
 
                 if (bank->fixture_count >= EDITOR_MAX_BANK_FIXTURES)
                 {
-                    spark_log_error("editor: too many bank fixtures");
+                    parser.problem = "too many bank fixtures (limit reached)";
+                    parser.problem_mark = ev.start_mark;
                     goto done;
                 }
                 if (s_parse_bank_fixture(&parser, &bank->fixtures[bank->fixture_count]) != 0)
@@ -808,8 +864,8 @@ int editor_yaml_parse_bank(const char *path, editor_bank_t *bank)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(&parser);
+            s_unexpected(&parser, &ev, "unknown top-level key in bank file");
+            goto done;
         }
     }
 

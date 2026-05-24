@@ -155,8 +155,10 @@
 
   async function handleBrowserConfirm(path: string) {
     showBrowser = false;
-    await reloadProject(path);
-    loadScenes();
+    try {
+      await reloadProject(path);
+      loadScenes();
+    } catch (e: any) { showError(e.message || 'Failed to load project'); }
   }
 
   async function handlePadDown(ev: PointerEvent, scene: SceneDef) {

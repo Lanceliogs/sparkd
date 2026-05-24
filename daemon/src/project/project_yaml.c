@@ -60,29 +60,33 @@ static void s_skip_value(yaml_parser_t *p)
 {
     yaml_event_t ev;
     int depth = 0;
-
     for (;;)
     {
-        if (s_next(p, &ev) != 0)
-            return;
-
+        if (s_next(p, &ev) != 0) return;
         yaml_event_type_t t = ev.type;
         yaml_event_delete(&ev);
-
-        if (t == YAML_MAPPING_START_EVENT || t == YAML_SEQUENCE_START_EVENT)
-        {
-            depth++;
-        }
-        else if (t == YAML_MAPPING_END_EVENT || t == YAML_SEQUENCE_END_EVENT)
-        {
-            depth--;
-            if (depth == 0) return;
-        }
-        else if (t == YAML_SCALAR_EVENT && depth == 0)
-        {
-            return;
-        }
+        if (t == YAML_MAPPING_START_EVENT || t == YAML_SEQUENCE_START_EVENT) depth++;
+        else if (t == YAML_MAPPING_END_EVENT || t == YAML_SEQUENCE_END_EVENT) { if (--depth == 0) return; }
+        else if (t == YAML_SCALAR_EVENT && depth == 0) return;
     }
+}
+
+static int s_unexpected(yaml_parser_t *p, yaml_event_t *ev, const char *section)
+{
+    (void)p;
+    if (ev->type == YAML_SCALAR_EVENT)
+    {
+        spark_log_error("project: unknown key \"%s\" in %s at line %zu col %zu",
+            (const char *)ev->data.scalar.value, section,
+            ev->start_mark.line + 1, ev->start_mark.column + 1);
+    }
+    else
+    {
+        spark_log_error("project: unexpected element in %s at line %zu col %zu",
+            section, ev->start_mark.line + 1, ev->start_mark.column + 1);
+    }
+    yaml_event_delete(ev);
+    return -1;
 }
 
 static const char *s_scalar(yaml_event_t *ev)
@@ -174,8 +178,7 @@ static int s_parse_channels(yaml_parser_t *p, spark_channel_def_t *channels,
             }
             else
             {
-                yaml_event_delete(&ev);
-                s_skip_value(p);
+                return s_unexpected(p, &ev, "channel");
             }
         }
 
@@ -280,8 +283,7 @@ static int s_parse_fixture(yaml_parser_t *p)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "fixture");
         }
     }
 
@@ -580,8 +582,7 @@ static int s_parse_scene_steps(yaml_parser_t *p, spark_scene_step_def_t *steps,
             }
             else
             {
-                yaml_event_delete(&ev);
-                s_skip_value(p);
+                return s_unexpected(p, &ev, "step");
             }
         }
 
@@ -664,8 +665,7 @@ static int s_parse_scene_trigger(yaml_parser_t *p, spark_scene_def_t *def)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "trigger");
         }
     }
 }
@@ -788,8 +788,7 @@ static int s_parse_scene(yaml_parser_t *p)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "scene");
         }
     }
 
@@ -895,8 +894,7 @@ static int s_parse_midi(yaml_parser_t *p, spark_project_config_t *cfg)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "midi");
         }
     }
 }
@@ -962,8 +960,7 @@ static int s_parse_dmx(yaml_parser_t *p, spark_project_config_t *cfg)
         }
         else
         {
-            yaml_event_delete(&ev);
-            s_skip_value(p);
+            return s_unexpected(p, &ev, "dmx");
         }
     }
 }
@@ -1194,11 +1191,17 @@ int spark_project_parse_yaml(const char *path, spark_project_config_t *cfg)
             if (s_parse_includes(&parser, base_dir, &has_fixtures, &has_scenes) != 0)
                 goto done;
         }
-        else
+        else if (strcmp(key, "format") == 0 || strcmp(key, "app") == 0)
         {
-            spark_log_debug("project: skipping section '%s'", key);
             yaml_event_delete(&ev);
             s_skip_value(&parser);
+        }
+        else
+        {
+            spark_log_error("project: unknown top-level key \"%s\" at line %zu",
+                key, ev.start_mark.line + 1);
+            yaml_event_delete(&ev);
+            goto done;
         }
     }
 

@@ -223,8 +223,9 @@ static void s_handle_project_reload(struct mg_connection *c, struct mg_http_mess
     if (rc != 0)
     {
         mg_http_reply(c, 422, s_json_content_type,
-            "{%m:%m}\n",
-            MG_ESC("error"), MG_ESC("project load failed"));
+            "{%m:%m,%m:%m}\n",
+            MG_ESC("error"), MG_ESC("load_failed"),
+            MG_ESC("message"), MG_ESC("Failed to load project (parse error or broken references)"));
         return;
     }
 

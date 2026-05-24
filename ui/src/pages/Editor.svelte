@@ -7,7 +7,10 @@
   import FixtureForm from '../components/FixtureForm.svelte';
   import SceneForm from '../components/SceneForm.svelte';
   import { validateId } from '../lib/validate';
-  import { showError } from '../lib/toast';
+  import { showError, showWarning, showSuccess } from '../lib/toast';
+  import { validateProject, type Problem } from '../lib/project-validate';
+  import Modal from '../components/Modal.svelte';
+  import ConfirmModal from '../components/ConfirmModal.svelte';
   import {
     editorStatus,
     editorOpen,
@@ -41,6 +44,7 @@
     type SceneValue,
     type SceneStep,
     type Channel,
+    ApiError,
   } from '../lib/api';
 
   /* ---- Data state ---- */
@@ -62,6 +66,9 @@
   let selectionTab: 'banks' | 'fixtures' | 'hardware' | 'scenes' = $state('banks');
   let selection: Selection = $state(null);
   let collapsedBanks: Set<number> = $state(new Set());
+
+  /* ---- Problems modal ---- */
+  let showProblemsModal = $state(false);
 
   /* ---- Edit card state ---- */
   let editDirty = $state(false);
@@ -91,6 +98,13 @@
     }
     return true;
   });
+
+  /* ---- Project validation ---- */
+  let problems: Problem[] = $derived(validateProject(fixtures, scenes, banks));
+  let fixtureProblems = $derived(problems.filter(p => p.tab === 'fixtures'));
+  let sceneProblems = $derived(problems.filter(p => p.tab === 'scenes'));
+  let warnFixtureIndices = $derived(new Set(fixtureProblems.map(p => p.index)));
+  let warnSceneIndices = $derived(new Set(sceneProblems.map(p => p.index)));
 
   /* ---- New bank form ---- */
   let newBankId = $state('');
@@ -249,7 +263,8 @@
           await editorOpen(fullPath);
           selection = null; editFixture = null; editBankFixture = null; editScene = null; editDirty = false;
           await refresh();
-        } catch (e: any) { showError(e.message || 'Open failed'); }
+          notifyOpenResult();
+        } catch (e: any) { showOpenError(e); }
       };
       showDiscardModal = true;
       return;
@@ -257,12 +272,41 @@
     try {
       if (browserMode === 'open') {
         await editorOpen(fullPath);
+        browserMode = null;
+        await refresh();
+        notifyOpenResult();
       } else if (browserMode === 'save') {
         await editorSaveAs(fullPath);
+        browserMode = null;
+        await refresh();
       }
-      browserMode = null;
-      await refresh();
-    } catch (e: any) { showError(e.message || 'File operation failed'); }
+    } catch (e: any) {
+      if (browserMode === 'open' || browserMode === null) showOpenError(e);
+      else showError(e.message || 'Save failed');
+    }
+  }
+
+  function notifyOpenResult() {
+    if (problems.length > 0) {
+      showWarning(`Opened with ${problems.length} problem${problems.length > 1 ? 's' : ''}`, () => { showProblemsModal = true; });
+    } else if (status.project_loaded) {
+      showSuccess('Project opened');
+    }
+  }
+
+  let openErrorDetail = $state('');
+  let showOpenErrorModal = $state(false);
+
+  function showOpenError(e: unknown) {
+    if (e instanceof ApiError) {
+      const line = e.detail.line as number | undefined;
+      const col = e.detail.column as number | undefined;
+      const loc = line ? `Line ${line}, column ${col || 1}` : '';
+      openErrorDetail = [e.message, loc].filter(Boolean).join('\n');
+      showError('Failed to open project', () => { showOpenErrorModal = true; });
+    } else {
+      showError((e as any)?.message || 'Open failed');
+    }
   }
 
   function getProjectBasename(): string {
@@ -462,9 +506,9 @@
   <div class="selection-card">
     <div class="sel-tabs">
       <button class="sel-tab" class:active={selectionTab === 'banks'} onclick={() => selectionTab = 'banks'}>Banks</button>
-      <button class="sel-tab" class:active={selectionTab === 'fixtures'} onclick={() => selectionTab = 'fixtures'}>Fixtures</button>
+      <button class="sel-tab" class:active={selectionTab === 'fixtures'} onclick={() => selectionTab = 'fixtures'}>Fixtures{#if fixtureProblems.length > 0}<span class="problem-badge">{fixtureProblems.length}</span>{/if}</button>
       <button class="sel-tab" class:active={selectionTab === 'hardware'} onclick={() => selectionTab = 'hardware'}>Hardware</button>
-      <button class="sel-tab" class:active={selectionTab === 'scenes'} onclick={() => selectionTab = 'scenes'}>Scenes</button>
+      <button class="sel-tab" class:active={selectionTab === 'scenes'} onclick={() => selectionTab = 'scenes'}>Scenes{#if sceneProblems.length > 0}<span class="problem-badge">{sceneProblems.length}</span>{/if}</button>
     </div>
 
     <div class="sel-content">
@@ -513,7 +557,7 @@
             <button class="btn-xs" onclick={handleFixturesSort}>Sort</button>
           </div>
           <PadGrid
-            items={fixtures.map(f => ({ id: String(f.index), label: f.id, sublabel: '@' + f.start_address }))}
+            items={fixtures.map((f, i) => ({ id: String(f.index), label: f.id, sublabel: '@' + f.start_address, warn: warnFixtureIndices.has(i) }))}
             selected={selection?.kind === 'project_fixture' ? String(selection.index) : undefined}
             onselect={(id) => trySelect({ kind: 'project_fixture', index: Number(id) })}
           />
@@ -535,8 +579,7 @@
           </div>
           <PadGrid
             items={scenes.map((s, i) => {
-              const dup = scenes.some((other, j) => j !== i && other.id === s.id);
-              return { id: String(i), label: s.id, sublabel: s.type, warn: dup, dim: !s.enabled };
+              return { id: String(i), label: s.id, sublabel: s.type, warn: warnSceneIndices.has(i), dim: !s.enabled };
             })}
             selected={selection?.kind === 'scene' ? String(selection.index) : undefined}
             onselect={(id) => trySelect({ kind: 'scene', index: Number(id) })}
@@ -606,31 +649,32 @@
   {/if}
 </div>
 
-<!-- Discard confirmation modal -->
 {#if showDiscardModal}
-  <div class="modal-overlay" onclick={cancelDiscard} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}} role="dialog" aria-modal="true" tabindex="-1">
-      <p>You have unsaved changes. Discard them?</p>
-      <div class="modal-actions">
-        <button class="btn-sm btn-danger" onclick={confirmDiscard}>Discard</button>
-        <button class="btn-sm btn-muted" onclick={cancelDiscard}>Cancel</button>
-      </div>
-    </div>
-  </div>
+  <ConfirmModal message="You have unsaved changes. Discard them?" confirmLabel="Discard" onconfirm={confirmDiscard} oncancel={cancelDiscard} />
 {/if}
 
 {#if showDeleteModal}
-  <div class="modal-overlay" onclick={cancelDelete} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={() => {}} role="dialog" aria-modal="true" tabindex="-1">
-      <p>Delete this item? This cannot be undone.</p>
-      <div class="modal-actions">
-        <button class="btn-sm btn-danger" onclick={executeDelete}>Delete</button>
-        <button class="btn-sm btn-muted" onclick={cancelDelete}>Cancel</button>
-      </div>
-    </div>
-  </div>
+  <ConfirmModal message="Delete this item? This cannot be undone." confirmLabel="Delete" onconfirm={executeDelete} oncancel={cancelDelete} />
 {/if}
 
+{#if showProblemsModal}
+  <Modal type="warning" title="Project Problems" onclose={() => showProblemsModal = false}>
+    <ul class="problem-list">
+      {#each problems as p}
+        <li class="problem-item">
+          <span class="problem-tab">{p.tab}</span>
+          <span class="problem-msg">{p.message}</span>
+        </li>
+      {/each}
+    </ul>
+  </Modal>
+{/if}
+
+{#if showOpenErrorModal}
+  <Modal type="error" title="Parse Error" onclose={() => showOpenErrorModal = false}>
+    <pre class="error-detail">{openErrorDetail}</pre>
+  </Modal>
+{/if}
 
 <style>
   /* Project bar */
@@ -662,29 +706,6 @@
     letter-spacing: 0.05em;
   }
   .project-actions { margin-left: auto; display: flex; gap: 0.4rem; }
-
-  /* Discard modal */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-  .modal {
-    position: relative;
-    background: var(--bg-surface);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: var(--radius);
-    width: 90%;
-    max-width: 500px;
-    max-height: 70vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(233, 69, 96, 0.2);
-  }
 
   /* Main layout */
   .editor-layout {
@@ -736,6 +757,20 @@
     color: var(--accent);
     border-bottom-color: var(--accent);
     box-shadow: 0 2px 6px var(--accent-glow);
+  }
+  .problem-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0.3rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.25rem;
+    border-radius: 9px;
+    background: rgba(255, 180, 0, 0.25);
+    color: rgb(255, 180, 0);
+    font-size: 0.55rem;
+    font-weight: 800;
   }
 
   .sel-content {
@@ -875,29 +910,6 @@
   .btn-xs.btn-add:hover { box-shadow: 0 0 6px var(--green-glow); }
   .empty-msg { color: var(--text-muted); font-size: 0.75rem; padding: 1.5rem; text-align: center; letter-spacing: 0.02em; }
 
-  /* Discard modal */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(2px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-  .modal {
-    background: var(--bg-card);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    max-width: 320px;
-    width: 90%;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(233, 69, 96, 0.2);
-  }
-  .modal p { font-size: 0.8rem; margin-bottom: 1rem; color: var(--text); }
-  .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-
   .loading-dot {
     width: 8px;
     height: 8px;
@@ -908,5 +920,39 @@
   @keyframes pulse {
     0%, 100% { opacity: 0.3; }
     50% { opacity: 1; }
+  }
+
+  .problem-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .problem-item {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+  }
+  .problem-tab {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.55rem;
+    color: rgb(255, 180, 0);
+    min-width: 4rem;
+  }
+  .problem-msg { color: var(--text-muted); }
+  .error-detail {
+    margin: 0;
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: var(--red);
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 </style>

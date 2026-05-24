@@ -5,6 +5,11 @@
   let toasts: Toast[] = $state([]);
 
   onMount(() => subscribeToasts((t) => { toasts = t; }));
+
+  function handleDetail(toast: Toast) {
+    removeToast(toast.id);
+    toast.ondetail?.();
+  }
 </script>
 
 {#if toasts.length > 0}
@@ -12,6 +17,9 @@
     {#each toasts as toast (toast.id)}
       <button class="toast toast-{toast.type}" onclick={() => removeToast(toast.id)}>
         <span class="toast-msg">{toast.message}</span>
+        {#if toast.ondetail}
+          <span class="toast-detail" role="button" tabindex="0" onclick={(e) => { e.stopPropagation(); handleDetail(toast); }} onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleDetail(toast); } }}>Details</span>
+        {/if}
         <span class="toast-close">&times;</span>
       </button>
     {/each}
@@ -67,6 +75,17 @@
   }
 
   .toast-msg { flex: 1; }
+
+  .toast-detail {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0.8;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .toast-detail:hover { opacity: 1; }
 
   .toast-close {
     background: none;

@@ -24,16 +24,17 @@ static int s_is_yaml_file(const char *name)
 
 /* ---- Project lifecycle ---- */
 
-int editor_open_project(editor_state_t *state, const char *path)
+int editor_open_project(editor_state_t *state, const char *path, editor_parse_error_t *err)
 {
     editor_close_project(state);
 
-    if (editor_yaml_parse_project(path, &state->project) != 0)
+    int rc = editor_yaml_parse_project(path, &state->project, err);
+    if (rc < 0)
         return -1;
 
     spark_log_info("editor: opened project '%s' (%d fixtures)",
                    path, state->project.fixture_count);
-    return 0;
+    return rc;
 }
 
 void editor_close_project(editor_state_t *state)

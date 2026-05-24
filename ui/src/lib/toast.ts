@@ -4,6 +4,7 @@ export interface Toast {
   id: number;
   type: ToastType;
   message: string;
+  ondetail?: () => void;
 }
 
 let nextId = 0;
@@ -14,9 +15,9 @@ function notify() {
   for (const fn of listeners) fn([...toasts]);
 }
 
-function addToast(type: ToastType, message: string, durationMs = 4000) {
+function addToast(type: ToastType, message: string, ondetail?: () => void, durationMs = 4000) {
   const id = nextId++;
-  toasts = [...toasts, { id, type, message }];
+  toasts = [...toasts, { id, type, message, ondetail }];
   notify();
 
   const timeout = type === 'error' ? Math.max(durationMs, 6000) : durationMs;
@@ -34,6 +35,6 @@ export function subscribeToasts(fn: (toasts: Toast[]) => void): () => void {
   return () => { listeners = listeners.filter(l => l !== fn); };
 }
 
-export function showError(message: string) { addToast('error', message); }
-export function showWarning(message: string) { addToast('warning', message); }
-export function showSuccess(message: string) { addToast('success', message); }
+export function showError(message: string, ondetail?: () => void) { addToast('error', message, ondetail); }
+export function showWarning(message: string, ondetail?: () => void) { addToast('warning', message, ondetail); }
+export function showSuccess(message: string, ondetail?: () => void) { addToast('success', message, ondetail); }

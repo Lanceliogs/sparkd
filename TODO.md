@@ -11,7 +11,11 @@
 - [x] Reconnect affinity by serial number
 - [x] Unit tests
 
-## Planned (post v0.1.0)
+### Project file rules
+- [ ] Fixtures and scenes id should be case insensitive
+- [ ] No spaces too, only [a-z0-9-] chars. No dots obviously as it's our id.channel delimiter.
+- [ ] This should be enforced in the editor and the CRUD should report an error (see next section).
+- [ ] We should be able to convert a bad id to a good one with some rules
 
 ### UI Error Feedback
 - [ ] Toast/notification system for failed API calls (start, stop, save, delete)
@@ -23,15 +27,39 @@
 - [ ] Hardware dirty state included in project dirty guard
 
 ### Live Page
-- [ ] Hide or grey out disabled scenes on pad grid
+- [ ] Mark disabled scenes on pad grid, but keep them usable from the UI
 - [ ] WebSocket JSON.parse error handling
 - [ ] User feedback on failed engine operations (start/stop/blackout)
 - [ ] Scene reload on WebSocket reconnect
 
 ### Editor
 - [ ] Error toasts for failed save/delete/open/create operations
+- [ ] Project file recovery strategies could be great (bad indents for example, or bad references).
+- [ ] Mark disabled scenes here too
 - [ ] Loading state during refresh and file browser navigation
 - [ ] Validation feedback on empty bank ID/directory
+
+## Planned (v0.2)
+
+### Auth Token ([spec](specs/auth-token.md))
+- [ ] Two tokens at startup: admin (full) + live (show control only)
+- [ ] All `/api/*` and `/ws` routes require `Authorization: Bearer <token>`
+- [ ] Permission levels: live token denied editor/browse/load-with-path routes
+- [ ] Localhost meta tag injection for seamless local admin access
+- [ ] Frontend token flow: meta → URL param → localStorage → manual input
+- [ ] Frontend hides Editor tab for live-level tokens
+- [ ] QR code modal: "Share Live Control" vs "Share Full Access"
+- [ ] Token rotation endpoint (`POST /api/auth/rotate`, admin only)
+
+### Basic REAPER integration
+- [ ] Generate mappings from scenes names and triggers using a `spark-reaper --project [PATH]` utility tool
+- [ ] Maybe allow a user to download the mapping for a project from the Editor page too. We could create
+      a tiny reaper module in tools/reaper
+- [ ] See what would be the cost of creating a VST like PAD communicating
+      with sparkd directly for a direct engine control from REAPER.
+      Being able to START/STOP and monitor the engine from REAPER would be sick.
+
+## Planned (post v0.2)
 
 ### DMX Pro Backend
 - [x] Enttec DMX USB Pro protocol (widget API over serial)
@@ -44,4 +72,4 @@
 - [ ] Cross-version sync check (consts.h version == package.json version)
 
 ### Open Questions
-- [ ] The routes can activate disabled scenes. Should we keep it that way?
+- [x] The routes can activate disabled scenes. Should we keep it that way? Yes for now.

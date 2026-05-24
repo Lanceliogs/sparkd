@@ -15,6 +15,8 @@
 - [x] Fixtures and scenes id should be case insensitive
 - [x] No spaces too, only [a-z0-9-] chars. No dots obviously as it's our id.channel delimiter.
 - [x] This should be enforced in the editor and the CRUD should report an error (see next section).
+- [x] Strict YAML parsing: unknown keys rejected with line/column error (editor + engine)
+- [x] Parse error details surfaced to the UI (toast + detail modal)
 - [ ] We should be able to convert a bad id to a good one with some rules (autocorrect button — later)
 
 ### UI Error Feedback
@@ -39,6 +41,10 @@
 - [x] Mark disabled scenes here too
 - [x] Loading state during refresh
 - [ ] Validation feedback on empty bank ID/directory
+- [ ] Display DMX channel occupancy in fixture form (edit card)
+- [ ] Template and copy-from: combobox selector + reference validator
+- [ ] Display resolved DMX device name next to connection state
+- [ ] Display full MIDI port name (not just pattern) — e.g. "Launchpad Mini (pattern)"
 
 ## Planned (v0.2)
 

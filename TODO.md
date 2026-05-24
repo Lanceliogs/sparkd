@@ -12,31 +12,32 @@
 - [x] Unit tests
 
 ### Project file rules
-- [ ] Fixtures and scenes id should be case insensitive
-- [ ] No spaces too, only [a-z0-9-] chars. No dots obviously as it's our id.channel delimiter.
-- [ ] This should be enforced in the editor and the CRUD should report an error (see next section).
-- [ ] We should be able to convert a bad id to a good one with some rules
+- [x] Fixtures and scenes id should be case insensitive
+- [x] No spaces too, only [a-z0-9-] chars. No dots obviously as it's our id.channel delimiter.
+- [x] This should be enforced in the editor and the CRUD should report an error (see next section).
+- [ ] We should be able to convert a bad id to a good one with some rules (autocorrect button — later)
 
 ### UI Error Feedback
-- [ ] Toast/notification system for failed API calls (start, stop, save, delete)
-- [ ] Loading spinners during async operations (file browse, project open/save)
+- [x] Toast/notification system for failed API calls (start, stop, save, delete)
+- [x] Loading spinners during async operations (project refresh)
+- [ ] Loading state during file browser navigation
 
 ### Safety Guards
-- [ ] Confirmation modal before destructive deletes (fixtures, scenes)
-- [ ] `beforeunload` browser guard for unsaved editor changes
-- [ ] Hardware dirty state included in project dirty guard
+- [x] Confirmation modal before destructive deletes (fixtures, scenes)
+- [x] `beforeunload` browser guard for unsaved editor changes
+- [x] Hardware dirty state included in project dirty guard
 
 ### Live Page
-- [ ] Mark disabled scenes on pad grid, but keep them usable from the UI
-- [ ] WebSocket JSON.parse error handling
-- [ ] User feedback on failed engine operations (start/stop/blackout)
-- [ ] Scene reload on WebSocket reconnect
+- [x] Mark disabled scenes on pad grid, but keep them usable from the UI
+- [x] WebSocket JSON.parse error handling
+- [x] User feedback on failed engine operations (start/stop/blackout)
+- [x] Scene reload on WebSocket reconnect
 
 ### Editor
-- [ ] Error toasts for failed save/delete/open/create operations
+- [x] Error toasts for failed save/delete/open/create operations
 - [ ] Project file recovery strategies could be great (bad indents for example, or bad references).
-- [ ] Mark disabled scenes here too
-- [ ] Loading state during refresh and file browser navigation
+- [x] Mark disabled scenes here too
+- [x] Loading state during refresh
 - [ ] Validation feedback on empty bank ID/directory
 
 ## Planned (v0.2)

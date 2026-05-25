@@ -7,6 +7,7 @@
 
 typedef struct {
     char pattern[SPARK_MIDI_PORT_STRLEN];
+    char device_name[SPARK_MIDI_PORT_STRLEN];
     int device_id;
     PortMidiStream *stream;
     uint64_t last_activity_ms;
@@ -45,10 +46,16 @@ static int s_add_input(const char *pattern, int device_id, PortMidiStream *strea
     midi_input_t *input = &s_inputs[s_input_count++];
     strncpy(input->pattern, pattern, SPARK_MIDI_PORT_STRLEN - 1);
     input->pattern[SPARK_MIDI_PORT_STRLEN - 1] = '\0';
+
+    const PmDeviceInfo *info = Pm_GetDeviceInfo(device_id);
+    const char *name = (info && info->name) ? info->name : pattern;
+    strncpy(input->device_name, name, SPARK_MIDI_PORT_STRLEN - 1);
+    input->device_name[SPARK_MIDI_PORT_STRLEN - 1] = '\0';
+
     input->device_id = device_id;
     input->stream = stream;
     input->last_activity_ms = spark_clock_monotonic_ms();
-    spark_log_debug("midi: input added '%s' device=%d (%d inputs)", pattern, device_id, s_input_count);
+    spark_log_debug("midi: input added '%s' [%s] device=%d (%d inputs)", pattern, name, device_id, s_input_count);
     return 0;
 }
 
@@ -341,6 +348,8 @@ int spark_midi_get_status(spark_midi_port_status_t *out, int max)
     {
         strncpy(out[count].pattern, s_inputs[i].pattern, SPARK_MIDI_PORT_STRLEN - 1);
         out[count].pattern[SPARK_MIDI_PORT_STRLEN - 1] = '\0';
+        strncpy(out[count].device_name, s_inputs[i].device_name, SPARK_MIDI_PORT_STRLEN - 1);
+        out[count].device_name[SPARK_MIDI_PORT_STRLEN - 1] = '\0';
         out[count].connected = (s_inputs[i].stream != NULL);
         out[count].last_activity_ms = s_inputs[i].last_activity_ms;
         count++;

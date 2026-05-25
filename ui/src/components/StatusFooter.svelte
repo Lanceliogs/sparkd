@@ -18,7 +18,7 @@
       {#each midiStatus.ports as port}
         <span class="status-value">
           <span class="dot-sm" class:green={port.connected} class:red={!port.connected}></span>
-          {port.pattern}
+          {port.device_name || port.pattern}{#if port.device_name && port.device_name !== port.pattern}<span class="muted">&nbsp;({port.pattern})</span>{/if}
         </span>
       {/each}
     {/if}
@@ -27,7 +27,7 @@
     <span class="status-label">DMX</span>
     <span class="status-value">
       <span class="dot-sm" class:green={dmxStatus.state === 'connected'} class:yellow={dmxStatus.state === 'connecting'} class:red={dmxStatus.state === 'disconnected' || dmxStatus.state === 'error'}></span>
-      {dmxStatus.backend}
+      {dmxStatus.device || dmxStatus.backend}{#if dmxStatus.device}<span class="muted">&nbsp;({dmxStatus.backend})</span>{/if}
     </span>
     <span class="status-value muted">{dmxStatus.stats.frames_sent} frames</span>
     {#if dmxStatus.stats.write_errors > 0}

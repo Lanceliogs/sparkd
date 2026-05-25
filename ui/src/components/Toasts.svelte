@@ -15,13 +15,13 @@
 {#if toasts.length > 0}
   <div class="toast-container">
     {#each toasts as toast (toast.id)}
-      <button class="toast toast-{toast.type}" onclick={() => removeToast(toast.id)}>
+      <div class="toast toast-{toast.type}" role="alert">
         <span class="toast-msg">{toast.message}</span>
         {#if toast.ondetail}
-          <span class="toast-detail" role="button" tabindex="0" onclick={(e) => { e.stopPropagation(); handleDetail(toast); }} onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleDetail(toast); } }}>Details</span>
+          <button class="toast-detail" onclick={() => handleDetail(toast)}>Details</button>
         {/if}
-        <span class="toast-close">&times;</span>
-      </button>
+        <button class="toast-close" onclick={() => removeToast(toast.id)} aria-label="Dismiss">&times;</button>
+      </div>
     {/each}
   </div>
 {/if}
@@ -47,7 +47,6 @@
     font-size: 0.75rem;
     font-weight: 500;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    cursor: pointer;
     animation: slide-in 0.2s ease-out;
   }
 
@@ -77,6 +76,9 @@
   .toast-msg { flex: 1; }
 
   .toast-detail {
+    background: none;
+    border: none;
+    color: inherit;
     font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -84,8 +86,10 @@
     opacity: 0.8;
     text-decoration: underline;
     cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
   }
-  .toast-detail:hover { opacity: 1; }
+  .toast-detail:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
 
   .toast-close {
     background: none;
@@ -94,7 +98,8 @@
     font-size: 1.1rem;
     cursor: pointer;
     opacity: 0.6;
-    padding: 0 0.2rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
   }
-  .toast-close:hover { opacity: 1; }
+  .toast-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
 </style>

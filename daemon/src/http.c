@@ -382,12 +382,13 @@ static void s_handle_midi_status(struct mg_connection *c)
     char buf[2048];
     size_t pos = snprintf(buf, sizeof(buf), "{\"port_count\":%d,\"ports\":[", count);
 
-    for (int i = 0; i < count && pos < sizeof(buf) - 128; i++)
+    for (int i = 0; i < count && pos < sizeof(buf) - 256; i++)
     {
         if (i > 0) buf[pos++] = ',';
         pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos,
-            "{\"pattern\":\"%s\",\"connected\":%s,\"last_activity_ms\":%llu}",
+            "{\"pattern\":\"%s\",\"device_name\":\"%s\",\"connected\":%s,\"last_activity_ms\":%llu}",
             ports[i].pattern,
+            ports[i].device_name,
             ports[i].connected ? "true" : "false",
             (unsigned long long)ports[i].last_activity_ms);
     }
@@ -430,9 +431,9 @@ static void s_handle_dmx_status(struct mg_connection *c)
     uint64_t reconn = spark_atomic_load_u64(&backend->reconnects);
 
     mg_http_reply(c, 200, s_json_content_type,
-        "{\"backend\":\"%s\",\"state\":\"%s\","
+        "{\"backend\":\"%s\",\"device\":\"%s\",\"state\":\"%s\","
         "\"stats\":{\"frames_sent\":%llu,\"write_errors\":%llu,\"reconnects\":%llu}}\n",
-        backend_name, s_dmx_state_str(state),
+        backend_name, cfg->dmx_device, s_dmx_state_str(state),
         (unsigned long long)frames,
         (unsigned long long)errors,
         (unsigned long long)reconn);

@@ -1,6 +1,6 @@
 #include "clock.h"
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <windows.h>
 #else
 #include <time.h>
@@ -8,7 +8,7 @@
 
 uint64_t spark_clock_monotonic_ms(void)
 {
-#ifdef _MSC_VER
+#ifdef _WIN32
     LARGE_INTEGER freq, now;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&now);
@@ -22,7 +22,7 @@ uint64_t spark_clock_monotonic_ms(void)
 
 uint64_t spark_clock_monotonic_us(void)
 {
-#ifdef _MSC_VER
+#ifdef _WIN32
     LARGE_INTEGER freq, now;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&now);
@@ -36,8 +36,8 @@ uint64_t spark_clock_monotonic_us(void)
 
 void spark_clock_msleep(uint32_t ms)
 {
-#ifdef _MSC_VER
-    Sleep(ms); /* windows.h */
+#ifdef _WIN32
+    Sleep(ms);
 #else
     struct timespec req = { .tv_sec = ms / 1000, .tv_nsec = (ms % 1000) * 1000000 };
     nanosleep(&req, NULL);
@@ -46,10 +46,10 @@ void spark_clock_msleep(uint32_t ms)
 
 void spark_clock_usleep(uint32_t us)
 {
-#ifdef _MSC_VER
+#ifdef _WIN32
     uint32_t ms = us / 1000;
-    if (ms < 1) ms = 1; 
-    Sleep(ms); /* windows.h */
+    if (ms < 1) ms = 1;
+    Sleep(ms);
 #else
     struct timespec req = { .tv_sec = us / 1000000, .tv_nsec = (us % 1000000) * 1000 };
     nanosleep(&req, NULL);

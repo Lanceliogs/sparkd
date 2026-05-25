@@ -30,7 +30,7 @@
 
   /* Status polling */
   let midiStatus: MidiStatus = $state({ port_count: 0, ports: [] });
-  let dmxStatus: DmxStatus = $state({ backend: 'none', state: 'disconnected', stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } });
+  let dmxStatus: DmxStatus = $state({ backend: 'none', device: '', state: 'disconnected', stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } });
   let statusPollTimer: ReturnType<typeof setInterval> | null = null;
 
   /* File browser for project swap */

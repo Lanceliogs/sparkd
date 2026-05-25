@@ -17,7 +17,6 @@
 - [x] This should be enforced in the editor and the CRUD should report an error (see next section).
 - [x] Strict YAML parsing: unknown keys rejected with line/column error (editor + engine)
 - [x] Parse error details surfaced to the UI (toast + detail modal)
-- [ ] We should be able to convert a bad id to a good one with some rules (autocorrect button — later)
 
 ### UI Error Feedback
 - [x] Toast/notification system for failed API calls (start, stop, save, delete)
@@ -34,17 +33,17 @@
 - [x] WebSocket JSON.parse error handling
 - [x] User feedback on failed engine operations (start/stop/blackout)
 - [x] Scene reload on WebSocket reconnect
+- [ ] Display resolved DMX device name next to connection state
+- [ ] Display full MIDI port name (not just pattern) — e.g. "Launchpad Mini (pattern)"
 
 ### Editor
 - [x] Error toasts for failed save/delete/open/create operations
-- [ ] Project file recovery strategies could be great (bad indents for example, or bad references).
 - [x] Mark disabled scenes here too
 - [x] Loading state during refresh
 - [ ] Validation feedback on empty bank ID/directory
 - [ ] Display DMX channel occupancy in fixture form (edit card)
 - [ ] Template and copy-from: combobox selector + reference validator
-- [ ] Display resolved DMX device name next to connection state
-- [ ] Display full MIDI port name (not just pattern) — e.g. "Launchpad Mini (pattern)"
+
 
 ## Planned (v0.2)
 
@@ -67,6 +66,13 @@
       Being able to START/STOP and monitor the engine from REAPER would be sick.
 
 ## Planned (post v0.2)
+
+### UI
+- [ ] We should be able to convert a bad id to a good one with some rules (autocorrect button — later)
+
+### Projects
+- [ ] Make a decision regarding folder based projects
+- [ ] Project file recovery strategies could be great (bad indents for example, or bad references). 
 
 ### DMX Pro Backend
 - [x] Enttec DMX USB Pro protocol (widget API over serial)

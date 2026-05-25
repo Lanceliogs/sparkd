@@ -61,6 +61,7 @@ int spark_midi_reconnect(void);
 /* Status reporting */
 typedef struct {
     char pattern[SPARK_MIDI_PORT_STRLEN];
+    char device_name[SPARK_MIDI_PORT_STRLEN];
     bool connected;
     uint64_t last_activity_ms;
 } spark_midi_port_status_t;

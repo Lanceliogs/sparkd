@@ -1,5 +1,6 @@
 import type { EditorFixture, EditorScene, EditorBank } from './api';
 import { validateId } from './validate';
+import { resolveChannelCount } from './fixture-resolve';
 
 export interface Problem {
   tab: 'fixtures' | 'scenes';
@@ -16,7 +17,7 @@ export function validateProject(
 
   checkFixtureIds(fixtures, problems);
   checkFixtureRefs(fixtures, banks, problems);
-  checkAddressOverlaps(fixtures, problems);
+  checkAddressOverlaps(fixtures, banks, problems);
   checkSceneIds(scenes, problems);
 
   return problems;
@@ -62,17 +63,18 @@ function checkFixtureRefs(fixtures: EditorFixture[], banks: EditorBank[], proble
   }
 }
 
-function checkAddressOverlaps(fixtures: EditorFixture[], problems: Problem[]) {
+function checkAddressOverlaps(fixtures: EditorFixture[], banks: EditorBank[], problems: Problem[]) {
   const ranges: Array<{ index: number; id: string; start: number; end: number }> = [];
 
   for (let i = 0; i < fixtures.length; i++) {
     const fix = fixtures[i];
-    if (fix.start_address > 0 && fix.channel_count > 0) {
+    const count = resolveChannelCount(fix, fixtures, banks);
+    if (fix.start_address > 0 && count > 0) {
       ranges.push({
         index: i,
         id: fix.id,
         start: fix.start_address,
-        end: fix.start_address + fix.channel_count - 1,
+        end: fix.start_address + count - 1,
       });
     }
   }

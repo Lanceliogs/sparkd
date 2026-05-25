@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EditorScene, EditorFixture, EditorBank, Channel } from '../lib/api';
   import { validateId, type IdStatus } from '../lib/validate';
+  import { resolveFixtureChannels } from '../lib/fixture-resolve';
 
   interface Props {
     scene: EditorScene;
@@ -22,26 +23,11 @@
     dmxAddr: number;
   }
 
-  function resolveFixtureChannels(fix: EditorFixture): Channel[] {
-    if (fix.channels.length > 0) return fix.channels;
-    if (fix.template) {
-      const [bankId, tplId] = fix.template.split(':', 2);
-      const bank = banks.find(b => b.id === bankId);
-      const tpl = bank?.fixtures.find(f => f.id === tplId);
-      if (tpl) return tpl.channels;
-    }
-    if (fix.copy_from) {
-      const src = fixtures.find(f => f.id === fix.copy_from);
-      if (src) return resolveFixtureChannels(src);
-    }
-    return [];
-  }
-
   function getFixtureTargets(): TargetEntry[] {
     const targets: TargetEntry[] = [];
     const sorted = [...fixtures].sort((a, b) => a.start_address - b.start_address);
     for (const fix of sorted) {
-      const channels = resolveFixtureChannels(fix);
+      const channels = resolveFixtureChannels(fix, fixtures, banks);
       for (const ch of channels) {
         targets.push({
           key: `${fix.id}.${ch.name}`,
@@ -59,7 +45,7 @@
     const [fixId, chName] = target.split('.', 2);
     const fix = fixtures.find(f => f.id === fixId);
     if (!fix) return 'warn';
-    const channels = resolveFixtureChannels(fix);
+    const channels = resolveFixtureChannels(fix, fixtures, banks);
     if (!channels.some(c => c.name === chName)) return 'warn';
     return 'valid';
   }

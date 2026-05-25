@@ -17,6 +17,7 @@
   let selectedFile: string | null = $state(null);
   let filename = $state('');
   let roots: BrowseRoots = $state({ places: [], drives: [] });
+  let navigating = $state(false);
 
   /* Navigation history */
   let history: string[] = $state([]);
@@ -29,20 +30,26 @@
   });
 
   async function navigatePush(path: string) {
-    browseResult = await editorBrowse(path);
-    selectedFile = null;
-    if (mode === 'open') filename = '';
-    if (historyIdx < history.length - 1) {
-      history = history.slice(0, historyIdx + 1);
-    }
-    history = [...history, browseResult.path];
-    historyIdx = history.length - 1;
+    navigating = true;
+    try {
+      browseResult = await editorBrowse(path);
+      selectedFile = null;
+      if (mode === 'open') filename = '';
+      if (historyIdx < history.length - 1) {
+        history = history.slice(0, historyIdx + 1);
+      }
+      history = [...history, browseResult.path];
+      historyIdx = history.length - 1;
+    } finally { navigating = false; }
   }
 
   async function navigateTo(path: string) {
-    browseResult = await editorBrowse(path);
-    selectedFile = null;
-    if (mode === 'open') filename = '';
+    navigating = true;
+    try {
+      browseResult = await editorBrowse(path);
+      selectedFile = null;
+      if (mode === 'open') filename = '';
+    } finally { navigating = false; }
   }
 
   function canGoBack(): boolean { return historyIdx > 0; }
@@ -208,7 +215,7 @@
             </nav>
           </div>
 
-          <div class="fb-list">
+          <div class="fb-list" class:fb-loading={navigating}>
             {#each browseResult.entries.filter(e => e.type === 'dir').sort((a, b) => a.name.localeCompare(b.name)) as entry (entry.name)}
               <button
                 class="fb-entry"
@@ -456,6 +463,11 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
+    transition: opacity 0.15s;
+  }
+  .fb-list.fb-loading {
+    opacity: 0.4;
+    pointer-events: none;
   }
   .fb-entry {
     display: flex;

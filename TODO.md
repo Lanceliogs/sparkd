@@ -21,7 +21,7 @@
 ### UI Error Feedback
 - [x] Toast/notification system for failed API calls (start, stop, save, delete)
 - [x] Loading spinners during async operations (project refresh)
-- [ ] Loading state during file browser navigation
+- [x] Loading state during file browser navigation
 
 ### Safety Guards
 - [x] Confirmation modal before destructive deletes (fixtures, scenes)
@@ -33,17 +33,17 @@
 - [x] WebSocket JSON.parse error handling
 - [x] User feedback on failed engine operations (start/stop/blackout)
 - [x] Scene reload on WebSocket reconnect
-- [ ] Display resolved DMX device name next to connection state
-- [ ] Display full MIDI port name (not just pattern) — e.g. "Launchpad Mini (pattern)"
+- [x] Display resolved DMX device name next to connection state
+- [x] Display full MIDI port name (not just pattern) — e.g. "Launchpad Mini (pattern)"
 
 ### Editor
 - [x] Error toasts for failed save/delete/open/create operations
 - [x] Mark disabled scenes here too
 - [x] Loading state during refresh
-- [ ] Validation feedback on empty bank ID/directory
-- [ ] Display DMX channel occupancy in fixture form (edit card)
-- [ ] Template and copy-from: combobox selector + reference validator
-- [ ] New button to create a new empty project
+- [x] Validation feedback on empty bank ID/directory
+- [x] Display DMX channel occupancy in fixture form (edit card)
+- [x] Template and copy-from: combobox selector + reference validator
+- [x] New button to create a new empty project
 
 
 ## Planned (v0.2)

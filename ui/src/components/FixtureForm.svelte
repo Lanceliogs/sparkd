@@ -1,18 +1,60 @@
 <script lang="ts">
-  import type { EditorFixture, BankFixture, Channel } from '../lib/api';
+  import type { EditorFixture, EditorBank, BankFixture, Channel } from '../lib/api';
   import { validateId, type IdStatus } from '../lib/validate';
+
+  export interface OccupiedRange {
+    id: string;
+    start: number;
+    end: number;
+  }
 
   interface Props {
     fixture: EditorFixture | BankFixture;
     isProject: boolean;
     existingIds?: string[];
     currentIndex?: number;
+    occupancy?: OccupiedRange[];
+    banks?: EditorBank[];
+    projectFixtures?: EditorFixture[];
     ondirty: () => void;
   }
 
-  let { fixture = $bindable(), isProject, existingIds = [], currentIndex, ondirty }: Props = $props();
+  let { fixture = $bindable(), isProject, existingIds = [], currentIndex, occupancy = [], banks = [], projectFixtures = [], ondirty }: Props = $props();
 
   let idStatus: IdStatus = $derived(validateId(fixture.id, existingIds, currentIndex));
+
+  let dmxConflicts = $derived.by(() => {
+    if (!isEditorFixture(fixture) || !fixture.start_address || fixture.channel_count <= 0) return [];
+    const myStart = fixture.start_address;
+    const myEnd = myStart + fixture.channel_count - 1;
+    return occupancy.filter(r => r.id !== fixture.id && r.start <= myEnd && r.end >= myStart);
+  });
+
+  let templateOptions = $derived.by(() => {
+    const opts: { key: string; label: string }[] = [];
+    for (const bank of banks) {
+      for (const bf of bank.fixtures) {
+        opts.push({ key: `${bank.id}:${bf.id}`, label: `${bank.id}:${bf.id} — ${bf.name || bf.id}` });
+      }
+    }
+    return opts;
+  });
+
+  let copyFromOptions = $derived.by(() => {
+    return projectFixtures
+      .filter(f => f.id !== fixture.id)
+      .map(f => ({ key: f.id, label: `${f.id} — ${f.name || f.id}` }));
+  });
+
+  let templateValid = $derived.by(() => {
+    if (!isEditorFixture(fixture) || !fixture.template) return true;
+    return templateOptions.some(o => o.key === fixture.template);
+  });
+
+  let copyFromValid = $derived.by(() => {
+    if (!isEditorFixture(fixture) || !fixture.copy_from) return true;
+    return copyFromOptions.some(o => o.key === fixture.copy_from);
+  });
 
   function isEditorFixture(f: EditorFixture | BankFixture): f is EditorFixture {
     return 'start_address' in f;
@@ -43,11 +85,31 @@
     <label for="ef-name">Name</label>
     <input id="ef-name" type="text" bind:value={fixture.name} oninput={ondirty} />
     <label for="ef-addr">Start Addr</label>
-    <input id="ef-addr" type="number" min="1" max="512" bind:value={fixture.start_address} oninput={ondirty} />
+    <input id="ef-addr" type="number" min="1" max="512" bind:value={fixture.start_address} oninput={ondirty} class:addr-conflict={dmxConflicts.length > 0} />
+    {#if dmxConflicts.length > 0}
+      <span class="grid-span"></span>
+      <span class="addr-warn">Overlaps: {dmxConflicts.map(c => c.id).join(', ')}</span>
+    {/if}
     <label for="ef-tpl">Template</label>
-    <input id="ef-tpl" type="text" placeholder="bank:fixture" bind:value={fixture.template} oninput={ondirty} />
+    <div class="ref-field">
+      <input id="ef-tpl" type="text" placeholder="bank:fixture" bind:value={fixture.template} oninput={ondirty} class:ref-warn={!templateValid} list="tpl-options" />
+      <datalist id="tpl-options">
+        {#each templateOptions as opt}
+          <option value={opt.key}>{opt.label}</option>
+        {/each}
+      </datalist>
+      {#if !templateValid}<span class="ref-hint">Not found</span>{/if}
+    </div>
     <label for="ef-copy">Copy From</label>
-    <input id="ef-copy" type="text" placeholder="fixture-id" bind:value={fixture.copy_from} oninput={ondirty} />
+    <div class="ref-field">
+      <input id="ef-copy" type="text" placeholder="fixture-id" bind:value={fixture.copy_from} oninput={ondirty} class:ref-warn={!copyFromValid} list="copy-options" />
+      <datalist id="copy-options">
+        {#each copyFromOptions as opt}
+          <option value={opt.key}>{opt.label}</option>
+        {/each}
+      </datalist>
+      {#if !copyFromValid}<span class="ref-hint">Not found</span>{/if}
+    </div>
   </div>
 
   {#if !fixture.template && !fixture.copy_from}
@@ -122,6 +184,34 @@
     outline: none;
     border-color: rgba(233, 69, 96, 0.4);
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 4px var(--accent-glow);
+  }
+
+  .addr-conflict {
+    border-color: rgba(255, 180, 0, 0.6) !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 4px rgba(255, 180, 0, 0.3) !important;
+  }
+  .grid-span { display: none; }
+  .addr-warn {
+    grid-column: 2;
+    font-size: 0.6rem;
+    color: rgb(255, 180, 0);
+    font-weight: 600;
+    margin-top: -0.2rem;
+  }
+  .ref-field {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .ref-field input { flex: 1; }
+  .ref-field input.ref-warn {
+    border-color: rgba(255, 180, 0, 0.6);
+  }
+  .ref-hint {
+    font-size: 0.6rem;
+    color: rgb(255, 180, 0);
+    font-weight: 700;
+    white-space: nowrap;
   }
 
   .channel-section { margin-top: 0.6rem; }

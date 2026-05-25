@@ -198,6 +198,11 @@ export async function editorClose(): Promise<void> {
   await assertOk(res);
 }
 
+export async function editorNew(): Promise<void> {
+  const res = await fetch(`${BASE}/api/editor/new`, { method: 'POST' });
+  await assertOk(res);
+}
+
 export async function editorSave(): Promise<void> {
   const res = await fetch(`${BASE}/api/editor/save`, { method: 'POST' });
   await assertOk(res);

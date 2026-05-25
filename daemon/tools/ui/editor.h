@@ -133,6 +133,7 @@ typedef struct {
 
 /* Lifecycle — editor_open_project returns -1 (fatal), 0 (clean), or N>0 (problems) */
 int  editor_open_project(editor_state_t *state, const char *path, editor_parse_error_t *err);
+void editor_new_project(editor_state_t *state);
 void editor_close_project(editor_state_t *state);
 int  editor_save_project(editor_state_t *state);
 int  editor_save_project_as(editor_state_t *state, const char *path);

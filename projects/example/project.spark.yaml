@@ -19,6 +19,36 @@ fixtures:
     name: Stairville PAR
     start-address: 1
     template: "stairville:par"
+  - id: test
+    name: Test
+    start-address: 10
+    template: "stairville:switch-4ch"
+  - id: test-2
+    name: Test 2
+    start-address: 15
+    channel-count: 4
+    channels:
+      - name: ch1
+        offset: 0
+      - name: ch2
+        offset: 1
+      - name: ch3
+        offset: 2
+      - name: ch4
+        offset: 3
+  - id: test-1
+    name: Test 1
+    start-address: 20
+    channel-count: 4
+    channels:
+      - name: ch1
+        offset: 0
+      - name: ch2
+        offset: 1
+      - name: ch3
+        offset: 2
+      - name: ch4
+        offset: 3
 
 scenes:
   - id: red-wash
@@ -28,13 +58,14 @@ scenes:
       channel: 1
       note: 60
       mode: gate
-    enabled: false
     values:
       par.dimmer: 255
       par.red: 255
       par.green: 0
       par.blue: 0
+      par.mode: 0
       par.white: 0
+      par.color: 0
       par.strobe: 0
   - id: color-cycle
     name: Color Cycle

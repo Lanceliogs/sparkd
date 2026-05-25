@@ -43,6 +43,14 @@ void editor_close_project(editor_state_t *state)
     memset(&state->project, 0, sizeof(state->project));
 }
 
+void editor_new_project(editor_state_t *state)
+{
+    editor_close_project(state);
+    state->project.loaded = true;
+    state->project.dirty = true;
+    spark_log_info("editor: new empty project created");
+}
+
 int editor_save_project(editor_state_t *state)
 {
     if (!state->project.loaded)

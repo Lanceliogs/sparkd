@@ -147,6 +147,12 @@ static void s_handle_close(struct mg_connection *c)
     mg_json_reply(c, 200, "{\"ok\":true}");
 }
 
+static void s_handle_new(struct mg_connection *c)
+{
+    editor_new_project(&s_editor);
+    mg_json_reply(c, 200, "{\"ok\":true}");
+}
+
 static void s_handle_save(struct mg_connection *c)
 {
     if (editor_save_project(&s_editor) != 0)
@@ -977,6 +983,12 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
         s_handle_open(c, hm);
         return true;
     }
+    if (mg_match(hm->uri, mg_str("/api/editor/new"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        s_handle_new(c);
+        return true;
+    }
     if (mg_match(hm->uri, mg_str("/api/editor/close"), NULL) &&
         mg_method_is(hm, "POST"))
     {
@@ -1028,8 +1040,8 @@ bool editor_http_handle(struct mg_connection *c, struct mg_http_message *hm)
     if (mg_match(hm->uri, mg_str("/api/editor/scenes/#"), NULL))
     {
         struct mg_str tail = hm->uri;
-        tail.buf += 20; /* skip "/api/editor/scenes/" */
-        tail.len -= 20;
+        tail.buf += 19; /* skip "/api/editor/scenes/" (19 chars) */
+        tail.len -= 19;
         int idx = (int)strtoul(tail.buf, NULL, 10);
 
         if (mg_method_is(hm, "PUT"))

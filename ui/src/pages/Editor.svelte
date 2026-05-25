@@ -7,6 +7,7 @@
   import FixtureForm from '../components/FixtureForm.svelte';
   import SceneForm from '../components/SceneForm.svelte';
   import { validateId } from '../lib/validate';
+  import { resolveChannelCount } from '../lib/fixture-resolve';
   import { showError, showWarning, showSuccess } from '../lib/toast';
   import { validateProject, type Problem } from '../lib/project-validate';
   import Modal from '../components/Modal.svelte';
@@ -14,6 +15,7 @@
   import {
     editorStatus,
     editorOpen,
+    editorNew,
     editorClose,
     editorSave,
     editorSaveAs,
@@ -106,9 +108,19 @@
   let warnFixtureIndices = $derived(new Set(fixtureProblems.map(p => p.index)));
   let warnSceneIndices = $derived(new Set(sceneProblems.map(p => p.index)));
 
+  let fixtureOccupancy = $derived(
+    fixtures
+      .filter(f => f.start_address > 0)
+      .map(f => ({ id: f.id, start: f.start_address, end: f.start_address + resolveChannelCount(f, fixtures, banks) - 1 }))
+      .filter(r => r.end >= r.start)
+  );
+
   /* ---- New bank form ---- */
   let newBankId = $state('');
   let newBankDir = $state('');
+  let newBankIdStatus: import('../lib/validate').IdStatus = $derived(
+    validateId(newBankId, banks.map(b => b.id))
+  );
 
   /* ---- File browser ---- */
   let browserMode: 'open' | 'save' | null = $state(null);
@@ -248,10 +260,30 @@
   }
 
   async function handleSave() {
+    if (!status.project_path) {
+      browserMode = 'save';
+      return;
+    }
     try {
       await editorSave();
       await refresh();
     } catch (e: any) { showError(e.message || 'Save failed'); }
+  }
+
+  async function handleNew() {
+    if (status.dirty || editDirty || hwDirty) {
+      pendingAction = doNew;
+      showDiscardModal = true;
+      return;
+    }
+    await doNew();
+  }
+
+  async function doNew() {
+    try {
+      await editorNew();
+      await refresh();
+    } catch (e: any) { showError(e.message || 'Failed to create project'); }
   }
 
   /* ---- File browser callbacks ---- */
@@ -484,10 +516,12 @@
     <div class="project-actions">
       <button class="btn-sm" onclick={handleSave}>Save</button>
       <button class="btn-sm btn-muted" onclick={() => browserMode = 'save'}>Save As</button>
+      <button class="btn-sm btn-muted" onclick={handleNew}>New</button>
       <button class="btn-sm btn-muted" onclick={handleClose}>Close</button>
     </div>
   {:else}
-    <button class="btn-sm" onclick={() => browserMode = 'open'}>Open Project</button>
+    <button class="btn-sm" onclick={() => browserMode = 'open'}>Open</button>
+    <button class="btn-sm btn-muted" onclick={handleNew}>New</button>
   {/if}
 </header>
 
@@ -516,14 +550,19 @@
         <!-- New bank form -->
         {#if bankDirs.length > 0}
           <div class="new-bank-row">
-            <input type="text" placeholder="new bank id" bind:value={newBankId} class="input-sm" />
+            <input type="text" placeholder="new bank id" bind:value={newBankId} class="input-sm"
+              class:id-invalid={newBankId.length > 0 && (newBankIdStatus === 'invalid')}
+              class:id-duplicate={newBankIdStatus === 'duplicate'} />
             <select bind:value={newBankDir} class="input-sm">
               {#each bankDirs as dir}
                 <option value={dir}>{dir}</option>
               {/each}
             </select>
-            <button class="btn-xs btn-add" onclick={handleCreateBank}>Create</button>
+            <button class="btn-xs btn-add" onclick={handleCreateBank} disabled={newBankIdStatus !== 'valid' || !newBankDir}>Create</button>
           </div>
+          {#if newBankId.length > 0 && newBankIdStatus !== 'valid'}
+            <span class="new-bank-hint" class:hint-dup={newBankIdStatus === 'duplicate'}>{newBankIdStatus === 'duplicate' ? 'ID already used' : 'Invalid ID (a-z, 0-9, hyphens)'}</span>
+          {/if}
         {/if}
 
         {#each banks as bank (bank.id)}
@@ -629,6 +668,9 @@
           <FixtureForm bind:fixture={editFixture} isProject={true}
             existingIds={fixtures.map(f => f.id)}
             currentIndex={editIsNew ? undefined : selection.index}
+            occupancy={fixtureOccupancy}
+            {banks}
+            projectFixtures={fixtures}
             ondirty={markDirty} />
 
         {:else if selection.kind === 'bank_fixture' && editBankFixture}
@@ -819,6 +861,15 @@
   }
   .new-bank-row select { flex: 1; }
   .new-bank-row input { width: 90px; }
+  .new-bank-row input.id-invalid { border-color: rgba(233, 69, 96, 0.6); }
+  .new-bank-row input.id-duplicate { border-color: rgba(255, 180, 0, 0.6); }
+  .new-bank-hint {
+    font-size: 0.6rem;
+    color: var(--red);
+    margin-top: -0.4rem;
+    margin-bottom: 0.4rem;
+  }
+  .new-bank-hint.hint-dup { color: rgb(255, 180, 0); }
 
   /* Edit card */
   .edit-card {

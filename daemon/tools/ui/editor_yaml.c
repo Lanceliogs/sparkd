@@ -1173,11 +1173,43 @@ int editor_yaml_emit_project(const char *path, const editor_project_t *project)
         need_newline = 1;
     }
 
-    /* Fallback: no raw sections at all (brand new project) */
-    if (!project->raw_buf || project->raw_section_count == 0)
+    /* Fallback: write format header if no raw section provided it */
+    if (!s_find_raw_section(project, "format"))
     {
-        if (pos == 0 && !need_newline)
-            fprintf(f, "format:\n  name: spark-project\n  version: 1\n\n");
+        /* Prepend format header by rewriting: close, reopen with prepend */
+        fclose(f);
+        f = NULL;
+
+        char *existing = NULL;
+        size_t existing_len = 0;
+        FILE *r = fopen(path, "rb");
+        if (r)
+        {
+            fseek(r, 0, SEEK_END);
+            existing_len = (size_t)ftell(r);
+            fseek(r, 0, SEEK_SET);
+            if (existing_len > 0)
+            {
+                existing = (char *)malloc(existing_len);
+                if (existing) fread(existing, 1, existing_len, r);
+            }
+            fclose(r);
+        }
+
+        f = fopen(path, "wb");
+        if (f)
+        {
+            fprintf(f, "format:\n  name: spark-project\n  version: 1\n");
+            if (existing && existing_len > 0)
+            {
+                fputc('\n', f);
+                fwrite(existing, 1, existing_len, f);
+            }
+            fclose(f);
+        }
+        free(existing);
+        free(buf);
+        return 0;
     }
 
     fclose(f);

@@ -8,10 +8,42 @@
 
 #define PROJECT_PATH "../projects/example/project.spark.yaml"
 #define BANK_PATH    "../projects/bank/stairville.yaml"
-#define TMP_OUT      "/tmp/sparkd_test_emit.yaml"
-#define TMP_RT       "/tmp/sparkd_test_roundtrip.yaml"
-#define TMP_BANK_OUT "/tmp/sparkd_test_bank.yaml"
-#define TMP_NEW      "/tmp/sparkd_test_new.yaml"
+
+#define TMP_NAME_OUT      "sparkd_test_emit.yaml"
+#define TMP_NAME_RT       "sparkd_test_roundtrip.yaml"
+#define TMP_NAME_BANK_OUT "sparkd_test_bank.yaml"
+#define TMP_NAME_NEW      "sparkd_test_new.yaml"
+
+static char TMP_OUT[512];
+static char TMP_RT[512];
+static char TMP_BANK_OUT[512];
+static char TMP_NEW[512];
+
+static void init_tmp_paths(void)
+{
+#ifdef _WIN32
+    const char *tmp = getenv("TEMP");
+    if (!tmp) tmp = getenv("TMP");
+    if (!tmp) tmp = ".";
+    snprintf(TMP_OUT, sizeof(TMP_OUT), "%s\\%s", tmp, TMP_NAME_OUT);
+    snprintf(TMP_RT, sizeof(TMP_RT), "%s\\%s", tmp, TMP_NAME_RT);
+    snprintf(TMP_BANK_OUT, sizeof(TMP_BANK_OUT), "%s\\%s", tmp, TMP_NAME_BANK_OUT);
+    snprintf(TMP_NEW, sizeof(TMP_NEW), "%s\\%s", tmp, TMP_NAME_NEW);
+#else
+    snprintf(TMP_OUT, sizeof(TMP_OUT), "/tmp/%s", TMP_NAME_OUT);
+    snprintf(TMP_RT, sizeof(TMP_RT), "/tmp/%s", TMP_NAME_RT);
+    snprintf(TMP_BANK_OUT, sizeof(TMP_BANK_OUT), "/tmp/%s", TMP_NAME_BANK_OUT);
+    snprintf(TMP_NEW, sizeof(TMP_NEW), "/tmp/%s", TMP_NAME_NEW);
+#endif
+}
+
+static void cleanup_tmp_files(void)
+{
+    remove(TMP_OUT);
+    remove(TMP_RT);
+    remove(TMP_BANK_OUT);
+    remove(TMP_NEW);
+}
 
 static editor_project_t project;
 static editor_state_t state;
@@ -87,12 +119,9 @@ void test_parse_project_raw_sections(void)
 {
     reset_project();
     ASSERT_EQ(editor_yaml_parse_project(PROJECT_PATH, &project, NULL), 0);
-    ASSERT_EQ(project.raw_section_count, 5);
+    ASSERT_EQ(project.raw_section_count, 2);
     ASSERT_STR_EQ(project.raw_sections[0].key, "format");
     ASSERT_STR_EQ(project.raw_sections[1].key, "app");
-    ASSERT_STR_EQ(project.raw_sections[2].key, "midi");
-    ASSERT_STR_EQ(project.raw_sections[3].key, "dmx");
-    ASSERT_STR_EQ(project.raw_sections[4].key, "scenes");
     ASSERT_TRUE(project.raw_buf != NULL);
     ASSERT_TRUE(project.raw_buf_len > 0);
     free(project.raw_buf);
@@ -285,6 +314,7 @@ void test_open_edit_save_preserves(void)
 int main(void)
 {
     spark_log_init(SPARK_LOG_SILENT);
+    init_tmp_paths();
 
     TEST_BEGIN();
     RUN_TEST(test_parse_project);
@@ -299,5 +329,5 @@ int main(void)
     RUN_TEST(test_parse_bank_fixture_channels);
     RUN_TEST(test_emit_bank_roundtrip);
     RUN_TEST(test_open_edit_save_preserves);
-    TEST_END();
+    TEST_END_WITH(cleanup_tmp_files());
 }

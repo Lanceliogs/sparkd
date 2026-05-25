@@ -43,9 +43,18 @@
 - [ ] Validation feedback on empty bank ID/directory
 - [ ] Display DMX channel occupancy in fixture form (edit card)
 - [ ] Template and copy-from: combobox selector + reference validator
+- [ ] New button to create a new empty project
 
 
 ## Planned (v0.2)
+
+### Basic REAPER integration
+- [ ] Generate mappings from scenes names and triggers using a `spark-reaper --project [PATH]` utility tool
+- [ ] Maybe allow a user to download the mapping for a project from the Editor page too. We could create
+      a tiny reaper module in tools/reaper
+- [ ] See what would be the cost of creating a VST like PAD communicating
+      with sparkd directly for a direct engine control from REAPER.
+      Being able to START/STOP and monitor the engine from REAPER would be sick.
 
 ### Auth Token ([spec](specs/auth-token.md))
 - [ ] Two tokens at startup: admin (full) + live (show control only)
@@ -56,14 +65,6 @@
 - [ ] Frontend hides Editor tab for live-level tokens
 - [ ] QR code modal: "Share Live Control" vs "Share Full Access"
 - [ ] Token rotation endpoint (`POST /api/auth/rotate`, admin only)
-
-### Basic REAPER integration
-- [ ] Generate mappings from scenes names and triggers using a `spark-reaper --project [PATH]` utility tool
-- [ ] Maybe allow a user to download the mapping for a project from the Editor page too. We could create
-      a tiny reaper module in tools/reaper
-- [ ] See what would be the cost of creating a VST like PAD communicating
-      with sparkd directly for a direct engine control from REAPER.
-      Being able to START/STOP and monitor the engine from REAPER would be sick.
 
 ## Planned (post v0.2)
 
@@ -84,5 +85,5 @@
 - [ ] Packaging (at minimum a zip/tar of binaries + ui/dist)
 - [ ] Cross-version sync check (consts.h version == package.json version)
 
-### Open Questions
+## Open Questions
 - [x] The routes can activate disabled scenes. Should we keep it that way? Yes for now.

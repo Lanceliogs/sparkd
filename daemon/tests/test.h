@@ -17,6 +17,14 @@ static int test_failures;
         return test_failures > 0 ? 1 : 0; \
     } while (0)
 
+#define TEST_END_WITH(cleanup) \
+    do { \
+        printf("\n%d/%d tests passed\n", \
+               test_count - test_failures, test_count); \
+        cleanup; \
+        return test_failures > 0 ? 1 : 0; \
+    } while (0)
+
 #define RUN_TEST(fn) \
     do { \
         int _before = test_failures; \

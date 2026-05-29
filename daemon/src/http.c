@@ -218,10 +218,11 @@ static void s_handle_project_reload(struct mg_connection *c, struct mg_http_mess
     }
 
     int rc = spark_engine_load_project(load_path);
-    free(path);
+    
 
     if (rc != 0)
     {
+        free(path);
         mg_http_reply(c, 422, s_json_content_type,
             "{%m:%m,%m:%m}\n",
             MG_ESC("error"), MG_ESC("load_failed"),
@@ -232,6 +233,12 @@ static void s_handle_project_reload(struct mg_connection *c, struct mg_http_mess
     mg_http_reply(c, 200, s_json_content_type,
         "{%m:%m}\n",
         MG_ESC("status"), MG_ESC("reloaded"));
+
+    char buf[1200];
+    int len = snprintf(buf, sizeof(buf),
+        "{\"type\":\"project_loaded\",\"path\":\"%s\"}", load_path);
+    s_ws_broadcast(buf, len);
+    free(path);
 }
 
 static void s_handle_fixture_bank_reload(struct mg_connection *c)

@@ -64,12 +64,12 @@ EDITOR_TEST_BINS := $(EDITOR_TEST_SRCS:tests/%.c=$(BUILDDIR)/tests/%$(EXE))
 LIB_SRCS := $(filter-out src/main.c, $(SRCS))
 LIB_OBJS := $(LIB_SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
-# Tools (linked against daemon libs)
-TOOL_SRCS := $(filter-out tools/sparkctl.c tools/midi_list.c tools/midi_monitor.c tools/spark_midi.c tools/spark_serial.c, $(wildcard tools/*.c))
-TOOL_BINS := $(TOOL_SRCS:tools/%.c=$(BUILDDIR)/tools/%$(EXE))
-
-# Standalone tools (no daemon deps)
-STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) $(BUILDDIR)/tools/spark-midi$(EXE) $(BUILDDIR)/tools/spark-serial$(EXE) $(BUILDDIR)/tools/spark-ui$(EXE) $(BUILDDIR)/tools/spark-reaper$(EXE)
+# All tool binaries (each has its own build rule below)
+ALL_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) \
+             $(BUILDDIR)/tools/spark-midi$(EXE) \
+             $(BUILDDIR)/tools/spark-serial$(EXE) \
+             $(BUILDDIR)/tools/spark-ui$(EXE) \
+             $(BUILDDIR)/tools/spark-reaper$(EXE)
 
 # Editor UI objects
 UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c tools/ui/editor_places.c
@@ -82,7 +82,7 @@ ENV_OBJS := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o
 
 all: $(TARGET)
 
-tools: $(TOOL_BINS) $(STANDALONE_TOOLS)
+tools: $(ALL_TOOLS)
 
 $(TARGET): $(OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
@@ -124,10 +124,6 @@ $(BUILDDIR)/tests/test_editor$(EXE): tests/test_editor.c $(EDITOR_OBJS) $(ENV_OB
 $(BUILDDIR)/tests/test_editor_yaml$(EXE): tests/test_editor_yaml.c $(EDITOR_OBJS) $(ENV_OBJS) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Itools/ui -Itests -o $@ $< $(EDITOR_OBJS) $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
-
-$(BUILDDIR)/tools/%$(EXE): tools/%.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
 $(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ) $(ENV_OBJS)
 	@mkdir -p $(dir $@)

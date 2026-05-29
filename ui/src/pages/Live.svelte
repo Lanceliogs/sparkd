@@ -73,6 +73,10 @@
         case 'scene_off':
           activeScenes = new Set([...activeScenes].filter(id => id !== msg.id));
           break;
+        case 'project_loaded':
+          engine = { ...engine, project: msg.path };
+          loadScenes();
+          break;
       }
     };
 

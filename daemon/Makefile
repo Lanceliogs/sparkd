@@ -13,7 +13,7 @@ YAMLDIR     := ../vendor/libyaml
 # Platform detection
 ifeq ($(OS),Windows_NT)
   EXE      := .exe
-  LDFLAGS  += -lws2_32 -lwinmm -lsetupapi
+  LDFLAGS  += -static -lws2_32 -lwinmm -lsetupapi
   PM_CFLAGS := -DWIN32
   PM_SRCS  := $(PORTMIDIDIR)/portmidi.c $(PORTMIDIDIR)/pmutil.c \
               $(PORTMIDIDIR)/pmwin.c $(PORTMIDIDIR)/pmwinmm.c \

@@ -1,50 +1,4 @@
-# sparkd v0.1.0 — TODO
-
-## In Progress
-
-### DMX Auto-Detection
-- [x] Split `serial.c` into `serial_posix.c`, `serial_win32.c`, `serial_common.c`
-- [x] VID/PID bank of known DMX USB devices (Enttec, Eurolite, FTDI generic)
-- [x] `spark_serial_enumerate()` — platform-specific USB-serial enumeration
-- [x] `spark_serial_find_dmx()` — auto-resolve device by manufacturer tag
-- [x] Engine integration: `dmx.device: auto` / `auto:enttec` config values
-- [x] Reconnect affinity by serial number
-- [x] Unit tests
-
-### Project file rules
-- [x] Fixtures and scenes id should be case insensitive
-- [x] No spaces too, only [a-z0-9-] chars. No dots obviously as it's our id.channel delimiter.
-- [x] This should be enforced in the editor and the CRUD should report an error (see next section).
-- [x] Strict YAML parsing: unknown keys rejected with line/column error (editor + engine)
-- [x] Parse error details surfaced to the UI (toast + detail modal)
-
-### UI Error Feedback
-- [x] Toast/notification system for failed API calls (start, stop, save, delete)
-- [x] Loading spinners during async operations (project refresh)
-- [x] Loading state during file browser navigation
-
-### Safety Guards
-- [x] Confirmation modal before destructive deletes (fixtures, scenes)
-- [x] `beforeunload` browser guard for unsaved editor changes
-- [x] Hardware dirty state included in project dirty guard
-
-### Live Page
-- [x] Mark disabled scenes on pad grid, but keep them usable from the UI
-- [x] WebSocket JSON.parse error handling
-- [x] User feedback on failed engine operations (start/stop/blackout)
-- [x] Scene reload on WebSocket reconnect
-- [x] Display resolved DMX device name next to connection state
-- [x] Display full MIDI port name (not just pattern) — e.g. "Launchpad Mini (pattern)"
-
-### Editor
-- [x] Error toasts for failed save/delete/open/create operations
-- [x] Mark disabled scenes here too
-- [x] Loading state during refresh
-- [x] Validation feedback on empty bank ID/directory
-- [x] Display DMX channel occupancy in fixture form (edit card)
-- [x] Template and copy-from: combobox selector + reference validator
-- [x] New button to create a new empty project
-
+# sparkd — TODO
 
 ## Planned (v0.2)
 
@@ -73,10 +27,9 @@
 
 ### Projects
 - [ ] Make a decision regarding folder based projects
-- [ ] Project file recovery strategies could be great (bad indents for example, or bad references). 
+- [ ] Project file recovery strategies could be great (bad indents for example, or bad references)
 
 ### DMX Pro Backend
-- [x] Enttec DMX USB Pro protocol (widget API over serial)
 - [ ] Auto-detect Pro vs Open based on device response (requires hardware testing)
 
 ### Infrastructure
@@ -84,6 +37,3 @@
 - [ ] Git tag + CHANGELOG for releases
 - [ ] Packaging (at minimum a zip/tar of binaries + ui/dist)
 - [ ] Cross-version sync check (consts.h version == package.json version)
-
-## Open Questions
-- [x] The routes can activate disabled scenes. Should we keep it that way? Yes for now.

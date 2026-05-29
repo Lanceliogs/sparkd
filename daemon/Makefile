@@ -69,7 +69,7 @@ TOOL_SRCS := $(filter-out tools/sparkctl.c tools/midi_list.c tools/midi_monitor.
 TOOL_BINS := $(TOOL_SRCS:tools/%.c=$(BUILDDIR)/tools/%$(EXE))
 
 # Standalone tools (no daemon deps)
-STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) $(BUILDDIR)/tools/spark-midi$(EXE) $(BUILDDIR)/tools/spark-serial$(EXE) $(BUILDDIR)/tools/spark-ui$(EXE)
+STANDALONE_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) $(BUILDDIR)/tools/spark-midi$(EXE) $(BUILDDIR)/tools/spark-serial$(EXE) $(BUILDDIR)/tools/spark-ui$(EXE) $(BUILDDIR)/tools/spark-reaper$(EXE)
 
 # Editor UI objects
 UI_SRCS := tools/ui/spark_ui.c tools/ui/editor_http.c tools/ui/editor.c tools/ui/editor_yaml.c tools/ui/editor_places.c
@@ -142,6 +142,10 @@ SERIAL_OBJS := $(BUILDDIR)/daemon/serial/serial_common.o $(SERIAL_SRCS:src/%.c=$
 $(BUILDDIR)/tools/spark-serial$(EXE): tools/spark_serial.c $(SERIAL_OBJS) $(BUILDDIR)/daemon/log.o
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(SERIAL_OBJS) $(BUILDDIR)/daemon/log.o $(LDFLAGS)
+
+$(BUILDDIR)/tools/spark-reaper$(EXE): tools/spark_reaper.c $(ENV_OBJS) $(YAML_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $< $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
 
 $(BUILDDIR)/tools/ui/%.o: tools/ui/%.c
 	@mkdir -p $(dir $@)

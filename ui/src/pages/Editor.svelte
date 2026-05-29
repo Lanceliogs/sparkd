@@ -520,8 +520,11 @@
       <button class="btn-sm btn-muted" onclick={handleClose}>Close</button>
     </div>
   {:else}
-    <button class="btn-sm" onclick={() => browserMode = 'open'}>Open</button>
-    <button class="btn-sm btn-muted" onclick={handleNew}>New</button>
+    <span class="project-path">No project loaded - Open or create a new project...</span>
+    <div class="project-actions">
+      <button class="btn-sm" onclick={() => browserMode = 'open'}>Open</button>
+      <button class="btn-sm btn-muted" onclick={handleNew}>New</button>
+    </div>
   {/if}
 </header>
 

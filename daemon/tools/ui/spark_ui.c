@@ -10,13 +10,91 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <libgen.h>
+#endif
+
 #define DEFAULT_HTTP_ADDR "127.0.0.1:7601"
 #define DEFAULT_DAEMON_ADDR "127.0.0.1:7600"
-#define DEFAULT_UI_ROOT "ui/dist"
 
 static volatile bool s_running = true;
 static char s_daemon_addr[256] = DEFAULT_DAEMON_ADDR;
-static char s_ui_root[1024] = DEFAULT_UI_ROOT;
+static char s_ui_root[1024] = {0};
+
+/* Get directory containing the running executable */
+static int s_get_exe_dir(char *buf, size_t buf_size)
+{
+#ifdef _WIN32
+    char path[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH) return -1;
+    /* Strip filename, keep directory */
+    char *sep = strrchr(path, '\\');
+    if (!sep) sep = strrchr(path, '/');
+    if (sep) *sep = '\0';
+    snprintf(buf, buf_size, "%s", path);
+#else
+    char path[1024];
+    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len <= 0) return -1;
+    path[len] = '\0';
+    snprintf(buf, buf_size, "%s", dirname(path));
+#endif
+    return 0;
+}
+
+/* Check if a directory contains index.html (valid UI root) */
+static int s_is_ui_root(const char *dir)
+{
+    char path[1100];
+    snprintf(path, sizeof(path), "%s/index.html", dir);
+    FILE *f = fopen(path, "r");
+    if (f) { fclose(f); return 1; }
+    return 0;
+}
+
+/*
+ * Resolve UI root path. Priority:
+ *   1. --ui-root (already set in s_ui_root before calling this)
+ *   2. SPARK_UI_ROOT env var
+ *   3. <exe-dir>/ui/
+ *   4. <exe-dir>/../share/sparkd/ui/
+ *   5. ui/dist (CWD fallback for development)
+ */
+static int s_resolve_ui_root(void)
+{
+    /* Already set by --ui-root */
+    if (s_ui_root[0] != '\0' && s_is_ui_root(s_ui_root))
+        return 0;
+
+    /* Env var */
+    const char *env = spark_env_get("SPARK_UI_ROOT");
+    if (env && env[0] != '\0')
+    {
+        snprintf(s_ui_root, sizeof(s_ui_root), "%s", env);
+        if (s_is_ui_root(s_ui_root)) return 0;
+    }
+
+    /* Relative to executable */
+    char exe_dir[1024];
+    if (s_get_exe_dir(exe_dir, sizeof(exe_dir)) == 0)
+    {
+        snprintf(s_ui_root, sizeof(s_ui_root), "%s/ui", exe_dir);
+        if (s_is_ui_root(s_ui_root)) return 0;
+
+        snprintf(s_ui_root, sizeof(s_ui_root), "%s/../share/sparkd/ui", exe_dir);
+        if (s_is_ui_root(s_ui_root)) return 0;
+    }
+
+    /* CWD fallback (development) */
+    snprintf(s_ui_root, sizeof(s_ui_root), "ui/dist");
+    if (s_is_ui_root(s_ui_root)) return 0;
+
+    return -1;
+}
 
 static void s_signal_handler(int sig)
 {
@@ -264,9 +342,14 @@ static void usage(void)
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  --http ADDR      Listen address (default: %s)\n", DEFAULT_HTTP_ADDR);
     fprintf(stderr, "  --daemon ADDR    sparkd address (default: %s)\n", DEFAULT_DAEMON_ADDR);
-    fprintf(stderr, "  --ui-root PATH   Built UI directory (default: %s)\n", DEFAULT_UI_ROOT);
+    fprintf(stderr, "  --ui-root PATH   Override UI assets directory (auto-detected)\n");
     fprintf(stderr, "  --open-browser   Open browser on startup\n");
     fprintf(stderr, "  --help           Show this help\n");
+    fprintf(stderr, "\nUI root auto-detection order:\n");
+    fprintf(stderr, "  1. --ui-root / SPARK_UI_ROOT env\n");
+    fprintf(stderr, "  2. <exe-dir>/ui/\n");
+    fprintf(stderr, "  3. <exe-dir>/../share/sparkd/ui/\n");
+    fprintf(stderr, "  4. ./ui/dist (development fallback)\n");
 }
 
 static void s_open_browser(const char *addr)
@@ -320,6 +403,14 @@ int main(int argc, char **argv)
             fprintf(stderr, "spark-ui: unknown option '%s'\n", argv[i]);
             return 1;
         }
+    }
+
+    if (s_resolve_ui_root() != 0)
+    {
+        fprintf(stderr, "spark-ui: cannot find UI assets (index.html)\n");
+        fprintf(stderr, "  Searched: <exe>/ui/, <exe>/../share/sparkd/ui/, ./ui/dist\n");
+        fprintf(stderr, "  Use --ui-root PATH or set SPARK_UI_ROOT\n");
+        return 1;
     }
 
     editor_http_init(spark_env_get("SPARK_FIXTURE_BANK_PATH"));

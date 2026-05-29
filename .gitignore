@@ -5,6 +5,10 @@ build/
 *.a
 *.exe
 
+# Packaging output
+# Windows
+sparkd-v*-win64.zip
+
 # Editor / IDE
 .cache/
 .vscode/

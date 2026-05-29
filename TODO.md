@@ -32,8 +32,9 @@
 ### DMX Pro Backend
 - [ ] Auto-detect Pro vs Open based on device response (requires hardware testing)
 
-### Infrastructure
-- [ ] CI pipeline (GitHub Actions: build + test on Linux/Windows)
-- [ ] Git tag + CHANGELOG for releases
-- [ ] Packaging (at minimum a zip/tar of binaries + ui/dist)
+### Infrastructure ([spec](specs/ci-release.md))
+- [ ] `make install` target with PREFIX=/opt/sparkd
+- [ ] `scripts/package.sh` — local packaging (tar.gz for Linux, zip for Windows)
+- [ ] `.github/workflows/ci.yml` — build + test on push, release on tag
+- [ ] Cross-compile Windows from Linux with mingw-w64
 - [ ] Cross-version sync check (consts.h version == package.json version)

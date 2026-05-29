@@ -121,8 +121,12 @@ static void s_print_status(const char *body)
     mg_json_get_bool(b, "$.running", &running);
     mg_json_get_bool(b, "$.blackout", &blackout);
 
+    char *project = mg_json_get_str(b, "$.project");
+
     printf("running:  %s\n", running ? "yes" : "no");
     printf("blackout: %s\n", blackout ? "yes" : "no");
+    printf("project:  %s\n", project ? project : "");
+    free(project);
 }
 
 int main(int argc, char **argv)

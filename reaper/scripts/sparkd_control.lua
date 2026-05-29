@@ -21,7 +21,7 @@ end
 -- Config
 local SCRIPT_NAME = "sparkd Control"
 local EXT_SECTION = "sparkd_reaper"
-local POLL_INTERVAL = 2.0
+local POLL_INTERVAL = 0.250
 local EXEC_TIMEOUT = 5000
 
 -- Colors (RGBA hex)
@@ -114,6 +114,12 @@ local function poll_status()
   state.daemon_reachable = true
   state.engine_running = output:match("running:%s*yes") ~= nil
   state.engine_blackout = output:match("blackout:%s*yes") ~= nil
+  
+  local ppath = output:match("project:%s*(.-)%s*$")
+  if ppath and ppath ~= "" and ppath ~= state.project_path then
+    state.project_path = ppath
+    save_ext_state()
+  end
 end
 
 local function force_poll()
@@ -174,11 +180,26 @@ local function draw_project_section()
   end
 
   reaper.ImGui_SameLine(ctx)
-  if reaper.ImGui_SmallButton(ctx, "Browse...") then
-    local rv, file = reaper.GetUserFileNameForRead("", "Select sparkd project", "*.yaml")
+  if reaper.ImGui_Button(ctx, " Load project... ") then
+    local init_dir = ""
+    if state.project_path ~= "" then
+      init_dir = state.project_path:match("^(.*)[/\\]") or ""
+    end
+    if init_dir == "" then
+      init_dir = os.getenv("HOME") or os.getenv("USERPROFILE") or ""
+    end
+    local init_path = init_dir ~= "" and (init_dir .. "/") or ""
+    local rv, file = reaper.GetUserFileNameForRead(init_path, "Select sparkd project", "yaml")
     if rv then
       state.project_path = file
       save_ext_state()
+      -- Stop engine first if running, then load the new project
+      if state.engine_running then
+        sparkctl("stop")
+      end
+      local _, err = sparkctl(string.format('reload "%s"', state.project_path:gsub("\\", "/")))
+      set_error(err)
+      force_poll()
     end
   end
 
@@ -224,7 +245,7 @@ local function draw_engine_controls()
     if state.project_path == "" then
       set_error("No project file selected")
     else
-      local _, err = sparkctl(string.format('reload "%s"', state.project_path))
+      local _, err = sparkctl('reload')
       set_error(err)
       force_poll()
     end
@@ -345,7 +366,7 @@ local function draw_footer()
   reaper.ImGui_SameLine(ctx, reaper.ImGui_GetContentRegionAvail(ctx) - 50)
   reaper.ImGui_PopStyleColor(ctx)
 
-  if reaper.ImGui_SmallButton(ctx, state.show_settings and "Close" or "Config") then
+  if reaper.ImGui_SmallButton(ctx, state.show_settings and "Close" or "Settings") then
     state.show_settings = not state.show_settings
   end
 

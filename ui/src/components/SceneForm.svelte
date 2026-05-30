@@ -2,6 +2,7 @@
   import type { EditorScene, EditorFixture, EditorBank, Channel } from '../lib/api';
   import { validateId, type IdStatus } from '../lib/validate';
   import { resolveFixtureChannels } from '../lib/fixture-resolve';
+  import DmxValueInput from './DmxValueInput.svelte';
 
   interface Props {
     scene: EditorScene;
@@ -192,7 +193,7 @@
                 </div>
               {/if}
             </div>
-            <input type="number" min="0" max="255" bind:value={val.value} oninput={ondirty} class="ch-offset" />
+            <DmxValueInput bind:value={val.value} onchange={ondirty} />
             <button class="btn-xs btn-danger" onclick={() => removeValue(i)}>x</button>
           </div>
         {/each}
@@ -245,7 +246,7 @@
                 </div>
               {/if}
             </div>
-            <input type="number" min="0" max="255" bind:value={val.value} oninput={ondirty} class="ch-offset" />
+            <DmxValueInput bind:value={val.value} onchange={ondirty} />
             <button class="btn-xs btn-danger" onclick={() => removeStepValue(si, vi)}>x</button>
           </div>
         {/each}

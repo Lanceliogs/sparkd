@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EditorFixture, EditorBank, BankFixture, Channel } from '../lib/api';
   import { validateId, type IdStatus } from '../lib/validate';
+  import { resolveFixtureChannels } from '../lib/fixture-resolve';
 
   export interface OccupiedRange {
     id: string;
@@ -56,6 +57,46 @@
     return copyFromOptions.some(o => o.key === fixture.copy_from);
   });
 
+  type ChannelMode = 'template' | 'copy_from' | 'manual';
+
+  function modeFromFixture(): ChannelMode {
+    if (isProject && 'start_address' in fixture) {
+      if (fixture.template) return 'template';
+      if (fixture.copy_from) return 'copy_from';
+    }
+    return 'manual';
+  }
+  let channelMode: ChannelMode = $state(modeFromFixture());
+
+  $effect(() => {
+    void currentIndex;
+    if (isEditorFixture(fixture)) {
+      void fixture.template;
+      void fixture.copy_from;
+    }
+    channelMode = modeFromFixture();
+  });
+
+  let resolvedChannels = $derived.by(() => {
+    if (!isEditorFixture(fixture)) return [];
+    if (channelMode === 'template' && fixture.template) {
+      const [bankId, tplId] = fixture.template.split(':', 2);
+      const bank = banks.find(b => b.id === bankId);
+      const tpl = bank?.fixtures.find(f => f.id === tplId);
+      return tpl?.channels ?? [];
+    }
+    if (channelMode === 'copy_from' && fixture.copy_from) {
+      const src = projectFixtures.find(f => f.id === fixture.copy_from);
+      if (src) return resolveFixtureChannels(src, projectFixtures, banks);
+    }
+    return [];
+  });
+
+  let effectiveCount = $derived.by(() => {
+    if (channelMode === 'manual') return fixture.channel_count;
+    return resolvedChannels.length;
+  });
+
   function isEditorFixture(f: EditorFixture | BankFixture): f is EditorFixture {
     return 'start_address' in f;
   }
@@ -90,29 +131,73 @@
       <span class="grid-span"></span>
       <span class="addr-warn">Overlaps: {dmxConflicts.map(c => c.id).join(', ')}</span>
     {/if}
-    <label for="ef-tpl">Template</label>
-    <div class="ref-field">
-      <input id="ef-tpl" type="text" placeholder="bank:fixture" bind:value={fixture.template} oninput={ondirty} class:ref-warn={!templateValid} list="tpl-options" />
-      <datalist id="tpl-options">
-        {#each templateOptions as opt}
-          <option value={opt.key}>{opt.label}</option>
-        {/each}
-      </datalist>
-      {#if !templateValid}<span class="ref-hint">Not found</span>{/if}
-    </div>
-    <label for="ef-copy">Copy From</label>
-    <div class="ref-field">
-      <input id="ef-copy" type="text" placeholder="fixture-id" bind:value={fixture.copy_from} oninput={ondirty} class:ref-warn={!copyFromValid} list="copy-options" />
-      <datalist id="copy-options">
-        {#each copyFromOptions as opt}
-          <option value={opt.key}>{opt.label}</option>
-        {/each}
-      </datalist>
-      {#if !copyFromValid}<span class="ref-hint">Not found</span>{/if}
+    <span class="grid-label">Source</span>
+    <div class="segment-bar">
+      <button class:active={channelMode === 'template'} onclick={() => { channelMode = 'template'; ondirty(); }}>Template</button>
+      <button class:active={channelMode === 'copy_from'} onclick={() => { channelMode = 'copy_from'; ondirty(); }}>Copy From</button>
+      <button class:active={channelMode === 'manual'} onclick={() => { channelMode = 'manual'; ondirty(); }}>Manual</button>
     </div>
   </div>
 
-  {#if !fixture.template && !fixture.copy_from}
+  {#if channelMode === 'template'}
+    <div class="ref-section">
+      <div class="ref-field">
+        <input type="text" placeholder="bank:fixture" bind:value={fixture.template} oninput={ondirty} class:ref-warn={!templateValid} list="tpl-options" />
+        <datalist id="tpl-options">
+          {#each templateOptions as opt}
+            <option value={opt.key}>{opt.label}</option>
+          {/each}
+        </datalist>
+        {#if !templateValid}<span class="ref-hint">Not found</span>{/if}
+      </div>
+      {#if resolvedChannels.length > 0}
+        <div class="channel-section dimmed">
+          <div class="ch-header">
+            <span>Channels ({resolvedChannels.length})</span>
+          </div>
+          {#each resolvedChannels as ch}
+            <div class="channel-row">
+              <input type="text" value={ch.name} class="ch-name" disabled />
+              <input type="number" value={ch.offset} class="ch-offset" disabled />
+            </div>
+          {/each}
+        </div>
+      {:else if fixture.template}
+        <div class="channel-section dimmed">
+          <div class="ch-header"><span>Source not found</span></div>
+        </div>
+      {/if}
+    </div>
+  {:else if channelMode === 'copy_from'}
+    <div class="ref-section">
+      <div class="ref-field">
+        <input type="text" placeholder="fixture-id" bind:value={fixture.copy_from} oninput={ondirty} class:ref-warn={!copyFromValid} list="copy-options" />
+        <datalist id="copy-options">
+          {#each copyFromOptions as opt}
+            <option value={opt.key}>{opt.label}</option>
+          {/each}
+        </datalist>
+        {#if !copyFromValid}<span class="ref-hint">Not found</span>{/if}
+      </div>
+      {#if resolvedChannels.length > 0}
+        <div class="channel-section dimmed">
+          <div class="ch-header">
+            <span>Channels ({resolvedChannels.length})</span>
+          </div>
+          {#each resolvedChannels as ch}
+            <div class="channel-row">
+              <input type="text" value={ch.name} class="ch-name" disabled />
+              <input type="number" value={ch.offset} class="ch-offset" disabled />
+            </div>
+          {/each}
+        </div>
+      {:else if fixture.copy_from}
+        <div class="channel-section dimmed">
+          <div class="ch-header"><span>Source not found</span></div>
+        </div>
+      {/if}
+    </div>
+  {:else}
     <div class="channel-section">
       <div class="ch-header">
         <span>Channels ({fixture.channel_count})</span>
@@ -125,6 +210,12 @@
           <button class="btn-xs btn-danger" onclick={() => removeChannel(i)}>x</button>
         </div>
       {/each}
+    </div>
+  {/if}
+
+  {#if isEditorFixture(fixture) && fixture.start_address && effectiveCount > 0}
+    <div class="occupancy-summary">
+      DMX {fixture.start_address} – {fixture.start_address + effectiveCount - 1} ({effectiveCount} ch)
     </div>
   {/if}
 
@@ -215,6 +306,12 @@
   }
 
   .channel-section { margin-top: 0.6rem; }
+  .channel-section.dimmed {
+    opacity: 0.5;
+  }
+  .channel-section.dimmed input {
+    cursor: not-allowed;
+  }
   .ch-header {
     display: flex;
     align-items: center;
@@ -282,4 +379,62 @@
   .id-status.valid { color: var(--green); }
   .id-status.invalid { color: var(--red); }
   .id-status.duplicate { color: rgb(255, 180, 0); }
+
+  .grid-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .segment-bar {
+    display: flex;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .segment-bar button {
+    flex: 1;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border: none;
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .segment-bar button:hover {
+    background: var(--bg-pad);
+  }
+  .segment-bar button.active {
+    background: var(--accent);
+    color: white;
+  }
+
+  .ref-section {
+    margin-top: 0.4rem;
+  }
+
+  .channel-section.dimmed {
+    opacity: 0.5;
+  }
+  .channel-section.dimmed input {
+    cursor: not-allowed;
+  }
+
+  .occupancy-summary {
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+  }
 </style>

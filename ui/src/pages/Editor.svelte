@@ -398,8 +398,10 @@
         await editorUpdateFixture(selection.index, data);
       }
       editDirty = false;
+      const wasNew = editIsNew;
       editIsNew = false;
       await refresh();
+      if (wasNew) selection = { kind: 'project_fixture', index: fixtures.length - 1 };
     } catch (e: any) { showError(e.message || 'Save failed'); }
   }
 
@@ -414,8 +416,13 @@
         await editorBankUpdateFixture(selection.bankIdx, selection.index, data);
       }
       editDirty = false;
+      const wasNew = editIsNew;
       editIsNew = false;
       await refresh();
+      if (wasNew) {
+        const bank = banks[selection.bankIdx];
+        selection = { kind: 'bank_fixture', bankIdx: selection.bankIdx, index: bank ? bank.fixtures.length - 1 : 0 };
+      }
     } catch (e: any) { showError(e.message || 'Save failed'); }
   }
 
@@ -454,8 +461,10 @@
         await editorUpdateScene(selection.index, data);
       }
       editDirty = false;
+      const wasNew = editIsNew;
       editIsNew = false;
       await refresh();
+      if (wasNew) selection = { kind: 'scene', index: scenes.length - 1 };
     } catch (e: any) { showError(e.message || 'Save failed'); }
   }
 

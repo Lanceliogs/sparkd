@@ -20,18 +20,33 @@
 </script>
 
 <div class="hw-form">
+  <h3 class="section-title">MIDI</h3>
+  <p class="help-text">
+    Device name is pattern-based: sparkd matches any MIDI input port whose name contains this string (case-insensitive). Leave empty to disable MIDI input.
+  </p>
   <div class="form-grid">
-    <label for="hw-midi-dev">MIDI Device</label>
-    <input id="hw-midi-dev" type="text" bind:value={config.midi_device} oninput={markDirty} />
-    <label for="hw-midi-mode">MIDI Mode</label>
+    <label for="hw-midi-dev">Device</label>
+    <input id="hw-midi-dev" type="text" placeholder="e.g. loopMIDI, UM-ONE" bind:value={config.midi_device} oninput={markDirty} />
+    <label for="hw-midi-mode">Mode</label>
     <select id="hw-midi-mode" bind:value={config.midi_mode} onchange={markDirty}>
       <option value="">none</option>
       <option value="open-existing">open-existing</option>
       <option value="create-virtual">create-virtual</option>
     </select>
-    <label for="hw-dmx-dev">DMX Device</label>
-    <input id="hw-dmx-dev" type="text" bind:value={config.dmx_device} oninput={markDirty} />
-    <label for="hw-dmx-backend">DMX Backend</label>
+  </div>
+  <p class="help-text help-detail">
+    <strong>open-existing</strong> — connect to a physical or virtual MIDI port already present on the system.<br/>
+    <strong>create-virtual</strong> — create a new virtual MIDI port (macOS/Linux only, useful for routing from a DAW).
+  </p>
+
+  <h3 class="section-title">DMX</h3>
+  <p class="help-text">
+    Device is the serial port for your DMX interface. On Windows this is a COM port (e.g. COM3), on Linux a /dev/tty path. Leave empty to use the dummy backend (no output).
+  </p>
+  <div class="form-grid">
+    <label for="hw-dmx-dev">Device</label>
+    <input id="hw-dmx-dev" type="text" placeholder="e.g. COM3, /dev/ttyUSB0" bind:value={config.dmx_device} oninput={markDirty} />
+    <label for="hw-dmx-backend">Backend</label>
     <select id="hw-dmx-backend" bind:value={config.dmx_backend} onchange={markDirty}>
       <option value="">none</option>
       <option value="open">open</option>
@@ -39,8 +54,16 @@
       <option value="dummy">dummy</option>
     </select>
     <label for="hw-refresh">Refresh Hz</label>
-    <input id="hw-refresh" type="number" min="1" max="44" bind:value={config.dmx_refresh_hz} oninput={markDirty} />
+    <input id="hw-refresh" type="number" min="1" max="44" placeholder="25" bind:value={config.dmx_refresh_hz} oninput={markDirty} />
   </div>
+  <p class="help-text help-detail">
+    <strong>open</strong> — Open DMX protocol (break + raw frames). Used by many USB-DMX interfaces.<br/>
+    <strong>pro</strong> — Enttec Pro protocol (packetized serial). Used by Enttec Pro and compatible interfaces.<br/>
+    <strong>dummy</strong> — No DMX output. Useful for testing without hardware.<br/>
+    Not sure which one? Try both — only the correct one will work with your interface.<br/>
+    Refresh rate: 1–44 Hz. Default <strong>25 Hz</strong> is a good balance between responsiveness and bus stability.
+  </p>
+
   {#if dirty}
     <button class="btn-sm btn-save" onclick={handleSave}>Save Hardware</button>
   {/if}
@@ -48,6 +71,30 @@
 
 <style>
   .hw-form { padding: 0.75rem; }
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    margin-top: 0.8rem;
+    margin-bottom: 0.3rem;
+  }
+  .section-title:first-child { margin-top: 0; }
+  .help-text {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 0.4rem;
+  }
+  .help-detail {
+    margin-top: 0.3rem;
+    padding-left: 0.3rem;
+    border-left: 2px solid rgba(255, 255, 255, 0.06);
+  }
+  .help-text strong {
+    color: var(--text);
+  }
   .form-grid {
     display: grid;
     grid-template-columns: auto 1fr;

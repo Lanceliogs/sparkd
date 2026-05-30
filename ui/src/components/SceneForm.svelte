@@ -208,12 +208,18 @@
       <div class="step-card">
         <div class="step-header">
           <span class="step-label">Step {si + 1}</span>
-          <input type="number" min="0" placeholder="ms" bind:value={step.duration_ms} oninput={ondirty} class="ch-offset" />
-          <select bind:value={step.transition} onchange={ondirty} class="input-sm">
-            <option value="hold">hold</option>
-            <option value="linear">linear</option>
-          </select>
-          <button class="btn-xs btn-danger" onclick={() => removeStep(si)}>x</button>
+          <div class="step-field">
+            <label for="step-duration-{si}">Duration</label>
+            <input id="step-duration-{si}" type="number" min="0" placeholder="ms" bind:value={step.duration_ms} oninput={ondirty} class="ch-offset" />
+          </div>
+          <div class="step-field">
+            <label for="step-transition-{si}">Transition</label>
+            <select id="step-transition-{si}" bind:value={step.transition} onchange={ondirty} class="input-sm">
+              <option value="hold">hold</option>
+              <option value="linear">linear</option>
+            </select>
+          </div>
+          <button class="btn-xs btn-step-remove" onclick={() => removeStep(si)}>DEL.</button>
         </div>
         {#each step.values as val, vi}
           {@const used = getUsedTargets(vi, si)}
@@ -406,20 +412,42 @@
   .step-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.35rem;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
   }
   .step-label {
     font-size: 0.7rem;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--text-muted);
-    min-width: 3rem;
+    color: var(--text);
+    margin-right: auto;
   }
+  .step-field {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .step-field label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+  .btn-xs.btn-step-remove {
+    background: transparent;
+    border: 1px solid var(--red);
+    color: var(--red);
+  }
+  .btn-xs.btn-step-remove:hover {
+    background: var(--red);
+    color: white;
+  }
+
   .input-sm {
     font-size: 0.7rem;
-    padding: 2px 4px;
+    padding: 0.25rem 0.4rem;
     width: auto;
     min-width: 4rem;
     background: var(--bg);

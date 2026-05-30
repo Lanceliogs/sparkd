@@ -8,9 +8,9 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <termios.h>
 #include <sys/ioctl.h>
 #include <dirent.h>
+#include <asm/termbits.h>
 
 /* --- Port operations --- */
 
@@ -20,23 +20,7 @@ void spark_serial_init(spark_serial_t *serial)
     serial->fd = -1;
 }
 
-static speed_t s_get_baud_constant(uint32_t baudrate)
-{
-    switch (baudrate)
-    {
-        case 9600:   return B9600;
-        case 19200:  return B19200;
-        case 38400:  return B38400;
-        case 57600:  return B57600;
-        case 115200: return B115200;
-        case 230400: return B230400;
-        default:
-            spark_log_warn("serial: non-standard baud %u, trying direct", baudrate);
-            return (speed_t)baudrate;
-    }
-}
-
-static void s_set_data_bits(struct termios *tio, spark_serial_data_bits_t data_bits)
+static void s_set_data_bits(struct termios2 *tio, spark_serial_data_bits_t data_bits)
 {
     tio->c_cflag &= ~CSIZE;
     switch (data_bits)
@@ -49,7 +33,7 @@ static void s_set_data_bits(struct termios *tio, spark_serial_data_bits_t data_b
     }
 }
 
-static void s_set_stop_bit(struct termios *tio, spark_serial_stop_bit_t stop_bit)
+static void s_set_stop_bit(struct termios2 *tio, spark_serial_stop_bit_t stop_bit)
 {
     switch (stop_bit)
     {
@@ -69,7 +53,7 @@ static void s_set_stop_bit(struct termios *tio, spark_serial_stop_bit_t stop_bit
     }
 }
 
-static void s_set_parity(struct termios *tio, spark_serial_parity_t parity)
+static void s_set_parity(struct termios2 *tio, spark_serial_parity_t parity)
 {
     switch (parity)
     {
@@ -99,21 +83,29 @@ int spark_serial_open(spark_serial_t *serial)
         return -1;
     }
 
-    struct termios tio;
-    if (tcgetattr(serial->fd, &tio) != 0)
+    struct termios2 tio;
+    if (ioctl(serial->fd, TCGETS2, &tio) < 0)
     {
-        spark_log_error("serial: tcgetattr failed on %s", serial->port);
+        spark_log_error("serial: TCGETS2 failed on %s", serial->port);
         close(serial->fd);
         serial->fd = -1;
         return -1;
     }
 
-    cfmakeraw(&tio);
-    tio.c_cflag |= CLOCAL | CREAD;
+    /* Raw mode */
+    tio.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+    tio.c_oflag &= ~OPOST;
+    tio.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    tio.c_cflag &= ~(CSIZE | PARENB);
 
-    speed_t baud = s_get_baud_constant(serial->baudrate);
-    cfsetispeed(&tio, baud);
-    cfsetospeed(&tio, baud);
+    tio.c_cflag |= CLOCAL | CREAD;
+    tio.c_cflag &= ~CRTSCTS;
+
+    /* Baud rate via BOTHER for exact custom speeds */
+    tio.c_cflag &= ~CBAUD;
+    tio.c_cflag |= BOTHER;
+    tio.c_ispeed = serial->baudrate;
+    tio.c_ospeed = serial->baudrate;
 
     s_set_data_bits(&tio, serial->data_bits);
     s_set_stop_bit(&tio, serial->stop_bit);
@@ -122,15 +114,26 @@ int spark_serial_open(spark_serial_t *serial)
     tio.c_cc[VMIN] = 0;
     tio.c_cc[VTIME] = 1;
 
-    if (tcsetattr(serial->fd, TCSANOW, &tio) != 0)
+    if (ioctl(serial->fd, TCSETS2, &tio) < 0)
     {
-        spark_log_error("serial: tcsetattr failed on %s", serial->port);
+        spark_log_error("serial: TCSETS2 failed on %s", serial->port);
         close(serial->fd);
         serial->fd = -1;
         return -1;
     }
 
-    tcflush(serial->fd, TCIOFLUSH);
+    /* Flush buffers */
+    ioctl(serial->fd, TCFLSH, TCIOFLUSH);
+
+    /* Clear RTS (required by Open DMX USB / FTDI adapters) */
+    int status;
+    if (ioctl(serial->fd, TIOCMGET, &status) == 0)
+    {
+        status &= ~TIOCM_RTS;
+        ioctl(serial->fd, TIOCMSET, &status);
+    }
+
+    spark_log_debug("serial: opened %s at %u baud", serial->port, serial->baudrate);
     return 0;
 }
 
@@ -148,6 +151,7 @@ int spark_serial_write(spark_serial_t *serial, const uint8_t *data, size_t len)
     ssize_t written = write(serial->fd, data, len);
     if (written < 0)
         return -1;
+    ioctl(serial->fd, TCSBRK, 1);
     return (int)written;
 }
 
@@ -207,23 +211,17 @@ int spark_serial_enumerate(spark_serial_device_info_t *out, int max)
         if (ent->d_name[0] == '.')
             continue;
 
-        /* Check if this tty has a USB device parent */
         char device_path[512];
         snprintf(device_path, sizeof(device_path),
                  "/sys/class/tty/%s/device", ent->d_name);
 
-        /* Resolve symlink to find USB device ancestor */
         char resolved[1024];
         if (realpath(device_path, resolved) == NULL)
             continue;
 
-        /* Walk up to find the USB device with idVendor.
-         * Typical path: .../usb1/1-2/1-2:1.0/ttyUSB0/tty/ttyUSB0
-         * We need the parent that has idVendor (the 1-2 level). */
         char usb_dev[1024];
         strncpy(usb_dev, resolved, sizeof(usb_dev) - 1);
 
-        /* Walk up directories until we find one with idVendor */
         bool found_usb = false;
         for (int depth = 0; depth < 6; depth++)
         {
@@ -234,7 +232,6 @@ int spark_serial_enumerate(spark_serial_device_info_t *out, int max)
                 found_usb = true;
                 break;
             }
-            /* Go up one directory */
             char *slash = strrchr(usb_dev, '/');
             if (!slash)
                 break;

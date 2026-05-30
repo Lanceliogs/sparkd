@@ -133,6 +133,12 @@ int spark_midi_open(int device_id)
         return -1;
     }
 
+    if (Pm_GetDeviceInfo(device_id) == NULL)
+    {
+        spark_log_error("midi:open: invalid device id %d", device_id);
+        return -1;
+    }
+
     PortMidiStream *stream;
     PmError rc = Pm_OpenInput(&stream, device_id, NULL, SPARK_MIDI_BUFFER_SIZE, NULL, NULL);
     if (rc != pmNoError)
@@ -195,6 +201,22 @@ int spark_midi_open_by_name(const char *pattern)
 int spark_midi_create_virtual(const char *name)
 {
     PmDeviceID id = Pm_CreateVirtualInput(name, NULL, NULL);
+    if (id == pmNameConflict)
+    {
+        spark_log_debug("midi:create_virtual: '%s' already exists, deleting", name);
+        int count = Pm_CountDevices();
+        for (int i = 0; i < count; i++)
+        {
+            const PmDeviceInfo *d = Pm_GetDeviceInfo(i);
+            if (d && d->input && d->is_virtual && strcmp(d->name, name) == 0)
+            {
+                Pm_DeleteVirtualDevice(i);
+                break;
+            }
+        }
+        id = Pm_CreateVirtualInput(name, NULL, NULL);
+    }
+
     if (id < 0)
     {
         spark_log_error("midi:create_virtual: failed for '%s'", name);

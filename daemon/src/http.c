@@ -511,14 +511,14 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
     else if (mg_match(hm->uri, mg_str("/api/scenes/*/activate"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
     {
-        struct mg_str caps[1];
+        struct mg_str caps[2];
         mg_match(hm->uri, mg_str("/api/scenes/*/activate"), caps);
         s_handle_scene_activate(c, caps[0]);
     }
     else if (mg_match(hm->uri, mg_str("/api/scenes/*/release"), NULL) &&
              mg_match(hm->method, mg_str("POST"), NULL))
     {
-        struct mg_str caps[1];
+        struct mg_str caps[2];
         mg_match(hm->uri, mg_str("/api/scenes/*/release"), caps);
         s_handle_scene_release(c, caps[0]);
     }

@@ -98,7 +98,7 @@ void spark_dmx_open_init(spark_dmx_backend_t *backend, const char *port)
     spark_serial_configure(
         &priv->serial,
         port,
-        SPARK_SERIAL_BAUDRATE_250000,
+        SPARK_SERIAL_BAUDRATE_DMX,
         SPARK_SERIAL_DATA_BITS_8,
         SPARK_SERIAL_STOP_BIT_2,
         SPARK_SERIAL_PARITY_NONE

@@ -1,4 +1,5 @@
 #include "editor_places.h"
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 

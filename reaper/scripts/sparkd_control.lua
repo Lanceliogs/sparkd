@@ -1,13 +1,10 @@
---[[
-  sparkd Control Panel for REAPER
-  Requires: ReaImGui extension (install via ReaPack)
-
-  Provides a dockable window to control a running sparkd instance:
-    - Select project file
-    - Start / Stop / Reload engine
-    - Toggle blackout
-    - Generate REAPER note-name files from project scenes
---]]
+-- @description Sparkd Controller
+-- @author Lanceliogs
+-- @version 1.0.0
+-- @provides [main] .
+-- @about
+--   Allow to remotely control the sparkd engine.
+--   Requires ReaImGui extension.
 
 -- Dependency check
 if not reaper.ImGui_CreateContext then
@@ -22,7 +19,7 @@ end
 local SCRIPT_NAME = "sparkd Control"
 local EXT_SECTION = "sparkd_reaper"
 local POLL_INTERVAL = 0.250
-local EXEC_TIMEOUT = 2000
+local EXEC_TIMEOUT = 1000
 
 -- Colors (RGBA hex)
 local COL_GREEN     = 0x4ADE80FF
@@ -43,7 +40,7 @@ reaper.ImGui_Attach(ctx, font_main)
 reaper.ImGui_Attach(ctx, font_large)
 
 local state = {
-  project_path = reaper.GetExtState(EXT_SECTION, "project_path"),
+  project_path = "",
   http_addr = reaper.GetExtState(EXT_SECTION, "http_addr"),
   notenames_dir = reaper.GetExtState(EXT_SECTION, "notenames_dir"),
   sparkctl_path = reaper.GetExtState(EXT_SECTION, "sparkctl_path"),
@@ -58,6 +55,7 @@ local state = {
   last_notenames_time = 0,
   show_settings = false,
   daemon_reachable = false,
+  connected = false, -- user-initiated connection state
 }
 
 -- Defaults
@@ -68,7 +66,6 @@ if state.spark_reaper_path == "" then state.spark_reaper_path = "spark-reaper" e
 -- Helpers
 
 local function save_ext_state()
-  reaper.SetExtState(EXT_SECTION, "project_path", state.project_path, true)
   reaper.SetExtState(EXT_SECTION, "http_addr", state.http_addr, true)
   reaper.SetExtState(EXT_SECTION, "notenames_dir", state.notenames_dir, true)
   reaper.SetExtState(EXT_SECTION, "sparkctl_path", state.sparkctl_path, true)
@@ -98,7 +95,14 @@ local function sparkctl(command)
   return exec(cmd)
 end
 
+local function set_error(msg)
+  state.last_error = msg or ""
+  state.last_error_time = reaper.time_precise()
+end
+
 local function poll_status()
+  if not state.connected then return end
+
   local now = reaper.time_precise()
   if now - state.last_poll < POLL_INTERVAL then return end
   state.last_poll = now
@@ -108,28 +112,44 @@ local function poll_status()
     state.daemon_reachable = false
     state.engine_running = false
     state.engine_blackout = false
+    state.connected = false
+    set_error("Connection lost")
     return
   end
 
   state.daemon_reachable = true
   state.engine_running = output:match("running:%s*yes") ~= nil
   state.engine_blackout = output:match("blackout:%s*yes") ~= nil
-  
+
   local ppath = output:match("project:%s*(.-)%s*$")
-  if ppath and ppath ~= "" and ppath ~= state.project_path then
+  if ppath and ppath ~= "" then
     state.project_path = ppath
-    save_ext_state()
+  end
+end
+
+local function try_connect()
+  local output, err = sparkctl("status")
+  if err then
+    state.connected = false
+    state.daemon_reachable = false
+    set_error("Cannot reach sparkd at " .. state.http_addr)
+    return
+  end
+  state.connected = true
+  state.daemon_reachable = true
+  state.last_error = ""
+  state.engine_running = output:match("running:%s*yes") ~= nil
+  state.engine_blackout = output:match("blackout:%s*yes") ~= nil
+
+  local ppath = output:match("project:%s*(.-)%s*$")
+  if ppath and ppath ~= "" then
+    state.project_path = ppath
   end
 end
 
 local function force_poll()
   state.last_poll = 0
   poll_status()
-end
-
-local function set_error(msg)
-  state.last_error = msg or ""
-  state.last_error_time = reaper.time_precise()
 end
 
 local function basename(path)
@@ -148,10 +168,18 @@ local function draw_header()
   reaper.ImGui_SameLine(ctx, 0, 8)
   reaper.ImGui_SetCursorPosY(ctx, reaper.ImGui_GetCursorPosY(ctx) + 6)
 
-  if not state.daemon_reachable then
+  if not state.connected then
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Text(), COL_GRAY)
     reaper.ImGui_Text(ctx, "disconnected")
     reaper.ImGui_PopStyleColor(ctx)
+    reaper.ImGui_SameLine(ctx, 0, 16)
+    reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Button(), 0x166534FF)
+    reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonHovered(), 0x15803DFF)
+    reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonActive(), 0x16A34AFF)
+    if reaper.ImGui_Button(ctx, "CONNECT", 80, 24) then
+      try_connect()
+    end
+    reaper.ImGui_PopStyleColor(ctx, 3)
   elseif state.engine_running then
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Text(), COL_GREEN)
     reaper.ImGui_Text(ctx, "running")
@@ -192,7 +220,6 @@ local function draw_project_section()
     local rv, file = reaper.GetUserFileNameForRead(init_path, "Select sparkd project", "yaml")
     if rv then
       state.project_path = file
-      save_ext_state()
       -- Stop engine first if running, then load the new project
       if state.engine_running then
         sparkctl("stop")
@@ -415,7 +442,9 @@ local function loop()
     draw_header()
     draw_error()
     draw_project_section()
-    draw_engine_controls()
+    if state.connected then
+      draw_engine_controls()
+    end
     draw_notenames_section()
     draw_footer()
     reaper.ImGui_End(ctx)
@@ -430,4 +459,5 @@ local function loop()
   end
 end
 
+try_connect()
 reaper.defer(loop)

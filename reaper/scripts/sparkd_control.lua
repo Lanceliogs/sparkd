@@ -22,7 +22,7 @@ end
 local SCRIPT_NAME = "sparkd Control"
 local EXT_SECTION = "sparkd_reaper"
 local POLL_INTERVAL = 0.250
-local EXEC_TIMEOUT = 5000
+local EXEC_TIMEOUT = 2000
 
 -- Colors (RGBA hex)
 local COL_GREEN     = 0x4ADE80FF

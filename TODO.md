@@ -11,8 +11,11 @@
       Being able to START/STOP and monitor the engine from REAPER would be sick.
 
 ### sparkctl upgrade
-- [ ] Add `sparkctl daemon up`and `sparkctl daemon down` to control the lifecycle of sparkd
-- [ ] Add `sparkctl ui up` and `sparkctl ui down` to control the lifecycle of spark-ui
+- [X] Add `sparkctl daemon up` and `sparkctl daemon down` to control the lifecycle of sparkd
+- [X] Add `sparkctl ui up` and `sparkctl ui down` to control the lifecycle of spark-ui
+- [X] Add `sparkctl daemon status` and `sparkctl ui status`
+- [X] Graceful shutdown via `POST /shutdown` on both sparkd and spark-ui
+- [X] `/healthz` endpoint on spark-ui (sparkd already had one)
 - [ ] Add `sparkctl ensure-path` to add the binaries folder to the PATH
 
 ### Linux packaging 

@@ -3,12 +3,24 @@
 ## Planned (v0.2)
 
 ### Basic REAPER integration
-- [ ] Generate mappings from scenes names and triggers using a `spark-reaper --project [PATH]` utility tool
+- [X] Generate mappings from scenes names and triggers using a `spark-reaper --project [PATH]` utility tool
 - [ ] Maybe allow a user to download the mapping for a project from the Editor page too. We could create
       a tiny reaper module in tools/reaper
-- [ ] See what would be the cost of creating a VST like PAD communicating
+- [X] See what would be the cost of creating a VST like PAD communicating
       with sparkd directly for a direct engine control from REAPER.
       Being able to START/STOP and monitor the engine from REAPER would be sick.
+
+### sparkctl upgrade
+- [ ] Add `sparkctl daemon up`and `sparkctl daemon down` to control the lifecycle of sparkd
+- [ ] Add `sparkctl ui up` and `sparkctl ui down` to control the lifecycle of spark-ui
+- [ ] Add `sparkctl ensure-path` to add the binaries folder to the PATH
+
+### Linux packaging 
+- [ ] Why not release a `sparkd-vX.X.X-amd64.deb` package really? 
+
+### Windows minimal installer 
+- [ ] Use [cres-c-resource-embedding](https://github.com/Lanceliogs/cres-c-resource-embedding) to create a tiny Windows package
+- [ ] Maybe also package the ui and serve it with  mongoose. We might have to change some things, but using cres_find(...) seems op.
 
 ### Auth Token ([spec](specs/auth-token.md))
 - [ ] Two tokens at startup: admin (full) + live (show control only)

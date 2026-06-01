@@ -3,6 +3,8 @@
 #include "editor_http.h"
 #include "env.h"
 #include "log.h"
+#include "clock.h"
+#include "consts.h"
 
 #include <signal.h>
 #include <stdbool.h>
@@ -19,8 +21,10 @@
 
 #define DEFAULT_HTTP_ADDR "127.0.0.1:7601"
 #define DEFAULT_DAEMON_ADDR "127.0.0.1:7600"
+#define SPARK_UI_VERSION SPARKD_VERSION
 
 static volatile bool s_running = true;
+static uint64_t s_start_time_ms = 0;
 static char s_daemon_addr[256] = DEFAULT_DAEMON_ADDR;
 static char s_ui_root[1024] = {0};
 
@@ -310,6 +314,31 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
         return;
     }
 
+    if (mg_match(hm->uri, mg_str("/healthz"), NULL))
+    {
+        uint64_t uptime = spark_clock_monotonic_ms() - s_start_time_ms;
+#ifdef _WIN32
+        int pid = (int)GetCurrentProcessId();
+#else
+        int pid = (int)getpid();
+#endif
+        mg_http_reply(c, 200, "Content-Type: application/json\r\n",
+            "{%m:%m,%m:%d,%m:%llu}\n",
+            MG_ESC("version"), MG_ESC(SPARK_UI_VERSION),
+            MG_ESC("pid"), pid,
+            MG_ESC("uptime_ms"), (unsigned long long)uptime);
+        return;
+    }
+
+    if (mg_match(hm->uri, mg_str("/shutdown"), NULL) &&
+        mg_method_is(hm, "POST"))
+    {
+        mg_http_reply(c, 200, "Content-Type: application/json\r\n",
+            "{%m:%s}\n", MG_ESC("ok"), "true");
+        s_running = false;
+        return;
+    }
+
     /* CORS preflight for editor API */
     if (mg_method_is(hm, "OPTIONS") &&
         mg_match(hm->uri, mg_str("/api/editor/#"), NULL))
@@ -436,6 +465,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    s_start_time_ms = spark_clock_monotonic_ms();
+
     printf("spark-ui: serving %s on %s\n", s_ui_root, http_addr);
     printf("spark-ui: proxying /api/* to %s\n", s_daemon_addr);
 
@@ -445,6 +476,7 @@ int main(int argc, char **argv)
     while (s_running)
         mg_mgr_poll(&mgr, 100);
 
+    mg_mgr_poll(&mgr, 10);
     mg_mgr_free(&mgr);
     printf("spark-ui: stopped\n");
     return 0;

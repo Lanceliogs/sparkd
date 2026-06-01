@@ -4,6 +4,7 @@
 #include "engine.h"
 #include "fixture_bank.h"
 #include "http.h"
+#include "shutdown.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -13,12 +14,10 @@
 
 #define MAIN_LOOP_PERIOD_MS 5
 
-static volatile uint8_t s_should_keep_running = 1;
-
 void signal_handler(int signum)
 {
     (void)signum;
-    s_should_keep_running = 0;
+    spark_request_shutdown();
 }
 
 #define SPARK_HTTP_ADDR_STRLEN 128
@@ -165,7 +164,7 @@ int main(int argc, char **argv)
 
     spark_log_info("sparkd running. Ctrl+C to stop...");
 
-    while (s_should_keep_running)
+    while (!spark_shutdown_requested())
     {
         spark_http_process_events(MAIN_LOOP_PERIOD_MS);
         spark_engine_process_events();
@@ -173,6 +172,7 @@ int main(int argc, char **argv)
     }
 
     spark_log_info("Shutting down");
+    spark_http_process_events(MAIN_LOOP_PERIOD_MS);
     spark_http_destroy();
     spark_engine_stop();
     spark_engine_destroy();

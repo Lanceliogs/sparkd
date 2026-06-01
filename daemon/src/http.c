@@ -9,6 +9,7 @@
 #include "consts.h"
 #include "log.h"
 #include "clock.h"
+#include "shutdown.h"
 
 #include "mongoose.h"
 #include "mg_helpers.h"
@@ -94,6 +95,12 @@ static void s_handle_healthz(struct mg_connection *c)
         MG_ESC("version"), MG_ESC(SPARKD_VERSION),
         MG_ESC("pid"), spark_getpid(),
         MG_ESC("uptime_ms"), (unsigned long long)uptime);
+}
+
+static void s_handle_shutdown(struct mg_connection *c)
+{
+    mg_http_reply(c, 200, s_json_content_type, "{%m:%s}\n", MG_ESC("ok"), "true");
+    spark_request_shutdown();
 }
 
 static void s_handle_engine_state(struct mg_connection *c)
@@ -475,6 +482,9 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
 
     if (mg_match(hm->uri, mg_str("/healthz"), NULL))
         s_handle_healthz(c);
+    else if (mg_match(hm->uri, mg_str("/shutdown"), NULL) &&
+             mg_match(hm->method, mg_str("POST"), NULL))
+        s_handle_shutdown(c);
     else if (mg_match(hm->uri, mg_str("/api/engine/state"), NULL) &&
              mg_match(hm->method, mg_str("GET"), NULL))
         s_handle_engine_state(c);

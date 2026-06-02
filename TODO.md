@@ -17,11 +17,11 @@
 - [ ] Add `sparkctl ensure-path` to add the binaries folder to the PATH
 
 ### Linux packaging 
-- [ ] Why not release a `sparkd-vX.X.X-amd64.deb` package really? 
+- [ ] Why not release a `sparkd-vX.X.X-amd64.deb` package really?
 
-### Windows minimal installer 
-- [ ] Use [cres-c-resource-embedding](https://github.com/Lanceliogs/cres-c-resource-embedding) to create a tiny Windows package
-- [ ] Maybe also package the ui and serve it with  mongoose. We might have to change some things, but using cres_find(...) seems op.
+### Windows minimal installer
+- [x] Use [cres-c-resource-embedding](https://github.com/Lanceliogs/cres-c-resource-embedding) to create a tiny Windows package
+- [x] Maybe also package the ui and serve it with  mongoose. We might have to change some things, but using cres_find(...) seems op.
 
 ### Auth Token ([spec](specs/auth-token.md))
 - [X] Static `SPARK_AUTH_TOKEN` for infrastructure (sparkd, sparkctl, spark-ui management)

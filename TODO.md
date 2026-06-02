@@ -24,14 +24,19 @@
 - [ ] Maybe also package the ui and serve it with  mongoose. We might have to change some things, but using cres_find(...) seems op.
 
 ### Auth Token ([spec](specs/auth-token.md))
-- [ ] Two tokens at startup: admin (full) + live (show control only)
-- [ ] All `/api/*` and `/ws` routes require `Authorization: Bearer <token>`
-- [ ] Permission levels: live token denied editor/browse/load-with-path routes
-- [ ] Localhost meta tag injection for seamless local admin access
-- [ ] Frontend token flow: meta → URL param → localStorage → manual input
-- [ ] Frontend hides Editor tab for live-level tokens
-- [ ] QR code modal: "Share Live Control" vs "Share Full Access"
-- [ ] Token rotation endpoint (`POST /api/auth/rotate`, admin only)
+- [X] Static `SPARK_AUTH_TOKEN` for infrastructure (sparkd, sparkctl, spark-ui management)
+- [X] Dynamic share token for live access (generated at startup, shared via QR)
+- [X] All `/api/*` and `/ws` routes require valid token
+- [X] Role-based access: `SPARK_AUTH_TOKEN` = admin, share token = live
+- [X] Live role denied editor/browse/load-with-path routes
+- [X] Localhost meta tag injection for seamless local admin access
+- [X] Frontend token flow: meta → URL param → localStorage → manual input
+- [X] Frontend hides Editor tab for live role, hides Load Project button
+- [X] QR code share modal (admin only)
+- [X] Token rotation endpoint (`POST /api/auth/rotate`, admin only)
+- [X] `GET /api/auth/role` for frontend role resolution
+- [X] `SPARK_LAN_IFACE` CIDR-based LAN IP auto-detection for QR URLs
+- [X] CORS headers on all `/api/*` responses (LAN access support)
 
 ## Planned (post v0.2)
 

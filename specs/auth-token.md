@@ -149,6 +149,11 @@ A "Share" button in the nav (admin only) opens a modal:
 
 LAN IP exposed via `GET /api/auth/info` (no auth): `{"lan_ip": "...", "port": 7601}`
 
+LAN IP detection priority:
+1. `SPARK_LAN_IFACE` env (CIDR notation, e.g. `192.168.0.0/24`) — finds local IP on that subnet
+2. Auto-detect: prefers 192.168.x.x > 10.x.x.x > 172.16-31.x.x
+3. Fallback: first non-loopback interface
+
 ## Token Rotation
 
 `POST /api/auth/rotate` (admin only):

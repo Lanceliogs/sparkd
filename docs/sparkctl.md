@@ -45,8 +45,11 @@ sparkctl [--http ADDR] <command> [args...]
 |----------|-------------|----------------|
 | `SPARK_HTTP_ADDR` | Default daemon address | `--http` |
 | `SPARK_UI_HTTP_ADDR` | Default spark-ui address | `--http` (within `ui` subcommand) |
+| `SPARK_AUTH_TOKEN` | Static auth token (sent as Bearer header on all requests) | — |
 
 Priority: CLI argument > environment variable > `.spark.env` file > built-in default.
+
+**Note:** If `SPARK_AUTH_TOKEN` is set, sparkctl automatically sends it as an `Authorization: Bearer` header on every request. If unset, no auth header is sent (backwards-compatible).
 
 ## Lifecycle Commands Detail
 
@@ -220,3 +223,14 @@ export SPARK_HTTP_ADDR=192.168.1.50:7600
 sparkctl status
 sparkctl start
 ```
+
+### With authentication
+
+```bash
+# Set in .spark.env or environment
+export SPARK_AUTH_TOKEN=my-secret-token
+sparkctl daemon up --project my-show.spark.yaml
+sparkctl ui up
+```
+
+**Note:** Addresses set to `0.0.0.0` (bind-all) are automatically resolved to `127.0.0.1` when connecting.

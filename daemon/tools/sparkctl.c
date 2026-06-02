@@ -181,6 +181,7 @@ static int s_find_binary(const char *name, char *out, size_t out_size)
 #ifdef _WIN32
 static int s_spawn_detached(const char *binary, char *const args[], int argc)
 {
+    (void)binary;
     char cmdline[4096] = {0};
     for (int i = 0; i < argc; i++)
     {

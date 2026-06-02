@@ -40,7 +40,7 @@
 
 {#if open}
   <div class="modal-backdrop" onclick={close} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
+    <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && close()} role="dialog" tabindex="-1">
       <div class="modal-header">
         <h3>Share Live Access</h3>
         <button class="modal-close" onclick={close}>X</button>

@@ -65,6 +65,7 @@
       <h2>spark</h2>
       <p>Enter access code to continue</p>
       <form onsubmit={(e) => { e.preventDefault(); submitToken(); }}>
+        <!-- svelte-ignore a11y_autofocus -->
         <input
           type="text"
           bind:value={tokenInput}

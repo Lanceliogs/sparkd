@@ -10,6 +10,7 @@
 #include "log.h"
 #include "clock.h"
 #include "shutdown.h"
+#include "auth.h"
 
 #include "mongoose.h"
 #include "mg_helpers.h"
@@ -469,6 +470,23 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
         return;
 
     struct mg_http_message *hm = (struct mg_http_message *)ev_data;
+
+    if (spark_auth_enabled())
+    {
+        struct mg_str *auth_hdr = mg_http_get_header(hm, "Authorization");
+        int authed = 0;
+        if (auth_hdr && auth_hdr->len > 7 &&
+            memcmp(auth_hdr->buf, "Bearer ", 7) == 0)
+        {
+            authed = spark_auth_check_static(auth_hdr->buf + 7, auth_hdr->len - 7);
+        }
+        if (!authed)
+        {
+            mg_http_reply(c, 401, s_json_content_type,
+                "{%m:%m}\n", MG_ESC("error"), MG_ESC("unauthorized"));
+            return;
+        }
+    }
 
     if (mg_match(hm->uri, mg_str("/ws"), NULL))
     {

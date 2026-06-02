@@ -20,6 +20,7 @@
     getEngineState,
   } from '../lib/api';
   import { showError } from '../lib/toast';
+  import { getToken, getRole } from '../lib/auth';
 
   let engine: EngineState = $state({ running: false, blackout: false, project: '' });
   let scenes: SceneDef[] = $state([]);
@@ -38,7 +39,9 @@
 
   function wsUrl(): string {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${location.host}/ws`;
+    const token = getToken();
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${proto}//${location.host}/ws${query}`;
   }
 
   function connect() {
@@ -206,7 +209,7 @@
       <span class="badge blackout">BLACKOUT</span>
     {/if}
   </div>
-  <div class="status-item project">
+  <div class="status-item project" title={engine.project || ''}>
     {engine.project || 'no project'}
   </div>
 </header>
@@ -222,7 +225,7 @@
       {engine.blackout ? 'Clear Blackout' : 'Blackout'}
     </button>
     <button class="btn-reload" onclick={handleReload}>Reload</button>
-    {#if !engine.running}
+    {#if !engine.running && getRole() === 'admin'}
       <button class="btn-load" onclick={() => showBrowser = true}>Load Project</button>
     {/if}
   {/if}
@@ -277,6 +280,12 @@
     color: var(--text-muted);
     font-size: 0.75rem;
     font-family: monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 50vw;
+    direction: rtl;
+    text-align: left;
   }
 
   .dot {

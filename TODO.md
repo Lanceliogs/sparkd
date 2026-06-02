@@ -4,8 +4,6 @@
 
 ### Basic REAPER integration
 - [X] Generate mappings from scenes names and triggers using a `spark-reaper --project [PATH]` utility tool
-- [ ] Maybe allow a user to download the mapping for a project from the Editor page too. We could create
-      a tiny reaper module in tools/reaper
 - [X] See what would be the cost of creating a VST like PAD communicating
       with sparkd directly for a direct engine control from REAPER.
       Being able to START/STOP and monitor the engine from REAPER would be sick.

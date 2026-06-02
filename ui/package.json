@@ -10,8 +10,12 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5",
+    "@types/qrcode": "^1.5.6",
     "svelte": "^5",
     "typescript": "^5",
     "vite": "^6"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

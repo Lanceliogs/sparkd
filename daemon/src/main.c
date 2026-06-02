@@ -5,6 +5,7 @@
 #include "fixture_bank.h"
 #include "http.h"
 #include "shutdown.h"
+#include "auth.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -67,6 +68,7 @@ static void s_parse_cmdline_args(int argc, char **argv, spark_args_t *args)
 int main(int argc, char **argv)
 {
     spark_env_load();
+    spark_auth_init();
 
     spark_args_t args = {
         .print_help = false,

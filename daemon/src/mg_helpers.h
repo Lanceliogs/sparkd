@@ -41,12 +41,15 @@ static inline bool mg_method_is(struct mg_http_message *hm, const char *method)
     return mg_strcasecmp(hm->method, mg_str(method)) == 0;
 }
 
+#define MG_CORS_HEADERS \
+    "Access-Control-Allow-Origin: *\r\n"
+
 static inline void mg_cors_preflight(struct mg_connection *c)
 {
     mg_http_reply(c, 204,
-        "Access-Control-Allow-Origin: *\r\n"
+        MG_CORS_HEADERS
         "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
-        "Access-Control-Allow-Headers: Content-Type\r\n",
+        "Access-Control-Allow-Headers: Content-Type, Authorization\r\n",
         "");
 }
 

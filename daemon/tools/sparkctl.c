@@ -2,6 +2,7 @@
 #include "env.h"
 #include "log.h"
 #include "clock.h"
+#include "auth.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -42,30 +43,65 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
     if (ev == MG_EV_CONNECT)
     {
         struct mg_str host = mg_url_host(ctx->url);
+        const char *token = spark_env_get("SPARK_AUTH_TOKEN");
         if (ctx->req_body)
         {
             size_t blen = strlen(ctx->req_body);
-            mg_printf(c,
-                "%s %s HTTP/1.0\r\n"
-                "Host: %.*s\r\n"
-                "Content-Type: application/json\r\n"
-                "Content-Length: %lu\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-                "%s",
-                ctx->method, ctx->path,
-                (int)host.len, host.buf,
-                (unsigned long)blen, ctx->req_body);
+            if (token && token[0])
+            {
+                mg_printf(c,
+                    "%s %s HTTP/1.0\r\n"
+                    "Host: %.*s\r\n"
+                    "Authorization: Bearer %s\r\n"
+                    "Content-Type: application/json\r\n"
+                    "Content-Length: %lu\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    "%s",
+                    ctx->method, ctx->path,
+                    (int)host.len, host.buf,
+                    token,
+                    (unsigned long)blen, ctx->req_body);
+            }
+            else
+            {
+                mg_printf(c,
+                    "%s %s HTTP/1.0\r\n"
+                    "Host: %.*s\r\n"
+                    "Content-Type: application/json\r\n"
+                    "Content-Length: %lu\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    "%s",
+                    ctx->method, ctx->path,
+                    (int)host.len, host.buf,
+                    (unsigned long)blen, ctx->req_body);
+            }
         }
         else
         {
-            mg_printf(c,
-                "%s %s HTTP/1.0\r\n"
-                "Host: %.*s\r\n"
-                "Connection: close\r\n"
-                "\r\n",
-                ctx->method, ctx->path,
-                (int)host.len, host.buf);
+            if (token && token[0])
+            {
+                mg_printf(c,
+                    "%s %s HTTP/1.0\r\n"
+                    "Host: %.*s\r\n"
+                    "Authorization: Bearer %s\r\n"
+                    "Connection: close\r\n"
+                    "\r\n",
+                    ctx->method, ctx->path,
+                    (int)host.len, host.buf,
+                    token);
+            }
+            else
+            {
+                mg_printf(c,
+                    "%s %s HTTP/1.0\r\n"
+                    "Host: %.*s\r\n"
+                    "Connection: close\r\n"
+                    "\r\n",
+                    ctx->method, ctx->path,
+                    (int)host.len, host.buf);
+            }
         }
     }
     else if (ev == MG_EV_HTTP_MSG)
@@ -367,6 +403,17 @@ static int s_cmd_service_status(const char *service_name, const char *addr)
     }
 }
 
+static void s_normalize_addr(char *addr, size_t size)
+{
+    if (strncmp(addr, "0.0.0.0", 7) == 0)
+    {
+        char port_part[64] = "";
+        if (addr[7] == ':')
+            snprintf(port_part, sizeof(port_part), "%s", addr + 7);
+        snprintf(addr, size, "127.0.0.1%s", port_part);
+    }
+}
+
 static int s_handle_service_subcommand(const char *service_name,
                                        const char *binary_name,
                                        const char *default_addr,
@@ -376,6 +423,7 @@ static int s_handle_service_subcommand(const char *service_name,
     char addr[256];
     const char *env_addr = spark_env_get(env_var);
     snprintf(addr, sizeof(addr), "%s", env_addr ? env_addr : default_addr);
+    s_normalize_addr(addr, sizeof(addr));
 
     /* Parse: [--http ADDR] <action> [passthrough...] */
     const char *action = NULL;
@@ -509,6 +557,7 @@ int main(int argc, char **argv)
     const char *env_addr = spark_env_get("SPARK_HTTP_ADDR");
     snprintf(daemon_addr, sizeof(daemon_addr), "%s",
         env_addr ? env_addr : DEFAULT_DAEMON_ADDR);
+    s_normalize_addr(daemon_addr, sizeof(daemon_addr));
 
     const char *cmd_name = NULL;
     const char *cmd_arg = NULL;

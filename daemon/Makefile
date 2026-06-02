@@ -32,7 +32,7 @@ endif
 TARGET := $(BUILDDIR)/sparkd$(EXE)
 
 # Source files (add as modules are implemented)
-SRCS := src/main.c src/log.c src/clock.c src/env.c src/engine.c src/http.c src/shutdown.c
+SRCS := src/main.c src/log.c src/clock.c src/env.c src/engine.c src/http.c src/shutdown.c src/auth.c
 SRCS += src/project/project.c src/project/project_yaml.c
 SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/fixture_bank.c src/dmx/dmx_out.c
 SRCS += src/serial/serial_common.c $(SERIAL_SRCS)
@@ -78,6 +78,7 @@ EDITOR_OBJS := $(BUILDDIR)/tools/ui/editor.o $(BUILDDIR)/tools/ui/editor_yaml.o
 
 ENV_OBJS := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o
 CLOCK_OBJ := $(BUILDDIR)/daemon/clock.o
+AUTH_OBJ := $(BUILDDIR)/daemon/auth.o
 
 .PHONY: all clean test tools
 
@@ -126,9 +127,9 @@ $(BUILDDIR)/tests/test_editor_yaml$(EXE): tests/test_editor_yaml.c $(EDITOR_OBJS
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Itools/ui -Itests -o $@ $< $(EDITOR_OBJS) $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ)
+$(BUILDDIR)/tools/sparkctl$(EXE): tools/sparkctl.c $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $< $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(LDFLAGS)
 
 $(BUILDDIR)/tools/spark-midi$(EXE): tools/spark_midi.c $(LIB_OBJS) $(PM_OBJS) $(MG_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
@@ -148,9 +149,9 @@ $(BUILDDIR)/tools/ui/%.o: tools/ui/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Itools/ui -c $< -o $@
 
-$(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(YAML_OBJS)
+$(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Itools/ui -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(YAML_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -Itools/ui -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILDDIR)/daemon $(BUILDDIR)/tests $(BUILDDIR)/tools $(BUILDDIR)/vendor $(TARGET)

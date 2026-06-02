@@ -1,3 +1,5 @@
+import { getToken, clearToken } from './auth';
+
 const BASE = '';
 
 export class ApiError extends Error {
@@ -13,7 +15,20 @@ export class ApiError extends Error {
   }
 }
 
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function authFetch(url: string, init?: RequestInit): Promise<Response> {
+  const headers = { ...authHeaders(), ...(init?.headers || {}) };
+  return fetch(url, { ...init, headers });
+}
+
 async function assertOk(res: Response): Promise<void> {
+  if (res.status === 401) {
+    clearToken();
+  }
   if (res.ok) return;
   let code = 'unknown';
   let msg = `Request failed (${res.status})`;
@@ -47,29 +62,29 @@ export interface SceneDef {
 }
 
 export async function getEngineState(): Promise<EngineState> {
-  const res = await fetch(`${BASE}/api/engine/state`);
+  const res = await authFetch(`${BASE}/api/engine/state`);
   if (!res.ok) return { running: false, blackout: false, project: '' };
   return res.json();
 }
 
 export async function getScenes(): Promise<SceneDef[]> {
-  const res = await fetch(`${BASE}/api/scenes`);
+  const res = await authFetch(`${BASE}/api/scenes`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function engineStart(): Promise<void> {
-  const res = await fetch(`${BASE}/api/engine/start`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/engine/start`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function engineStop(): Promise<void> {
-  const res = await fetch(`${BASE}/api/engine/stop`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/engine/stop`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function setBlackout(enabled: boolean): Promise<void> {
-  const res = await fetch(`${BASE}/api/engine/blackout`, {
+  const res = await authFetch(`${BASE}/api/engine/blackout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -78,17 +93,17 @@ export async function setBlackout(enabled: boolean): Promise<void> {
 }
 
 export async function activateScene(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/scenes/${id}/activate`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/scenes/${id}/activate`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function releaseScene(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/scenes/${id}/release`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/scenes/${id}/release`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function reloadProject(path?: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/project/reload`, {
+  const res = await authFetch(`${BASE}/api/project/reload`, {
     method: 'POST',
     headers: path ? { 'Content-Type': 'application/json' } : {},
     body: path ? JSON.stringify({ path }) : undefined,
@@ -119,7 +134,7 @@ export interface DmxStatus {
 
 export async function getMidiStatus(): Promise<MidiStatus> {
   try {
-    const res = await fetch(`${BASE}/api/midi/status`);
+    const res = await authFetch(`${BASE}/api/midi/status`);
     if (!res.ok) return { port_count: 0, ports: [] };
     return await res.json();
   } catch { return { port_count: 0, ports: [] }; }
@@ -127,7 +142,7 @@ export async function getMidiStatus(): Promise<MidiStatus> {
 
 export async function getDmxStatus(): Promise<DmxStatus> {
   try {
-    const res = await fetch(`${BASE}/api/dmx/status`);
+    const res = await authFetch(`${BASE}/api/dmx/status`);
     if (!res.ok) return { backend: 'none', device: '', state: 'disconnected', stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } };
     return await res.json();
   } catch { return { backend: 'none', device: '', state: 'disconnected', stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } }; }
@@ -178,14 +193,14 @@ export interface EditorBank {
 
 export async function editorStatus(): Promise<EditorStatus> {
   try {
-    const res = await fetch(`${BASE}/api/editor/status`);
+    const res = await authFetch(`${BASE}/api/editor/status`);
     if (!res.ok) return { project_loaded: false, project_path: '', dirty: false, fixture_count: 0, bank_count: 0 };
     return await res.json();
   } catch { return { project_loaded: false, project_path: '', dirty: false, fixture_count: 0, bank_count: 0 }; }
 }
 
 export async function editorOpen(path: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/open`, {
+  const res = await authFetch(`${BASE}/api/editor/open`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path }),
@@ -194,30 +209,30 @@ export async function editorOpen(path: string): Promise<void> {
 }
 
 export async function editorClose(): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/close`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/editor/close`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function editorNew(): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/new`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/editor/new`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function editorSave(): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/save`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/editor/save`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function editorGetFixtures(): Promise<EditorFixture[]> {
   try {
-    const res = await fetch(`${BASE}/api/editor/fixtures`);
+    const res = await authFetch(`${BASE}/api/editor/fixtures`);
     if (!res.ok) return [];
     return await res.json();
   } catch { return []; }
 }
 
 export async function editorAddFixture(fixture: Omit<EditorFixture, 'index'>): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/fixtures`, {
+  const res = await authFetch(`${BASE}/api/editor/fixtures`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(fixture),
@@ -226,7 +241,7 @@ export async function editorAddFixture(fixture: Omit<EditorFixture, 'index'>): P
 }
 
 export async function editorUpdateFixture(index: number, fixture: Omit<EditorFixture, 'index'>): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/fixtures/${index}`, {
+  const res = await authFetch(`${BASE}/api/editor/fixtures/${index}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(fixture),
@@ -235,20 +250,20 @@ export async function editorUpdateFixture(index: number, fixture: Omit<EditorFix
 }
 
 export async function editorDeleteFixture(index: number): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/fixtures/${index}`, { method: 'DELETE' });
+  const res = await authFetch(`${BASE}/api/editor/fixtures/${index}`, { method: 'DELETE' });
   await assertOk(res);
 }
 
 export async function editorGetBanks(): Promise<EditorBank[]> {
   try {
-    const res = await fetch(`${BASE}/api/editor/banks`);
+    const res = await authFetch(`${BASE}/api/editor/banks`);
     if (!res.ok) return [];
     return await res.json();
   } catch { return []; }
 }
 
 export async function editorBankAddFixture(bankIndex: number, fixture: Omit<BankFixture, 'index'>): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/banks/${bankIndex}/fixtures`, {
+  const res = await authFetch(`${BASE}/api/editor/banks/${bankIndex}/fixtures`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(fixture),
@@ -257,7 +272,7 @@ export async function editorBankAddFixture(bankIndex: number, fixture: Omit<Bank
 }
 
 export async function editorBankUpdateFixture(bankIndex: number, fixIndex: number, fixture: Omit<BankFixture, 'index'>): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/banks/${bankIndex}/fixtures/${fixIndex}`, {
+  const res = await authFetch(`${BASE}/api/editor/banks/${bankIndex}/fixtures/${fixIndex}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(fixture),
@@ -266,25 +281,25 @@ export async function editorBankUpdateFixture(bankIndex: number, fixIndex: numbe
 }
 
 export async function editorBankDeleteFixture(bankIndex: number, fixIndex: number): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/banks/${bankIndex}/fixtures/${fixIndex}`, { method: 'DELETE' });
+  const res = await authFetch(`${BASE}/api/editor/banks/${bankIndex}/fixtures/${fixIndex}`, { method: 'DELETE' });
   await assertOk(res);
 }
 
 export async function editorBankSave(bankIndex: number): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/banks/${bankIndex}/save`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/editor/banks/${bankIndex}/save`, { method: 'POST' });
   await assertOk(res);
 }
 
 export async function editorGetBankDirs(): Promise<string[]> {
   try {
-    const res = await fetch(`${BASE}/api/editor/bank-dirs`);
+    const res = await authFetch(`${BASE}/api/editor/bank-dirs`);
     if (!res.ok) return [];
     return await res.json();
   } catch { return []; }
 }
 
 export async function editorCreateBank(id: string, directory: string): Promise<void> {
-  await fetch(`${BASE}/api/editor/banks/create`, {
+  await authFetch(`${BASE}/api/editor/banks/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, directory }),
@@ -298,7 +313,7 @@ export interface BrowseResult {
 
 export async function editorBrowse(path: string): Promise<BrowseResult> {
   try {
-    const res = await fetch(`${BASE}/api/editor/browse?path=${encodeURIComponent(path)}`);
+    const res = await authFetch(`${BASE}/api/editor/browse?path=${encodeURIComponent(path)}`);
     if (!res.ok) return { path: path || '.', entries: [] };
     return await res.json();
   } catch { return { path: path || '.', entries: [] }; }
@@ -311,7 +326,7 @@ export interface BrowseRoots {
 
 export async function editorBrowseRoots(): Promise<BrowseRoots> {
   try {
-    const res = await fetch(`${BASE}/api/editor/browse/roots`);
+    const res = await authFetch(`${BASE}/api/editor/browse/roots`);
     if (!res.ok) return { places: [], drives: [] };
     return await res.json();
   } catch { return { places: [], drives: [] }; }
@@ -320,7 +335,7 @@ export async function editorBrowseRoots(): Promise<BrowseRoots> {
 /* ---- Save As ---- */
 
 export async function editorSaveAs(path: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/save-as`, {
+  const res = await authFetch(`${BASE}/api/editor/save-as`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path }),
@@ -331,7 +346,7 @@ export async function editorSaveAs(path: string): Promise<void> {
 /* ---- Fixtures Sort ---- */
 
 export async function editorFixturesSort(): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/fixtures/sort`, { method: 'POST' });
+  const res = await authFetch(`${BASE}/api/editor/fixtures/sort`, { method: 'POST' });
   await assertOk(res);
 }
 
@@ -347,14 +362,14 @@ export interface HardwareConfig {
 
 export async function editorGetHardware(): Promise<HardwareConfig> {
   try {
-    const res = await fetch(`${BASE}/api/editor/hardware`);
+    const res = await authFetch(`${BASE}/api/editor/hardware`);
     if (!res.ok) return { midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 };
     return await res.json();
   } catch { return { midi_device: '', midi_mode: '', dmx_device: '', dmx_backend: '', dmx_refresh_hz: 0 }; }
 }
 
 export async function editorUpdateHardware(hw: HardwareConfig): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/hardware`, {
+  const res = await authFetch(`${BASE}/api/editor/hardware`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(hw),
@@ -391,14 +406,14 @@ export interface EditorScene {
 
 export async function editorGetScenes(): Promise<EditorScene[]> {
   try {
-    const res = await fetch(`${BASE}/api/editor/scenes`);
+    const res = await authFetch(`${BASE}/api/editor/scenes`);
     if (!res.ok) return [];
     return await res.json();
   } catch { return []; }
 }
 
 export async function editorAddScene(scene: Omit<EditorScene, 'index'>): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/scenes`, {
+  const res = await authFetch(`${BASE}/api/editor/scenes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(scene),
@@ -407,7 +422,7 @@ export async function editorAddScene(scene: Omit<EditorScene, 'index'>): Promise
 }
 
 export async function editorUpdateScene(index: number, scene: Omit<EditorScene, 'index'>): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/scenes/${index}`, {
+  const res = await authFetch(`${BASE}/api/editor/scenes/${index}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(scene),
@@ -416,6 +431,6 @@ export async function editorUpdateScene(index: number, scene: Omit<EditorScene, 
 }
 
 export async function editorDeleteScene(index: number): Promise<void> {
-  const res = await fetch(`${BASE}/api/editor/scenes/${index}`, { method: 'DELETE' });
+  const res = await authFetch(`${BASE}/api/editor/scenes/${index}`, { method: 'DELETE' });
   await assertOk(res);
 }

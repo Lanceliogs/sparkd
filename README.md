@@ -27,7 +27,7 @@ make
 
 Requires a C compiler (gcc or clang) and GNU Make. No other system dependencies.
 
-```bash
+```bash 
 make            # builds sparkd + sparkctl + tools
 make test       # runs the test suite
 make clean      # removes build artifacts

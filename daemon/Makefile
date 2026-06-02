@@ -80,6 +80,15 @@ ENV_OBJS := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o
 CLOCK_OBJ := $(BUILDDIR)/daemon/clock.o
 AUTH_OBJ := $(BUILDDIR)/daemon/auth.o
 
+# cres (resource embedding)
+CRESDIR := ../vendor/cres
+CRES_TOOL := $(BUILDDIR)/cres$(EXE)
+CRES_OBJ := $(BUILDDIR)/vendor/cres/cres.o
+MINIZ_OBJ := $(BUILDDIR)/vendor/cres/miniz.o
+UI_RES_SRC := $(BUILDDIR)/ui_resources.c
+UI_RES_HDR := $(BUILDDIR)/ui_resources.h
+UI_RES_OBJ := $(BUILDDIR)/ui_resources.o
+
 .PHONY: all clean test tools
 
 all: $(TARGET)
@@ -145,13 +154,34 @@ $(BUILDDIR)/tools/spark-reaper$(EXE): tools/spark_reaper.c $(ENV_OBJS) $(YAML_OB
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/tools/ui/%.o: tools/ui/%.c
+$(BUILDDIR)/tools/ui/%.o: tools/ui/%.c $(UI_RES_HDR)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Itools/ui -c $< -o $@
+	$(CC) $(CFLAGS) -DSPARK_EMBED_UI -Itools/ui -I$(BUILDDIR) -I$(CRESDIR) -c $< -o $@
 
-$(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS)
+# cres tool (built from source)
+$(CRES_TOOL): $(CRESDIR)/cres_tool.c $(CRESDIR)/miniz.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Itools/ui -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(LDFLAGS)
+	$(CC) -std=c11 -w -DCRES_COMPRESSION -o $@ $^
+
+# Generate embedded UI resources (depends on ui/dist existing)
+$(UI_RES_SRC) $(UI_RES_HDR): $(CRES_TOOL) ui_resources.txt $(wildcard ../ui/dist/*) $(wildcard ../ui/dist/assets/*)
+	@mkdir -p $(dir $(UI_RES_SRC))
+	$(CRES_TOOL) -m ui_resources.txt -o $(BUILDDIR)/ui_resources
+
+$(UI_RES_OBJ): $(UI_RES_SRC)
+	$(CC) -std=c11 -w -DCRES_COMPRESSION -I$(CRESDIR) -c $< -o $@
+
+$(CRES_OBJ): $(CRESDIR)/cres.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -w -DCRES_COMPRESSION -I$(CRESDIR) -c $< -o $@
+
+$(MINIZ_OBJ): $(CRESDIR)/miniz.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -w -DCRES_COMPRESSION -c $< -o $@
+
+$(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Itools/ui -I$(BUILDDIR) -I$(CRESDIR) -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILDDIR)/daemon $(BUILDDIR)/tests $(BUILDDIR)/tools $(BUILDDIR)/vendor $(TARGET)

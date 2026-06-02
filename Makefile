@@ -9,7 +9,7 @@ all: daemon tools
 daemon:
 	$(MAKE) -C daemon
 
-tools:
+tools: ui
 	$(MAKE) -C daemon tools
 
 test:

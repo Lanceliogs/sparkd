@@ -1,5 +1,6 @@
 #include "serial/serial.h"
 #include "log.h"
+#include "consts.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -87,6 +88,11 @@ static int cmd_find(const char *tag)
 
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && strcmp(argv[1], "--version") == 0)
+    {
+        printf("spark-serial, from sparkd v%s\n", SPARKD_VERSION);
+        return 0;
+    }
     if (argc < 2 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)
     {
         usage();

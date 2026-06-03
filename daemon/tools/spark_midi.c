@@ -2,6 +2,7 @@
 #include "midi_event.h"
 #include "log.h"
 #include "clock.h"
+#include "consts.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -118,6 +119,11 @@ static int cmd_listen(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && strcmp(argv[1], "--version") == 0)
+    {
+        printf("spark-midi, from sparkd v%s\n", SPARKD_VERSION);
+        return 0;
+    }
     if (argc < 2 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)
     {
         usage();

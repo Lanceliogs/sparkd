@@ -25,24 +25,42 @@ make
 
 ## Build
 
-Requires a C compiler (gcc or clang) and GNU Make. No other system dependencies.
+### Prerequisites
 
-```bash 
-make            # builds sparkd + sparkctl + tools
-make test       # runs the test suite
-make clean      # removes build artifacts
+- C compiler (gcc or clang) and GNU Make
+- `libasound2-dev` (Debian/Ubuntu) for MIDI support on Linux
+- Node.js and npm (optional — only needed to rebuild the web UI from source)
+
+If you don't have Node.js, you can download pre-built UI assets instead:
+
+```bash
+make ui-fetch       # downloads pre-built UI for the current version
 ```
 
-On Linux, ALSA development headers are needed for MIDI (`libasound2-dev` on Debian/Ubuntu).
+### Quick Build
+
+```bash
+make                # builds sparkd + all tools
+make test           # runs the test suite
+sudo make install   # installs to /opt/sparkd, symlinks to /usr/local/bin
+```
 
 ### Build Targets
 
-| Target | Output | Description |
-|--------|--------|-------------|
-| `make` | `build/sparkd` | Daemon binary |
-| `make tools` | `build/tools/sparkctl`, `build/tools/spark-midi` | CLI tools |
-| `make test` | `build/tests/test_*` | Unit test binaries |
-| `make clean` | | Remove build directory |
+| Target | Description |
+|--------|-------------|
+| `make` | Build daemon + all tools |
+| `make tools` | Build CLI tools (auto-builds UI if missing) |
+| `make test` | Run the test suite |
+| `make install` | Install to `/opt/sparkd`, symlink binaries to `/usr/local/bin` |
+| `make uninstall` | Remove installation and symlinks |
+| `make clean` | Remove C build artifacts |
+| `make ui-rebuild` | Force-rebuild the web UI (requires npm) |
+| `make ui-fetch` | Download pre-built UI assets from GitHub release |
+| `make ui-clean` | Remove `ui/dist/` |
+| `make dist` | Create Linux tarball |
+| `make deb` | Create `.deb` package |
+| `make installer` | Create Windows installer (cross-compile) |
 
 ## Project Layout
 

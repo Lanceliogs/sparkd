@@ -3,6 +3,7 @@
 #include "log.h"
 #include "clock.h"
 #include "auth.h"
+#include "consts.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -565,6 +566,11 @@ int main(int argc, char **argv)
 
     for (int i = 1; i < argc; i++)
     {
+        if (strcmp(argv[i], "--version") == 0)
+        {
+            printf("sparkctl, from sparkd v%s\n", SPARKD_VERSION);
+            return 0;
+        }
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0)
         {
             usage();

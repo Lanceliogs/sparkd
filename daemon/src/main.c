@@ -90,7 +90,7 @@ int main(int argc, char **argv)
 
     if (args.print_version)
     {
-        printf("sparkd %s\n", SPARKD_VERSION);
+        printf("sparkd v%s\n", SPARKD_VERSION);
         return 0;
     }
 

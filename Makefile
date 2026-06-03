@@ -7,7 +7,7 @@ DIST_NAME := sparkd-v$(VERSION)-linux-x64
 BINS := build/sparkd build/tools/sparkctl build/tools/spark-ui \
         build/tools/spark-midi build/tools/spark-serial build/tools/spark-reaper
 
-.PHONY: all clean test daemon tools ui install installer dist deb
+.PHONY: all clean test daemon tools ui ui-rebuild ui-fetch ui-clean install uninstall installer dist deb
 
 all: daemon tools
 
@@ -21,13 +21,41 @@ test:
 	$(MAKE) -C daemon test
 
 ui:
+	@if [ ! -d ui/dist ]; then echo "[ui] Building..."; cd ui && npm run build; \
+	else echo "[ui] ui/dist/ exists, skipping (use 'make ui-rebuild' to force)"; fi
+
+ui-rebuild:
 	cd ui && npm run build
+
+ui-fetch:
+	@echo "[ui] Downloading pre-built UI for v$(VERSION)..."
+	curl -fsSL https://github.com/music-music/sparkd/releases/download/v$(VERSION)/ui-dist.tar.gz | tar xz -C ui/
+	@echo "[ui] ui/dist/ ready"
+
+ui-clean:
+	rm -rf ui/dist
 
 install: all tools ui
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(BINS) $(DESTDIR)$(PREFIX)/bin/
 	install -d $(DESTDIR)$(PREFIX)/ui
 	cp -r ui/dist/* $(DESTDIR)$(PREFIX)/ui/
+	install -d $(DESTDIR)/usr/local/bin
+	@for bin in $(notdir $(BINS)); do \
+	    ln -sf $(PREFIX)/bin/$$bin $(DESTDIR)/usr/local/bin/$$bin; \
+	done
+	@echo ""
+	@echo "  sparkd installed to $(PREFIX)"
+	@echo "  Binaries symlinked to /usr/local/bin"
+	@echo "  Run: sparkctl --help"
+	@echo ""
+
+uninstall:
+	@for bin in $(notdir $(BINS)); do \
+	    rm -f $(DESTDIR)/usr/local/bin/$$bin; \
+	done
+	rm -rf $(DESTDIR)$(PREFIX)
+	@echo "  sparkd uninstalled"
 
 # --- Tarball ---
 

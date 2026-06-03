@@ -6,6 +6,7 @@
  */
 
 #include "log.h"
+#include "consts.h"
 
 #include <yaml.h>
 #include <stdio.h>
@@ -381,6 +382,11 @@ int main(int argc, char *argv[])
     if (argc < 2) {
         usage();
         return 1;
+    }
+
+    if (strcmp(argv[1], "--version") == 0) {
+        printf("spark-reaper, from sparkd v%s\n", SPARKD_VERSION);
+        return 0;
     }
 
     if (strcmp(argv[1], "note-names") != 0) {

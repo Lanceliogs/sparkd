@@ -13,6 +13,7 @@
 #include "cres.h"
 #include "install_resources.h"
 #include "../src/consts.h"
+#include "../src/fs.h"
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 
@@ -28,21 +29,6 @@
 static char s_install_dir[MAX_PATH];
 static char s_bin_dir[MAX_PATH];
 
-static int s_mkdir_p(const char *path)
-{
-    char tmp[MAX_PATH];
-    snprintf(tmp, sizeof(tmp), "%s", path);
-    for (char *p = tmp + 1; *p; p++)
-    {
-        if (*p == '\\' || *p == '/')
-        {
-            *p = '\0';
-            _mkdir(tmp);
-            *p = '\\';
-        }
-    }
-    return _mkdir(tmp);
-}
 
 static int s_extract_files(void)
 {
@@ -64,9 +50,8 @@ static int s_extract_files(void)
 
         /* Ensure parent directory exists */
         char parent[MAX_PATH];
-        snprintf(parent, sizeof(parent), "%s", out_path);
-        char *last_sep = strrchr(parent, '\\');
-        if (last_sep) { *last_sep = '\0'; s_mkdir_p(parent); }
+        if (spark_fs_path_parent(parent, sizeof(parent), out_path) == 0)
+            spark_fs_mkdir_p(parent);
 
         FILE *f = fopen(out_path, "wb");
         if (!f)
@@ -146,7 +131,7 @@ static int s_create_shortcut(void)
 
     char shortcut_dir[MAX_PATH];
     snprintf(shortcut_dir, sizeof(shortcut_dir), "%s\\sparkd", start_menu);
-    _mkdir(shortcut_dir);
+    spark_fs_mkdir_p(shortcut_dir);
 
     char shortcut_path[MAX_PATH];
     snprintf(shortcut_path, sizeof(shortcut_path), "%s\\sparkctl.lnk", shortcut_dir);

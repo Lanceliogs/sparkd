@@ -16,8 +16,9 @@
   let browseResult: BrowseResult | null = $state(null);
   let selectedFile: string | null = $state(null);
   let filename = $state('');
-  let roots: BrowseRoots = $state({ places: [], drives: [] });
+  let roots: BrowseRoots = $state({ projects: [], places: [], drives: [] });
   let navigating = $state(false);
+  let expanded: { projects: boolean; places: boolean; drives: boolean } = $state({ projects: false, places: false, drives: false });
 
   /* Navigation history */
   let history: string[] = $state([]);
@@ -26,6 +27,9 @@
   onMount(async () => {
     filename = initialFilename;
     roots = await editorBrowseRoots();
+    if (roots.projects.length > 0) expanded = { projects: true, places: false, drives: false };
+    else if (roots.places.length > 0) expanded = { projects: false, places: true, drives: false };
+    else expanded = { projects: false, places: false, drives: true };
     await navigatePush(initialPath);
   });
 
@@ -166,26 +170,52 @@
     <div class="fb-body">
       <!-- Sidebar -->
       <aside class="fb-sidebar">
+        {#if roots.projects.length > 0}
+          <div class="fb-sidebar-section">
+            <button class="fb-sidebar-title" onclick={() => expanded.projects = !expanded.projects}>
+              <svg class="fb-collapse-icon" class:fb-collapsed={!expanded.projects} viewBox="0 0 20 20" fill="currentColor"><path d={ICON_CHEVRON} /></svg>
+              Projects
+            </button>
+            {#if expanded.projects}
+              {#each roots.projects as project}
+                <button class="fb-sidebar-item" onclick={() => navigatePush(project.path)}>
+                  <svg class="fb-sidebar-icon" viewBox="0 0 20 20" fill="currentColor"><path d={ICON_FOLDER} /></svg>
+                  {project.label}
+                </button>
+              {/each}
+            {/if}
+          </div>
+        {/if}
         {#if roots.places.length > 0}
           <div class="fb-sidebar-section">
-            <span class="fb-sidebar-title">Places</span>
-            {#each roots.places as place}
-              <button class="fb-sidebar-item" onclick={() => navigatePush(place.path)}>
-                <svg class="fb-sidebar-icon" viewBox="0 0 20 20" fill="currentColor"><path d={ICON_FOLDER} /></svg>
-                {place.label}
-              </button>
-            {/each}
+            <button class="fb-sidebar-title" onclick={() => expanded.places = !expanded.places}>
+              <svg class="fb-collapse-icon" class:fb-collapsed={!expanded.places} viewBox="0 0 20 20" fill="currentColor"><path d={ICON_CHEVRON} /></svg>
+              Places
+            </button>
+            {#if expanded.places}
+              {#each roots.places as place}
+                <button class="fb-sidebar-item" onclick={() => navigatePush(place.path)}>
+                  <svg class="fb-sidebar-icon" viewBox="0 0 20 20" fill="currentColor"><path d={ICON_FOLDER} /></svg>
+                  {place.label}
+                </button>
+              {/each}
+            {/if}
           </div>
         {/if}
         {#if roots.drives.length > 0}
           <div class="fb-sidebar-section">
-            <span class="fb-sidebar-title">Drives</span>
-            {#each roots.drives as drive}
-              <button class="fb-sidebar-item" onclick={() => navigatePush(drive.path)}>
-                <svg class="fb-sidebar-icon" viewBox="0 0 20 20" fill="currentColor"><path d={ICON_FOLDER} /></svg>
-                {drive.label}
-              </button>
-            {/each}
+            <button class="fb-sidebar-title" onclick={() => expanded.drives = !expanded.drives}>
+              <svg class="fb-collapse-icon" class:fb-collapsed={!expanded.drives} viewBox="0 0 20 20" fill="currentColor"><path d={ICON_CHEVRON} /></svg>
+              Drives
+            </button>
+            {#if expanded.drives}
+              {#each roots.drives as drive}
+                <button class="fb-sidebar-item" onclick={() => navigatePush(drive.path)}>
+                  <svg class="fb-sidebar-icon" viewBox="0 0 20 20" fill="currentColor"><path d={ICON_FOLDER} /></svg>
+                  {drive.label}
+                </button>
+              {/each}
+            {/if}
           </div>
         {/if}
       </aside>
@@ -349,13 +379,33 @@
     margin-bottom: 0.5rem;
   }
   .fb-sidebar-title {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    width: 100%;
     font-size: 0.55rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-muted);
     padding: 0.3rem 0.6rem 0.15rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+  }
+  .fb-sidebar-title:hover {
+    color: var(--text);
+  }
+  .fb-collapse-icon {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+    transform: rotate(90deg);
+  }
+  .fb-collapse-icon.fb-collapsed {
+    transform: rotate(0deg);
   }
   .fb-sidebar-item {
     display: flex;

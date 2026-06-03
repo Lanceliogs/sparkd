@@ -13,6 +13,8 @@ typedef struct {
 } editor_place_t;
 
 typedef struct {
+    uint8_t project_count;
+    editor_place_t projects[EDITOR_PLACES_MAX];
     uint8_t place_count;
     editor_place_t places[EDITOR_PLACES_MAX];
     uint8_t drive_count;

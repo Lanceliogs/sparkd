@@ -1,4 +1,5 @@
 #include "fixture_bank.h"
+#include "fs.h"
 #include "log.h"
 #include "consts.h"
 
@@ -8,14 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#include <dirent.h>
-#endif
-
-#define PATH_SEP '/'
 #define PATH_LIST_SEP ';'
 
 #define BANK_ID_SIZE 64
@@ -475,55 +468,26 @@ static int s_process_bank_entry(const char *dir_path, const char *filename)
     return 0;
 }
 
-#ifdef _WIN32
+struct scan_ctx {
+    const char *dir_path;
+};
+
+static void s_scan_cb(const char *name, int is_dir, void *ctx)
+{
+    if (is_dir) return;
+    struct scan_ctx *sc = (struct scan_ctx *)ctx;
+    s_process_bank_entry(sc->dir_path, name);
+}
 
 static int s_scan_directory(const char *dir_path)
 {
     spark_log_debug("fixture_bank: scanning '%s'", dir_path);
-
-    char pattern[1024];
-    snprintf(pattern, sizeof(pattern), "%s/*", dir_path);
-
-    WIN32_FIND_DATAA fd;
-    HANDLE h = FindFirstFileA(pattern, &fd);
-    if (h == INVALID_HANDLE_VALUE)
-    {
+    struct scan_ctx ctx = { .dir_path = dir_path };
+    int rc = spark_fs_list_dir(dir_path, s_scan_cb, &ctx);
+    if (rc != 0)
         spark_log_warn("fixture_bank: cannot open directory '%s'", dir_path);
-        return -1;
-    }
-
-    do {
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            continue;
-        s_process_bank_entry(dir_path, fd.cFileName);
-    } while (FindNextFileA(h, &fd));
-
-    FindClose(h);
-    return 0;
+    return rc;
 }
-
-#else
-
-static int s_scan_directory(const char *dir_path)
-{
-    spark_log_debug("fixture_bank: scanning '%s'", dir_path);
-
-    DIR *dir = opendir(dir_path);
-    if (!dir)
-    {
-        spark_log_warn("fixture_bank: cannot open directory '%s'", dir_path);
-        return -1;
-    }
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL)
-        s_process_bank_entry(dir_path, entry->d_name);
-
-    closedir(dir);
-    return 0;
-}
-
-#endif
 
 int spark_fixture_bank_load(const char *search_paths)
 {
@@ -531,16 +495,10 @@ int spark_fixture_bank_load(const char *search_paths)
 
     if (!search_paths || search_paths[0] == '\0')
     {
-        /* Default: ~/.spark/fixtures/ */
+        char home[1024];
+        if (spark_fs_home(home, sizeof(home)) != 0) return 0;
         char default_path[1024];
-#ifdef _WIN32
-        const char *home = getenv("USERPROFILE");
-#else
-        const char *home = getenv("HOME");
-#endif
-        if (!home) return 0;
-        snprintf(default_path, sizeof(default_path), "%s%c.spark%cfixtures",
-                 home, PATH_SEP, PATH_SEP);
+        spark_fs_path_join(default_path, sizeof(default_path), home, ".spark/fixtures");
         s_scan_directory(default_path);
         return 0;
     }

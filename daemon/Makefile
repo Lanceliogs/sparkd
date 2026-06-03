@@ -41,7 +41,7 @@ YAML_CFLAGS := -DYAML_DECLARE_STATIC \
 
 # ---- Daemon sources ----
 
-SRCS := src/main.c src/log.c src/clock.c src/env.c src/engine.c src/http.c src/shutdown.c src/auth.c
+SRCS := src/main.c src/log.c src/clock.c src/env.c src/fs.c src/engine.c src/http.c src/shutdown.c src/auth.c
 SRCS += src/project/project.c src/project/project_yaml.c
 SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/fixture_bank.c src/dmx/dmx_out.c
 SRCS += src/serial/serial_common.c $(SERIAL_SRCS)
@@ -53,7 +53,8 @@ LIB_SRCS := $(filter-out src/main.c, $(SRCS))
 LIB_OBJS := $(LIB_SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 
 # Reusable object groups
-ENV_OBJS  := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o
+FS_OBJ    := $(BUILDDIR)/daemon/fs.o
+ENV_OBJS  := $(BUILDDIR)/daemon/env.o $(BUILDDIR)/daemon/log.o $(FS_OBJ)
 CLOCK_OBJ := $(BUILDDIR)/daemon/clock.o
 AUTH_OBJ  := $(BUILDDIR)/daemon/auth.o
 
@@ -98,14 +99,16 @@ SERIAL_OBJS := $(BUILDDIR)/daemon/serial/serial_common.o $(SERIAL_SRCS:src/%.c=$
 # ---- Tests ----
 
 TEST_EXCLUDED := tests/test_editor.c tests/test_editor_yaml.c \
-                 tests/test_auth.c tests/test_sparkctl_helpers.c tests/test_cres.c
+                 tests/test_auth.c tests/test_sparkctl_helpers.c tests/test_cres.c \
+                 tests/test_fs.c
 TEST_SRCS := $(filter-out $(TEST_EXCLUDED), $(wildcard tests/test_*.c))
 TEST_BINS := $(TEST_SRCS:tests/test_%.c=$(BUILDDIR)/tests/test_%$(EXE))
 
 EDITOR_TEST_BINS := $(BUILDDIR)/tests/test_editor$(EXE) $(BUILDDIR)/tests/test_editor_yaml$(EXE)
 CUSTOM_TEST_BINS := $(BUILDDIR)/tests/test_auth$(EXE) \
                     $(BUILDDIR)/tests/test_sparkctl_helpers$(EXE) \
-                    $(BUILDDIR)/tests/test_cres$(EXE)
+                    $(BUILDDIR)/tests/test_cres$(EXE) \
+                    $(BUILDDIR)/tests/test_fs$(EXE)
 
 # ============================================================================
 # Targets
@@ -208,9 +211,9 @@ $(INSTALL_RES_SRC) $(INSTALL_RES_HDR): $(CRES_TOOL) install_resources.txt $(WIN3
 $(INSTALL_RES_OBJ): $(INSTALL_RES_SRC)
 	$(CC) -std=c11 -w -DCRES_COMPRESSION -I$(CRESDIR) -c $< -o $@
 
-$(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE): tools/spark_install.c $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ)
+$(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE): tools/spark_install.c $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -o $@ $< $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(LDFLAGS) -lole32 -lshell32
+	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -o $@ $< $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ) $(LDFLAGS) -lole32 -lshell32
 
 # ---- Tests ----
 
@@ -240,6 +243,10 @@ $(BUILDDIR)/tests/test_sparkctl_helpers$(EXE): tests/test_sparkctl_helpers.c $(M
 $(BUILDDIR)/tests/test_cres$(EXE): tests/test_cres.c $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -Itests -o $@ $< $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(LDFLAGS)
+
+$(BUILDDIR)/tests/test_fs$(EXE): tests/test_fs.c $(FS_OBJ)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Itests -o $@ $< $(FS_OBJ) $(LDFLAGS)
 
 # ---- Housekeeping ----
 

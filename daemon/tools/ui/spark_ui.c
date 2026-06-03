@@ -2,6 +2,7 @@
 #include "mg_helpers.h"
 #include "editor_http.h"
 #include "env.h"
+#include "fs.h"
 #include "log.h"
 #include "clock.h"
 #include "consts.h"
@@ -36,36 +37,12 @@ static char s_listen_port[16] = "7601";
 static char s_daemon_addr[256] = DEFAULT_DAEMON_ADDR;
 static char s_ui_root[1088] = {0};
 
-/* Get directory containing the running executable */
-static int s_get_exe_dir(char *buf, size_t buf_size)
-{
-#ifdef _WIN32
-    char path[MAX_PATH];
-    DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) return -1;
-    /* Strip filename, keep directory */
-    char *sep = strrchr(path, '\\');
-    if (!sep) sep = strrchr(path, '/');
-    if (sep) *sep = '\0';
-    snprintf(buf, buf_size, "%s", path);
-#else
-    char path[1024];
-    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
-    if (len <= 0) return -1;
-    path[len] = '\0';
-    snprintf(buf, buf_size, "%s", dirname(path));
-#endif
-    return 0;
-}
-
 /* Check if a directory contains index.html (valid UI root) */
 static int s_is_ui_root(const char *dir)
 {
     char path[1100];
-    snprintf(path, sizeof(path), "%s/index.html", dir);
-    FILE *f = fopen(path, "r");
-    if (f) { fclose(f); return 1; }
-    return 0;
+    spark_fs_path_join(path, sizeof(path), dir, "index.html");
+    return spark_fs_file_exists(path);
 }
 
 /*
@@ -92,7 +69,7 @@ static int s_resolve_ui_root(void)
 
     /* Relative to executable */
     char exe_dir[1024];
-    if (s_get_exe_dir(exe_dir, sizeof(exe_dir)) == 0)
+    if (spark_fs_exe_dir(exe_dir, sizeof(exe_dir)) == 0)
     {
         snprintf(s_ui_root, sizeof(s_ui_root), "%s/ui", exe_dir);
         if (s_is_ui_root(s_ui_root)) return 0;

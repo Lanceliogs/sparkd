@@ -5,6 +5,7 @@
  *   note-names   Generate per-channel note-name files for REAPER's MIDI editor
  */
 
+#include "fs.h"
 #include "log.h"
 #include "consts.h"
 
@@ -14,14 +15,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-
-#ifdef _WIN32
-#include <direct.h>
-#define MKDIR(path) _mkdir(path)
-#else
-#include <sys/stat.h>
-#define MKDIR(path) mkdir(path, 0755)
-#endif
 
 #define MAX_SCENES 2048
 #define MAX_NAME 64
@@ -311,7 +304,7 @@ static int s_write_note_names(const char *out_dir, bool include_disabled)
 
     /* Create output directory if needed */
     if (out_dir) {
-        MKDIR(out_dir);
+        spark_fs_mkdir_p(out_dir);
     }
 
     int total_written = 0;

@@ -1,17 +1,10 @@
 #include "env.h"
+#include "fs.h"
 #include "log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
-#define PATH_SEP '/'
 
 #define ENV_MAX_ENTRIES 64
 #define ENV_KEY_SIZE 64
@@ -77,13 +70,9 @@ static int s_parse_file(const char *path)
 
 static void s_get_home_path(char *buf, size_t size)
 {
-#ifdef _WIN32
-    const char *home = getenv("USERPROFILE");
-#else
-    const char *home = getenv("HOME");
-#endif
-    if (home)
-        snprintf(buf, size, "%s%c.spark%c.spark.env", home, PATH_SEP, PATH_SEP);
+    char home[1024];
+    if (spark_fs_home(home, sizeof(home)) == 0)
+        spark_fs_path_join(buf, size, home, ".spark/.spark.env");
     else
         buf[0] = '\0';
 }

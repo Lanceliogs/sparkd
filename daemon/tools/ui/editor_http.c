@@ -3,6 +3,7 @@
 #include "editor.h"
 #include "editor_places.h"
 #include "env.h"
+#include "fs.h"
 #include "log.h"
 
 #include <stdio.h>
@@ -14,12 +15,9 @@
 #endif
 
 #ifdef _WIN32
-#include <windows.h>
 #include <direct.h>
 #else
 #include <unistd.h>
-#include <dirent.h>
-#include <sys/stat.h>
 #endif
 
 static editor_state_t s_editor;
@@ -785,7 +783,18 @@ static void s_handle_browse_roots(struct mg_connection *c)
 
     char *out = (char *)malloc(16 * 1024);
     int pos = 0;
-    pos += snprintf(out + pos, 16 * 1024 - pos, "{\"places\":[");
+    pos += snprintf(out + pos, 16 * 1024 - pos, "{\"projects\":[");
+    for (uint8_t i = 0; i < roots.project_count; i++)
+    {
+        char esc_label[EDITOR_PLACE_LABEL_MAX * 2];
+        char esc_path[EDITOR_PLACE_PATH_MAX * 2];
+        s_escape_json_str(roots.projects[i].label, esc_label, sizeof(esc_label));
+        s_escape_json_str(roots.projects[i].path, esc_path, sizeof(esc_path));
+        if (i > 0) pos += snprintf(out + pos, 16 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 16 * 1024 - pos,
+            "{\"label\":\"%s\",\"path\":\"%s\"}", esc_label, esc_path);
+    }
+    pos += snprintf(out + pos, 16 * 1024 - pos, "],\"places\":[");
     for (uint8_t i = 0; i < roots.place_count; i++)
     {
         char esc_label[EDITOR_PLACE_LABEL_MAX * 2];
@@ -829,38 +838,53 @@ static int s_is_browsable(const char *name)
     return 0;
 }
 
-#ifdef _WIN32
+struct browse_ctx {
+    char *out;
+    int pos;
+    int first;
+};
+
+static void s_browse_cb(const char *name, int is_dir, void *ctx)
+{
+    struct browse_ctx *bc = (struct browse_ctx *)ctx;
+    if (s_is_hidden(name)) return;
+    if (!is_dir && !s_is_browsable(name)) return;
+
+    if (!bc->first) bc->pos += snprintf(bc->out + bc->pos, 64 * 1024 - bc->pos, ",");
+    bc->pos += snprintf(bc->out + bc->pos, 64 * 1024 - bc->pos,
+        "{\"name\":\"%s\",\"type\":\"%s\"}",
+        name, is_dir ? "dir" : "file");
+    bc->first = 0;
+}
 
 static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
 {
     char path[EDITOR_PATH_MAX] = {0};
     mg_http_get_var(&hm->query, "path", path, sizeof(path));
 
-    if (path[0] == '\0' || (path[0] == '/' && path[1] == '\0'))
+    if (path[0] == '\0')
     {
+#ifdef _WIN32
         _getcwd(path, sizeof(path));
+#else
+        getcwd(path, sizeof(path));
+#endif
     }
     else
     {
         char abs[EDITOR_PATH_MAX];
-        if (_fullpath(abs, path, sizeof(abs)) != NULL)
+        if (spark_fs_realpath(abs, sizeof(abs), path) == 0)
             strncpy(path, abs, sizeof(path) - 1);
     }
 
+    spark_fs_path_normalize(path);
+
     size_t plen = strlen(path);
-    while (plen > 1 && (path[plen - 1] == '/' || path[plen - 1] == '\\'))
+    while (plen > 1 && path[plen - 1] == '/')
         path[--plen] = '\0';
 
-    char pattern[EDITOR_PATH_MAX + 4];
-    snprintf(pattern, sizeof(pattern), "%s\\*", path);
-
-    spark_log_debug("browse: path='%s' pattern='%s'", path, pattern);
-
-    WIN32_FIND_DATAA fd;
-    HANDLE h = FindFirstFileA(pattern, &fd);
-    if (h == INVALID_HANDLE_VALUE)
+    if (!spark_fs_dir_exists(path))
     {
-        spark_log_debug("browse: FindFirstFileA failed for '%s'", pattern);
         mg_json_reply(c, 404, "{\"error\":\"cannot open directory\"}");
         return;
     }
@@ -873,20 +897,10 @@ static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
     pos += snprintf(out + pos, 64 * 1024 - pos,
         "{\"path\":\"%s\",\"entries\":[", escaped_path);
 
-    int first = 1;
-    do {
-        if (s_is_hidden(fd.cFileName)) continue;
-        int is_dir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        if (!is_dir && !s_is_browsable(fd.cFileName)) continue;
+    struct browse_ctx bc = { .out = out, .pos = pos, .first = 1 };
+    spark_fs_list_dir(path, s_browse_cb, &bc);
+    pos = bc.pos;
 
-        if (!first) pos += snprintf(out + pos, 64 * 1024 - pos, ",");
-        pos += snprintf(out + pos, 64 * 1024 - pos,
-            "{\"name\":\"%s\",\"type\":\"%s\"}",
-            fd.cFileName, is_dir ? "dir" : "file");
-        first = 0;
-    } while (FindNextFileA(h, &fd));
-
-    FindClose(h);
     pos += snprintf(out + pos, 64 * 1024 - pos, "]}");
 
     mg_http_reply(c, 200,
@@ -895,77 +909,6 @@ static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
         "%.*s", pos, out);
     free(out);
 }
-
-#else
-
-static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
-{
-    char path[EDITOR_PATH_MAX] = {0};
-    mg_http_get_var(&hm->query, "path", path, sizeof(path));
-
-    if (path[0] == '\0')
-    {
-        getcwd(path, sizeof(path));
-    }
-    else if (path[0] != '/')
-    {
-        char abs[EDITOR_PATH_MAX];
-        if (realpath(path, abs) != NULL)
-            strncpy(path, abs, sizeof(path) - 1);
-    }
-
-    DIR *dir = opendir(path);
-    if (!dir)
-    {
-        mg_json_reply(c, 404, "{\"error\":\"cannot open directory\"}");
-        return;
-    }
-
-    char *out = (char *)malloc(64 * 1024);
-    int pos = 0;
-    pos += snprintf(out + pos, 64 * 1024 - pos,
-        "{\"path\":\"%s\",\"entries\":[", path);
-
-    struct dirent *entry;
-    int first = 1;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        if (s_is_hidden(entry->d_name)) continue;
-
-        int is_dir = 0;
-        if (entry->d_type == DT_DIR)
-        {
-            is_dir = 1;
-        }
-        else if (entry->d_type == DT_UNKNOWN)
-        {
-            char fullpath[EDITOR_PATH_MAX * 2];
-            snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
-            struct stat st;
-            if (stat(fullpath, &st) == 0 && S_ISDIR(st.st_mode))
-                is_dir = 1;
-        }
-
-        if (!is_dir && !s_is_browsable(entry->d_name)) continue;
-
-        if (!first) pos += snprintf(out + pos, 64 * 1024 - pos, ",");
-        pos += snprintf(out + pos, 64 * 1024 - pos,
-            "{\"name\":\"%s\",\"type\":\"%s\"}",
-            entry->d_name, is_dir ? "dir" : "file");
-        first = 0;
-    }
-
-    closedir(dir);
-    pos += snprintf(out + pos, 64 * 1024 - pos, "]}");
-
-    mg_http_reply(c, 200,
-        "Access-Control-Allow-Origin: *\r\n"
-        "Content-Type: application/json\r\n",
-        "%.*s", pos, out);
-    free(out);
-}
-
-#endif
 
 /* ---- Route dispatcher ---- */
 

@@ -1,16 +1,11 @@
 #include "editor.h"
 #include "log.h"
 #include "env.h"
+#include "fs.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <dirent.h>
-#endif
 
 #define PATH_LIST_SEP ';'
 
@@ -212,42 +207,23 @@ static int s_load_bank_file(editor_state_t *state, const char *dir_path, const c
     return 0;
 }
 
-#ifdef _WIN32
+struct bank_scan_ctx {
+    editor_state_t *state;
+    const char *dir_path;
+};
+
+static void s_bank_scan_cb(const char *name, int is_dir, void *ctx)
+{
+    if (is_dir) return;
+    struct bank_scan_ctx *bc = (struct bank_scan_ctx *)ctx;
+    s_load_bank_file(bc->state, bc->dir_path, name);
+}
 
 static int s_scan_bank_dir(editor_state_t *state, const char *dir_path)
 {
-    char pattern[1024];
-    snprintf(pattern, sizeof(pattern), "%s/*", dir_path);
-
-    WIN32_FIND_DATAA fd;
-    HANDLE h = FindFirstFileA(pattern, &fd);
-    if (h == INVALID_HANDLE_VALUE) return -1;
-
-    do {
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-        s_load_bank_file(state, dir_path, fd.cFileName);
-    } while (FindNextFileA(h, &fd));
-
-    FindClose(h);
-    return 0;
+    struct bank_scan_ctx ctx = { .state = state, .dir_path = dir_path };
+    return spark_fs_list_dir(dir_path, s_bank_scan_cb, &ctx);
 }
-
-#else
-
-static int s_scan_bank_dir(editor_state_t *state, const char *dir_path)
-{
-    DIR *dir = opendir(dir_path);
-    if (!dir) return -1;
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL)
-        s_load_bank_file(state, dir_path, entry->d_name);
-
-    closedir(dir);
-    return 0;
-}
-
-#endif
 
 int editor_load_banks(editor_state_t *state, const char *search_paths)
 {
@@ -255,14 +231,10 @@ int editor_load_banks(editor_state_t *state, const char *search_paths)
 
     if (!search_paths || search_paths[0] == '\0')
     {
+        char home[1024];
+        if (spark_fs_home(home, sizeof(home)) != 0) return 0;
         char default_path[1024];
-#ifdef _WIN32
-        const char *home = getenv("USERPROFILE");
-#else
-        const char *home = getenv("HOME");
-#endif
-        if (!home) return 0;
-        snprintf(default_path, sizeof(default_path), "%s/.spark/fixtures", home);
+        spark_fs_path_join(default_path, sizeof(default_path), home, ".spark/fixtures");
         s_scan_bank_dir(state, default_path);
         return 0;
     }

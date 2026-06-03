@@ -320,6 +320,7 @@ export async function editorBrowse(path: string): Promise<BrowseResult> {
 }
 
 export interface BrowseRoots {
+  projects: { label: string; path: string }[];
   places: { label: string; path: string }[];
   drives: { label: string; path: string }[];
 }
@@ -327,9 +328,9 @@ export interface BrowseRoots {
 export async function editorBrowseRoots(): Promise<BrowseRoots> {
   try {
     const res = await authFetch(`${BASE}/api/editor/browse/roots`);
-    if (!res.ok) return { places: [], drives: [] };
+    if (!res.ok) return { projects: [], places: [], drives: [] };
     return await res.json();
-  } catch { return { places: [], drives: [] }; }
+  } catch { return { projects: [], places: [], drives: [] }; }
 }
 
 /* ---- Save As ---- */

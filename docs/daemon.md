@@ -33,6 +33,7 @@ Real env vars always take priority over file values.
 | `SPARK_PROJECT_PATH` | Default project file path | `--project` |
 | `SPARK_HTTP_ADDR` | HTTP listen address (`host:port`) | `--http` |
 | `SPARK_FIXTURE_BANK_PATH` | Semicolon-separated fixture bank directories | — |
+| `SPARK_PROJECT_ROOTS` | Custom project browser roots (`Name@/path;Name2@/path2`) | — |
 
 ## Lifecycle Modes
 

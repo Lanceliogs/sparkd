@@ -1,5 +1,6 @@
 #include "mongoose.h"
 #include "env.h"
+#include "fs.h"
 #include "log.h"
 #include "clock.h"
 #include "auth.h"
@@ -16,7 +17,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <libgen.h>
 #endif
 
 #define DEFAULT_DAEMON_ADDR "127.0.0.1:7600"
@@ -165,46 +165,21 @@ static int s_http_request(const char *addr, const char *method,
 
 /* ---- Binary discovery ---- */
 
-static int s_get_exe_dir(char *buf, size_t buf_size)
-{
-#ifdef _WIN32
-    char path[MAX_PATH];
-    DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) return -1;
-    char *sep = strrchr(path, '\\');
-    if (!sep) sep = strrchr(path, '/');
-    if (sep) *sep = '\0';
-    snprintf(buf, buf_size, "%s", path);
-#else
-    char path[1024];
-    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
-    if (len <= 0) return -1;
-    path[len] = '\0';
-    char *dir = dirname(path);
-    snprintf(buf, buf_size, "%s", dir);
-#endif
-    return 0;
-}
-
 static int s_find_binary(const char *name, char *out, size_t out_size)
 {
     char exe_dir[1024];
-    if (s_get_exe_dir(exe_dir, sizeof(exe_dir)) == 0)
+    if (spark_fs_exe_dir(exe_dir, sizeof(exe_dir)) == 0)
     {
 #ifdef _WIN32
-        snprintf(out, out_size, "%s\\%s.exe", exe_dir, name);
-        if (GetFileAttributesA(out) != INVALID_FILE_ATTRIBUTES)
-            return 0;
-        snprintf(out, out_size, "%s\\..\\%s.exe", exe_dir, name);
-        if (GetFileAttributesA(out) != INVALID_FILE_ATTRIBUTES)
-            return 0;
+        snprintf(out, out_size, "%s/%s.exe", exe_dir, name);
+        if (spark_fs_file_exists(out)) return 0;
+        snprintf(out, out_size, "%s/../%s.exe", exe_dir, name);
+        if (spark_fs_file_exists(out)) return 0;
 #else
         snprintf(out, out_size, "%s/%s", exe_dir, name);
-        if (access(out, X_OK) == 0)
-            return 0;
+        if (spark_fs_file_exists(out)) return 0;
         snprintf(out, out_size, "%s/../%s", exe_dir, name);
-        if (access(out, X_OK) == 0)
-            return 0;
+        if (spark_fs_file_exists(out)) return 0;
 #endif
     }
 
@@ -251,15 +226,14 @@ static int s_spawn_detached(const char *binary, char *const args[],
         setsid();
 
         /* Redirect stdout/stderr to log file */
-        const char *home = getenv("HOME");
+        char home[512];
         char logdir[512], logpath[600];
-        if (home)
-            snprintf(logdir, sizeof(logdir), "%s/.spark", home);
+        if (spark_fs_home(home, sizeof(home)) == 0)
+            spark_fs_path_join(logdir, sizeof(logdir), home, ".spark");
         else
             snprintf(logdir, sizeof(logdir), "/tmp");
 
-        /* Ensure log directory exists */
-        mkdir(logdir, 0755);
+        spark_fs_mkdir_p(logdir);
 
         const char *basename_str = strrchr(binary, '/');
         basename_str = basename_str ? basename_str + 1 : binary;

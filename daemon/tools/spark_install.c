@@ -189,15 +189,22 @@ static int s_write_uninstaller(void)
     }
 
     fprintf(f, "@echo off\n");
-    fprintf(f, "echo Uninstalling sparkd...\n");
+    fprintf(f, "echo.\n");
+    fprintf(f, "echo   sparkd uninstaller\n");
+    fprintf(f, "echo   ========================\n");
+    fprintf(f, "echo.\n");
+    fprintf(f, "echo   Remove: %s\n", s_install_dir);
+    fprintf(f, "echo.\n");
+    fprintf(f, "pause\n");
     fprintf(f, "echo.\n");
 
     /* Remove bin and ui folders */
+    fprintf(f, "echo [1/3] Removing files...\n");
     fprintf(f, "rmdir /s /q \"%s\\bin\" 2>nul\n", s_install_dir);
     fprintf(f, "rmdir /s /q \"%s\\ui\" 2>nul\n", s_install_dir);
 
     /* Remove from PATH */
-    fprintf(f, "echo Removing from PATH...\n");
+    fprintf(f, "echo [2/3] Removing from PATH...\n");
     fprintf(f, "powershell -NoProfile -Command \""
               "$p = [Environment]::GetEnvironmentVariable('Path','User'); "
               "$p = ($p.Split(';') | Where-Object { $_ -ne '%s' }) -join ';'; "
@@ -205,26 +212,44 @@ static int s_write_uninstaller(void)
               s_bin_dir);
 
     /* Remove Start Menu shortcut */
+    fprintf(f, "echo [3/3] Removing shortcuts...\n");
     char start_menu[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_PROGRAMS, NULL, 0, start_menu) == S_OK)
     {
         fprintf(f, "rmdir /s /q \"%s\\sparkd\" 2>nul\n", start_menu);
     }
 
-    /* Remove install dirs */
-    fprintf(f, "rmdir /q \"%s\" 2>nul\n", s_bin_dir);
     fprintf(f, "echo.\n");
-    fprintf(f, "echo sparkd uninstalled.\n");
-    fprintf(f, "echo You can delete this folder: %s\n", s_install_dir);
+    fprintf(f, "echo   ========================\n");
+    fprintf(f, "echo   sparkd uninstalled.\n");
+    fprintf(f, "echo.\n");
     fprintf(f, "pause\n");
+
+    /* Self-delete: copy to temp, run from there to remove install dir */
+    fprintf(f, "cd /d \"%%TEMP%%\"\n");
+    fprintf(f, "rmdir /s /q \"%s\" 2>nul\n", s_install_dir);
+    fprintf(f, "(goto) 2>nul & del \"%%~f0\"\n");
 
     fclose(f);
     printf("  Uninstaller written: %s\n", bat_path);
     return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    int silent = 0;
+
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--version") == 0)
+        {
+            printf("sparkd-installer, from sparkd v%s\n", SPARKD_VERSION);
+            return 0;
+        }
+        if (strcmp(argv[i], "--silent") == 0 || strcmp(argv[i], "-y") == 0)
+            silent = 1;
+    }
+
     printf("\n");
     printf("  sparkd installer v%s\n", SPARKD_VERSION);
     printf("  ========================\n\n");
@@ -240,10 +265,22 @@ int main(void)
     snprintf(s_install_dir, sizeof(s_install_dir), "%s\\%s", appdata, INSTALL_DIR_NAME);
     snprintf(s_bin_dir, sizeof(s_bin_dir), "%s\\bin", s_install_dir);
 
-    printf("  Install to: %s\n\n", s_bin_dir);
-    printf("  Press ENTER to install, or Ctrl+C to cancel...");
-    fflush(stdout);
-    getchar();
+    /* Check for existing installation */
+    WIN32_FILE_ATTRIBUTE_DATA attr;
+    int upgrading = GetFileAttributesExA(s_bin_dir, GetFileExInfoStandard, &attr);
+
+    printf("  Install to: %s\n", s_install_dir);
+    printf("    bin/    executables\n");
+    printf("    ui/     web interface\n");
+    if (upgrading)
+        printf("\n  Existing installation detected — will overwrite.\n");
+
+    if (!silent)
+    {
+        printf("\n  Press ENTER to install, or Ctrl+C to cancel...");
+        fflush(stdout);
+        getchar();
+    }
     printf("\n");
 
     /* Extract */
@@ -267,7 +304,7 @@ int main(void)
     s_write_uninstaller();
 
     printf("\n  ========================\n");
-    printf("  sparkd installed successfully!\n");
+    printf("  sparkd v%s installed successfully!\n", SPARKD_VERSION);
     printf("  Open a new terminal and run: sparkctl --help\n\n");
 
     return 0;

@@ -134,15 +134,34 @@ static void s_list_cb(const char *name, int is_dir, void *ctx)
         lc->found_self = 1;
 }
 
-static void test_list_dir(void)
+static void test_iter_dir(void)
 {
     struct list_ctx ctx = {0};
-    ASSERT_EQ(spark_fs_list_dir("tests", s_list_cb, &ctx), 0);
+    ASSERT_EQ(spark_fs_iter_dir("tests", s_list_cb, &ctx), 0);
     ASSERT_TRUE(ctx.count > 0);
     ASSERT_EQ(ctx.found_self, 1);
 
     /* Non-existent dir returns error */
-    ASSERT_EQ(spark_fs_list_dir("/nonexistent_xyz_12345", s_list_cb, &ctx), -1);
+    ASSERT_EQ(spark_fs_iter_dir("/nonexistent_xyz_12345", s_list_cb, &ctx), -1);
+}
+
+static void test_list(void)
+{
+    spark_fs_listing_t ls;
+    ASSERT_EQ(spark_fs_list("tests", &ls), 0);
+    ASSERT_TRUE(ls.count > 0);
+
+    int found = 0;
+    for (int i = 0; i < ls.count; i++)
+        if (strcmp(ls.entries[i].name, "test_fs.c") == 0) found = 1;
+    ASSERT_EQ(found, 1);
+
+    spark_fs_list_free(&ls);
+    ASSERT_EQ(ls.entries == NULL, 1);
+    ASSERT_EQ(ls.count, 0);
+
+    /* Non-existent dir */
+    ASSERT_EQ(spark_fs_list("/nonexistent_xyz_12345", &ls), -1);
 }
 
 /* ---- exe_dir and home ---- */
@@ -221,7 +240,8 @@ int main(void)
     RUN_TEST(test_dir_exists);
     RUN_TEST(test_file_exists);
     RUN_TEST(test_mkdir_p_and_remove);
-    RUN_TEST(test_list_dir);
+    RUN_TEST(test_iter_dir);
+    RUN_TEST(test_list);
     RUN_TEST(test_exe_dir);
     RUN_TEST(test_home);
     RUN_TEST(test_realpath);

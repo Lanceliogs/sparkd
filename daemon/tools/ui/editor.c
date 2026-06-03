@@ -222,7 +222,7 @@ static void s_bank_scan_cb(const char *name, int is_dir, void *ctx)
 static int s_scan_bank_dir(editor_state_t *state, const char *dir_path)
 {
     struct bank_scan_ctx ctx = { .state = state, .dir_path = dir_path };
-    return spark_fs_list_dir(dir_path, s_bank_scan_cb, &ctx);
+    return spark_fs_iter_dir(dir_path, s_bank_scan_cb, &ctx);
 }
 
 int editor_load_banks(editor_state_t *state, const char *search_paths)

@@ -483,7 +483,7 @@ static int s_scan_directory(const char *dir_path)
 {
     spark_log_debug("fixture_bank: scanning '%s'", dir_path);
     struct scan_ctx ctx = { .dir_path = dir_path };
-    int rc = spark_fs_list_dir(dir_path, s_scan_cb, &ctx);
+    int rc = spark_fs_iter_dir(dir_path, s_scan_cb, &ctx);
     if (rc != 0)
         spark_log_warn("fixture_bank: cannot open directory '%s'", dir_path);
     return rc;

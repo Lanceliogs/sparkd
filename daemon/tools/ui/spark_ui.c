@@ -57,14 +57,14 @@ static int s_resolve_ui_root(void)
 {
     /* Already set by --ui-root */
     if (s_ui_root[0] != '\0' && s_is_ui_root(s_ui_root))
-        return 0;
+        goto resolve;
 
     /* Env var */
     const char *env = spark_env_get("SPARK_UI_ROOT");
     if (env && env[0] != '\0')
     {
         snprintf(s_ui_root, sizeof(s_ui_root), "%s", env);
-        if (s_is_ui_root(s_ui_root)) return 0;
+        if (s_is_ui_root(s_ui_root)) goto resolve;
     }
 
     /* Relative to executable */
@@ -72,20 +72,28 @@ static int s_resolve_ui_root(void)
     if (spark_fs_exe_dir(exe_dir, sizeof(exe_dir)) == 0)
     {
         snprintf(s_ui_root, sizeof(s_ui_root), "%s/ui", exe_dir);
-        if (s_is_ui_root(s_ui_root)) return 0;
+        if (s_is_ui_root(s_ui_root)) goto resolve;
 
         snprintf(s_ui_root, sizeof(s_ui_root), "%s/../ui", exe_dir);
-        if (s_is_ui_root(s_ui_root)) return 0;
+        if (s_is_ui_root(s_ui_root)) goto resolve;
 
         snprintf(s_ui_root, sizeof(s_ui_root), "%s/../share/sparkd/ui", exe_dir);
-        if (s_is_ui_root(s_ui_root)) return 0;
+        if (s_is_ui_root(s_ui_root)) goto resolve;
     }
 
     /* CWD fallback (development) */
     snprintf(s_ui_root, sizeof(s_ui_root), "ui/dist");
-    if (s_is_ui_root(s_ui_root)) return 0;
+    if (s_is_ui_root(s_ui_root)) goto resolve;
 
     return -1;
+
+resolve:
+    {
+        char resolved[1088];
+        if (spark_fs_realpath(resolved, sizeof(resolved), s_ui_root) == 0)
+            strncpy(s_ui_root, resolved, sizeof(s_ui_root) - 1);
+    }
+    return 0;
 }
 
 static void s_signal_handler(int sig)

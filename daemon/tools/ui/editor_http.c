@@ -838,25 +838,6 @@ static int s_is_browsable(const char *name)
     return 0;
 }
 
-struct browse_ctx {
-    char *out;
-    int pos;
-    int first;
-};
-
-static void s_browse_cb(const char *name, int is_dir, void *ctx)
-{
-    struct browse_ctx *bc = (struct browse_ctx *)ctx;
-    if (s_is_hidden(name)) return;
-    if (!is_dir && !s_is_browsable(name)) return;
-
-    if (!bc->first) bc->pos += snprintf(bc->out + bc->pos, 64 * 1024 - bc->pos, ",");
-    bc->pos += snprintf(bc->out + bc->pos, 64 * 1024 - bc->pos,
-        "{\"name\":\"%s\",\"type\":\"%s\"}",
-        name, is_dir ? "dir" : "file");
-    bc->first = 0;
-}
-
 static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
 {
     char path[EDITOR_PATH_MAX] = {0};
@@ -883,7 +864,8 @@ static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
     while (plen > 1 && path[plen - 1] == '/')
         path[--plen] = '\0';
 
-    if (!spark_fs_dir_exists(path))
+    spark_fs_listing_t ls;
+    if (spark_fs_list(path, &ls) != 0)
     {
         mg_json_reply(c, 404, "{\"error\":\"cannot open directory\"}");
         return;
@@ -897,10 +879,20 @@ static void s_handle_browse(struct mg_connection *c, struct mg_http_message *hm)
     pos += snprintf(out + pos, 64 * 1024 - pos,
         "{\"path\":\"%s\",\"entries\":[", escaped_path);
 
-    struct browse_ctx bc = { .out = out, .pos = pos, .first = 1 };
-    spark_fs_list_dir(path, s_browse_cb, &bc);
-    pos = bc.pos;
+    int first = 1;
+    for (int i = 0; i < ls.count; i++)
+    {
+        if (s_is_hidden(ls.entries[i].name)) continue;
+        if (!ls.entries[i].is_dir && !s_is_browsable(ls.entries[i].name)) continue;
 
+        if (!first) pos += snprintf(out + pos, 64 * 1024 - pos, ",");
+        pos += snprintf(out + pos, 64 * 1024 - pos,
+            "{\"name\":\"%s\",\"type\":\"%s\"}",
+            ls.entries[i].name, ls.entries[i].is_dir ? "dir" : "file");
+        first = 0;
+    }
+
+    spark_fs_list_free(&ls);
     pos += snprintf(out + pos, 64 * 1024 - pos, "]}");
 
     mg_http_reply(c, 200,

@@ -59,7 +59,7 @@ int spark_fs_file_exists(const char *path)
 
 #ifdef _WIN32
 
-int spark_fs_list_dir(const char *path, spark_fs_list_cb cb, void *ctx)
+int spark_fs_iter_dir(const char *path, spark_fs_iter_callback cb, void *ctx)
 {
     if (!path || !cb) return -1;
 
@@ -85,7 +85,7 @@ int spark_fs_list_dir(const char *path, spark_fs_list_cb cb, void *ctx)
 
 #else
 
-int spark_fs_list_dir(const char *path, spark_fs_list_cb cb, void *ctx)
+int spark_fs_iter_dir(const char *path, spark_fs_iter_callback cb, void *ctx)
 {
     if (!path || !cb) return -1;
 
@@ -120,6 +120,60 @@ int spark_fs_list_dir(const char *path, spark_fs_list_cb cb, void *ctx)
 }
 
 #endif
+
+/* ------------------------------------------------------------------ */
+/* Simple directory listing (array-based)                              */
+/* ------------------------------------------------------------------ */
+
+struct collect_ctx {
+    spark_fs_listing_t *out;
+    int cap;
+};
+
+static void s_collect_cb(const char *name, int is_dir, void *ctx)
+{
+    struct collect_ctx *cc = (struct collect_ctx *)ctx;
+    if (cc->out->count >= cc->cap)
+    {
+        cc->cap = cc->cap + cc->cap / 2;
+        cc->out->entries = (spark_fs_entry_t *)realloc(
+            cc->out->entries, (size_t)cc->cap * sizeof(spark_fs_entry_t));
+    }
+    spark_fs_entry_t *e = &cc->out->entries[cc->out->count++];
+    strncpy(e->name, name, sizeof(e->name) - 1);
+    e->name[sizeof(e->name) - 1] = '\0';
+    e->is_dir = is_dir;
+}
+
+int spark_fs_list(const char *path, spark_fs_listing_t *out)
+{
+    if (!out) return -1;
+    out->entries = NULL;
+    out->count = 0;
+
+    struct collect_ctx cc = { .out = out, .cap = 32 };
+    cc.out->entries = (spark_fs_entry_t *)malloc(
+        (size_t)cc.cap * sizeof(spark_fs_entry_t));
+    if (!cc.out->entries) return -1;
+
+    int rc = spark_fs_iter_dir(path, s_collect_cb, &cc);
+    if (rc != 0)
+    {
+        free(cc.out->entries);
+        cc.out->entries = NULL;
+        cc.out->count = 0;
+        return -1;
+    }
+    return 0;
+}
+
+void spark_fs_list_free(spark_fs_listing_t *out)
+{
+    if (!out) return;
+    free(out->entries);
+    out->entries = NULL;
+    out->count = 0;
+}
 
 /* ------------------------------------------------------------------ */
 /* mkdir -p                                                            */
@@ -408,23 +462,23 @@ void spark_fs_path_normalize(char *path)
 
 #ifdef _WIN32
 
-int spark_fs_list_drives(spark_fs_drive_cb cb, void *ctx)
+int spark_fs_iter_drives(spark_fs_drive_callback callback, void *ctx)
 {
-    if (!cb) return -1;
+    if (!callback) return -1;
     DWORD mask = GetLogicalDrives();
     for (int i = 0; i < 26; i++)
     {
         if (!(mask & (1u << i))) continue;
         char label[4] = { (char)('A' + i), ':', '\0', '\0' };
         char path[4] = { (char)('A' + i), ':', '/', '\0' };
-        cb(label, path, ctx);
+        callback(label, path, ctx);
     }
     return 0;
 }
 
 #else
 
-static void s_scan_mounts(const char *base, spark_fs_drive_cb cb, void *ctx)
+static void s_scan_mounts(const char *base, spark_fs_drive_callback callback, void *ctx)
 {
     DIR *dir = opendir(base);
     if (!dir) return;
@@ -436,14 +490,14 @@ static void s_scan_mounts(const char *base, spark_fs_drive_cb cb, void *ctx)
         char fullpath[1024];
         snprintf(fullpath, sizeof(fullpath), "%s/%s", base, entry->d_name);
         if (spark_fs_dir_exists(fullpath))
-            cb(entry->d_name, fullpath, ctx);
+            callback(entry->d_name, fullpath, ctx);
     }
     closedir(dir);
 }
 
-int spark_fs_list_drives(spark_fs_drive_cb cb, void *ctx)
+int spark_fs_iter_drives(spark_fs_drive_callback callback, void *ctx)
 {
-    if (!cb) return -1;
+    if (!callback) return -1;
 
     const char *home = getenv("HOME");
     if (home)
@@ -453,11 +507,59 @@ int spark_fs_list_drives(spark_fs_drive_cb cb, void *ctx)
         {
             char media[1024];
             snprintf(media, sizeof(media), "/media%s", user);
-            s_scan_mounts(media, cb, ctx);
+            s_scan_mounts(media, callback, ctx);
         }
     }
-    s_scan_mounts("/mnt", cb, ctx);
+    s_scan_mounts("/mnt", callback, ctx);
     return 0;
 }
 
 #endif
+
+/* ------------------------------------------------------------------ */
+/* Drive listing (array-based)                                         */
+/* ------------------------------------------------------------------ */
+
+struct drive_collect_ctx {
+    spark_fs_drives_t *out;
+    int cap;
+};
+
+static void s_drive_collect_cb(const char *label, const char *path, void *ctx)
+{
+    struct drive_collect_ctx *dc = (struct drive_collect_ctx *)ctx;
+    if (dc->out->count >= dc->cap)
+    {
+        dc->cap = dc->cap + dc->cap / 2;
+        dc->out->entries = (spark_fs_drive_t *)realloc(
+            dc->out->entries, (size_t)dc->cap * sizeof(spark_fs_drive_t));
+    }
+    spark_fs_drive_t *e = &dc->out->entries[dc->out->count++];
+    strncpy(e->label, label, sizeof(e->label) - 1);
+    e->label[sizeof(e->label) - 1] = '\0';
+    strncpy(e->path, path, sizeof(e->path) - 1);
+    e->path[sizeof(e->path) - 1] = '\0';
+}
+
+int spark_fs_list_drives(spark_fs_drives_t *out)
+{
+    if (!out) return -1;
+    out->entries = NULL;
+    out->count = 0;
+
+    struct drive_collect_ctx dc = { .out = out, .cap = 8 };
+    dc.out->entries = (spark_fs_drive_t *)malloc(
+        (size_t)dc.cap * sizeof(spark_fs_drive_t));
+    if (!dc.out->entries) return -1;
+
+    spark_fs_iter_drives(s_drive_collect_cb, &dc);
+    return 0;
+}
+
+void spark_fs_list_drives_free(spark_fs_drives_t *out)
+{
+    if (!out) return;
+    free(out->entries);
+    out->entries = NULL;
+    out->count = 0;
+}

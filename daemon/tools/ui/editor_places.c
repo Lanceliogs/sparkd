@@ -1,6 +1,7 @@
 #include "editor_places.h"
-#include "../../src/env.h"
-#include "../../src/fs.h"
+#include "env.h"
+#include "fs.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -53,18 +54,6 @@ static void s_parse_project_roots(editor_roots_t *roots)
     }
 }
 
-struct drive_ctx {
-    editor_roots_t *roots;
-};
-
-static void s_drive_cb(const char *label, const char *path, void *ctx)
-{
-    struct drive_ctx *dc = (struct drive_ctx *)ctx;
-    if (dc->roots->drive_count >= EDITOR_PLACES_MAX) return;
-    editor_place_t *d = &dc->roots->drives[dc->roots->drive_count++];
-    strncpy(d->label, label, EDITOR_PLACE_LABEL_MAX - 1);
-    strncpy(d->path, path, EDITOR_PLACE_PATH_MAX - 1);
-}
 
 void editor_get_roots(editor_roots_t *roots)
 {
@@ -96,6 +85,15 @@ void editor_get_roots(editor_roots_t *roots)
     s_add_place(roots, "/", "/");
 #endif
 
-    struct drive_ctx dc = { .roots = roots };
-    spark_fs_list_drives(s_drive_cb, &dc);
+    spark_fs_drives_t drives;
+    if (spark_fs_list_drives(&drives) == 0)
+    {
+        for (int i = 0; i < drives.count && roots->drive_count < EDITOR_PLACES_MAX; i++)
+        {
+            editor_place_t *d = &roots->drives[roots->drive_count++];
+            strncpy(d->label, drives.entries[i].label, EDITOR_PLACE_LABEL_MAX - 1);
+            strncpy(d->path, drives.entries[i].path, EDITOR_PLACE_PATH_MAX - 1);
+        }
+        spark_fs_list_drives_free(&drives);
+    }
 }

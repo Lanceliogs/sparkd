@@ -11,6 +11,7 @@ MONGOOSEDIR := ../vendor/mongoose
 YAMLDIR     := ../vendor/libyaml
 CRESDIR     := ../vendor/cres
 RESDIR      := $(BUILDDIR)/resources
+VERSION     := $(shell sed -n 's/.*SPARKD_VERSION "\(.*\)"/\1/p' src/consts.h)
 
 # Platform detection
 ifeq ($(OS),Windows_NT)
@@ -76,6 +77,11 @@ UI_RES_SRC := $(RESDIR)/ui_resources.c
 UI_RES_HDR := $(RESDIR)/ui_resources.h
 UI_RES_OBJ := $(RESDIR)/ui_resources.o
 
+# Installer resources (Windows only, built from compiled binaries)
+INSTALL_RES_SRC := $(RESDIR)/install_resources.c
+INSTALL_RES_HDR := $(RESDIR)/install_resources.h
+INSTALL_RES_OBJ := $(RESDIR)/install_resources.o
+
 # ---- Tools ----
 
 ALL_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) \
@@ -107,11 +113,13 @@ CUSTOM_TEST_BINS := $(BUILDDIR)/tests/test_auth$(EXE) \
 
 TARGET := $(BUILDDIR)/sparkd$(EXE)
 
-.PHONY: all clean test tools
+.PHONY: all clean test tools installer
 
 all: $(TARGET)
 
 tools: $(ALL_TOOLS)
+
+installer: $(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE)
 
 # ---- Daemon ----
 
@@ -176,13 +184,25 @@ $(BUILDDIR)/tools/spark-reaper$(EXE): tools/spark_reaper.c $(ENV_OBJS) $(YAML_OB
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(ENV_OBJS) $(YAML_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/tools/ui/%.o: tools/ui/%.c $(UI_RES_HDR)
+$(BUILDDIR)/tools/ui/%.o: tools/ui/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -DSPARK_EMBED_UI -Itools/ui -I$(RESDIR) -I$(CRESDIR) -c $< -o $@
+	$(CC) $(CFLAGS) -Itools/ui -c $< -o $@
 
-$(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ)
+$(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Itools/ui -I$(RESDIR) -I$(CRESDIR) -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -Itools/ui -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(LDFLAGS)
+
+# Installer (Windows only — depends on all tool binaries being built)
+$(INSTALL_RES_SRC) $(INSTALL_RES_HDR): $(CRES_TOOL) install_resources.txt $(TARGET) $(ALL_TOOLS) $(wildcard ../ui/dist/*) $(wildcard ../ui/dist/assets/*)
+	@mkdir -p $(RESDIR)
+	$(CRES_TOOL) -m install_resources.txt -o $(RESDIR)/install_resources
+
+$(INSTALL_RES_OBJ): $(INSTALL_RES_SRC)
+	$(CC) -std=c11 -w -DCRES_COMPRESSION -I$(CRESDIR) -c $< -o $@
+
+$(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE): tools/spark_install.c $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -o $@ $< $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(LDFLAGS) -lole32 -lshell32
 
 # ---- Tests ----
 
@@ -211,7 +231,7 @@ $(BUILDDIR)/tests/test_sparkctl_helpers$(EXE): tests/test_sparkctl_helpers.c $(M
 
 $(BUILDDIR)/tests/test_cres$(EXE): tests/test_cres.c $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -DSPARK_EMBED_UI -I$(RESDIR) -I$(CRESDIR) -Itests -o $@ $< $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -Itests -o $@ $< $(UI_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(LDFLAGS)
 
 # ---- Housekeeping ----
 

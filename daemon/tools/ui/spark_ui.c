@@ -7,9 +7,6 @@
 #include "consts.h"
 #include "auth.h"
 
-#ifdef SPARK_EMBED_UI
-#include "ui_resources.h"
-#endif
 
 #include <signal.h>
 #include <stdbool.h>
@@ -100,6 +97,9 @@ static int s_resolve_ui_root(void)
         snprintf(s_ui_root, sizeof(s_ui_root), "%s/ui", exe_dir);
         if (s_is_ui_root(s_ui_root)) return 0;
 
+        snprintf(s_ui_root, sizeof(s_ui_root), "%s/../ui", exe_dir);
+        if (s_is_ui_root(s_ui_root)) return 0;
+
         snprintf(s_ui_root, sizeof(s_ui_root), "%s/../share/sparkd/ui", exe_dir);
         if (s_is_ui_root(s_ui_root)) return 0;
     }
@@ -121,63 +121,8 @@ static void s_signal_handler(int sig)
 
 static struct mg_http_serve_opts s_serve_opts;
 
-static int s_use_embedded = 0;
-
-#ifdef SPARK_EMBED_UI
-static void s_serve_embedded(struct mg_connection *c, struct mg_http_message *hm)
-{
-    char res_path[512];
-    if (hm->uri.len == 1 && hm->uri.buf[0] == '/')
-        snprintf(res_path, sizeof(res_path), "../ui/dist/index.html");
-    else
-        snprintf(res_path, sizeof(res_path), "../ui/dist%.*s",
-            (int)hm->uri.len, hm->uri.buf);
-
-    CResEntry *entry = cres_find(cres_table, cres_table_count, res_path);
-    if (entry && cres_load(entry) == 0)
-    {
-        const char *cache = (entry->cdata)
-            ? "Cache-Control: max-age=31536000, immutable\r\n"
-            : "Cache-Control: no-cache\r\n";
-        mg_printf(c,
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: %s\r\n"
-            "Content-Length: %lu\r\n"
-            "%s"
-            "\r\n",
-            cres_mime(entry), (unsigned long)entry->size, cache);
-        mg_send(c, entry->data, entry->size);
-        return;
-    }
-
-    /* SPA fallback: serve index.html for unknown paths */
-    entry = cres_find(cres_table, cres_table_count, "../ui/dist/index.html");
-    if (entry && cres_load(entry) == 0)
-    {
-        mg_printf(c,
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html\r\n"
-            "Content-Length: %lu\r\n"
-            "Cache-Control: no-cache\r\n"
-            "\r\n",
-            (unsigned long)entry->size);
-        mg_send(c, entry->data, entry->size);
-        return;
-    }
-
-    mg_http_reply(c, 404, "", "Not found\n");
-}
-#endif
-
 static void s_serve_static(struct mg_connection *c, struct mg_http_message *hm)
 {
-#ifdef SPARK_EMBED_UI
-    if (s_use_embedded)
-    {
-        s_serve_embedded(c, hm);
-        return;
-    }
-#endif
     s_serve_opts.root_dir = s_ui_root;
     s_serve_opts.ssi_pattern = NULL;
     s_serve_opts.extra_headers = "Cache-Control: no-cache\r\n";
@@ -707,18 +652,6 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
         const char *src_html = NULL;
         size_t src_len = 0;
 
-#ifdef SPARK_EMBED_UI
-        if (s_use_embedded)
-        {
-            CResEntry *e = cres_find(cres_table, cres_table_count, "../ui/dist/index.html");
-            if (e && cres_load(e) == 0)
-            {
-                src_html = (const char *)e->data;
-                src_len = e->size;
-            }
-        }
-        else
-#endif
         {
             char path[1100];
             snprintf(path, sizeof(path), "%s/index.html", s_ui_root);
@@ -747,7 +680,7 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
                 memcpy(html, src_html, src_len);
                 html[src_len] = '\0';
 
-                if (!s_use_embedded) free((void *)src_html);
+                free((void *)src_html);
 
                 char meta[256];
                 snprintf(meta, sizeof(meta),
@@ -772,7 +705,7 @@ static void s_ev_handler(struct mg_connection *c, int ev, void *ev_data)
                 free(html);
                 return;
             }
-            if (!s_use_embedded) free((void *)src_html);
+            free((void *)src_html);
         }
     }
 
@@ -855,21 +788,10 @@ int main(int argc, char **argv)
 
     if (s_resolve_ui_root() != 0)
     {
-#ifdef SPARK_EMBED_UI
-        if (cres_table_count > 0)
-        {
-            s_use_embedded = 1;
-            cres_load_all(cres_table, cres_table_count);
-            snprintf(s_ui_root, sizeof(s_ui_root), "(embedded)");
-        }
-        else
-#endif
-        {
-            fprintf(stderr, "spark-ui: cannot find UI assets (index.html)\n");
-            fprintf(stderr, "  Searched: <exe>/ui/, <exe>/../share/sparkd/ui/, ./ui/dist\n");
-            fprintf(stderr, "  Use --ui-root PATH or set SPARK_UI_ROOT\n");
-            return 1;
-        }
+        fprintf(stderr, "spark-ui: cannot find UI assets (index.html)\n");
+        fprintf(stderr, "  Searched: <exe>/ui/, <exe>/../share/sparkd/ui/, ./ui/dist\n");
+        fprintf(stderr, "  Use --ui-root PATH or set SPARK_UI_ROOT\n");
+        return 1;
     }
 
     editor_http_init(spark_env_get("SPARK_FIXTURE_BANK_PATH"));

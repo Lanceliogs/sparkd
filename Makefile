@@ -2,7 +2,7 @@
 
 PREFIX ?= /opt/sparkd
 
-.PHONY: all clean test daemon tools ui install
+.PHONY: all clean test daemon tools ui install installer
 
 all: daemon tools
 
@@ -24,6 +24,9 @@ install: all tools ui
 	  build/tools/spark-serial build/tools/sparkctl $(DESTDIR)$(PREFIX)/bin/
 	install -d $(DESTDIR)$(PREFIX)/share/sparkd/ui
 	cp -r ui/dist/* $(DESTDIR)$(PREFIX)/share/sparkd/ui/
+
+installer: all tools
+	$(MAKE) -C daemon installer
 
 clean:
 	$(MAKE) -C daemon clean

@@ -65,8 +65,9 @@ dist: all tools ui
 	cp $(BINS) build/$(DIST_NAME)/bin/
 	mkdir -p build/$(DIST_NAME)/ui
 	cp -r ui/dist/* build/$(DIST_NAME)/ui/
-	cp pkg/install.sh build/$(DIST_NAME)/
-	chmod +x build/$(DIST_NAME)/install.sh
+	sed 's/@@VERSION@@/$(VERSION)/' pkg/install.sh > build/$(DIST_NAME)/install.sh
+	sed 's/@@VERSION@@/$(VERSION)/' pkg/uninstall.sh > build/$(DIST_NAME)/uninstall.sh
+	chmod +x build/$(DIST_NAME)/install.sh build/$(DIST_NAME)/uninstall.sh
 	tar -czf build/$(DIST_NAME).tar.gz -C build $(DIST_NAME)
 	@echo "\n  Created: build/$(DIST_NAME).tar.gz\n"
 
@@ -79,6 +80,7 @@ deb: all tools ui
 	VERSION=$(VERSION) envsubst < pkg/deb/control > /tmp/sparkd-deb/DEBIAN/control
 	install -m 0755 pkg/deb/postinst /tmp/sparkd-deb/DEBIAN/postinst
 	install -m 0755 pkg/deb/prerm /tmp/sparkd-deb/DEBIAN/prerm
+	install -m 0755 pkg/deb/postrm /tmp/sparkd-deb/DEBIAN/postrm
 	dpkg-deb --build /tmp/sparkd-deb build/sparkd_$(VERSION)_amd64.deb
 	rm -rf /tmp/sparkd-deb
 	@echo "\n  Created: build/sparkd_$(VERSION)_amd64.deb\n"

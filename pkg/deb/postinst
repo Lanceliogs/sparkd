@@ -9,3 +9,7 @@ for bin in "$BIN_DIR/"*; do
     name="$(basename "$bin")"
     ln -sf "$bin" "$LINK_DIR/$name"
 done
+
+echo ""
+echo "  sparkd installed. Run: sparkctl --help"
+echo ""

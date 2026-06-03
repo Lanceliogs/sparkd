@@ -14,14 +14,12 @@
 - [X] Add `sparkctl daemon status` and `sparkctl ui status`
 - [X] Graceful shutdown via `POST /shutdown` on both sparkd and spark-ui
 - [X] `/healthz` endpoint on spark-ui (sparkd already had one)
-- [ ] Add `sparkctl ensure-path` to add the binaries folder to the PATH
 
-### Linux packaging 
-- [ ] Why not release a `sparkd-vX.X.X-amd64.deb` package really?
+### Linux packaging
+- [x] Why not release a `sparkd-vX.X.X-amd64.deb` package really?
 
 ### Windows minimal installer
 - [x] Use [cres-c-resource-embedding](https://github.com/Lanceliogs/cres-c-resource-embedding) to create a tiny Windows package
-- [x] Maybe also package the ui and serve it with  mongoose. We might have to change some things, but using cres_find(...) seems op.
 
 ### Auth Token ([spec](specs/auth-token.md))
 - [X] Static `SPARK_AUTH_TOKEN` for infrastructure (sparkd, sparkctl, spark-ui management)
@@ -56,3 +54,6 @@
 - [ ] `.github/workflows/ci.yml` — build + test on push, release on tag
 - [ ] Cross-compile Windows from Linux with mingw-w64
 - [ ] Cross-version sync check (consts.h version == package.json version)
+
+### Packaging
+- [ ] Maybe also package the ui and serve it with mongoose. We might have to change some things, but using cres_find(...) seems op.

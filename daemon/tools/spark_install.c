@@ -44,13 +44,8 @@ static int s_mkdir_p(const char *path)
     return _mkdir(tmp);
 }
 
-#define UI_DIST_PREFIX "../ui/dist/"
-#define UI_DIST_PREFIX_LEN (sizeof(UI_DIST_PREFIX) - 1)
-
 static int s_extract_files(void)
 {
-    s_mkdir_p(s_bin_dir);
-
     int ok = 0, fail = 0;
     for (size_t i = 0; i < cres_table_count; i++)
     {
@@ -63,26 +58,9 @@ static int s_extract_files(void)
         }
 
         char out_path[MAX_PATH];
-
-        if (strncmp(e->name, UI_DIST_PREFIX, UI_DIST_PREFIX_LEN) == 0)
-        {
-            /* UI asset: extract to <install>/ui/<relative-path> (sibling of bin/) */
-            const char *rel = e->name + UI_DIST_PREFIX_LEN;
-            snprintf(out_path, sizeof(out_path), "%s\\ui\\%s", s_install_dir, rel);
-            /* Convert forward slashes to backslashes */
-            for (char *p = out_path; *p; p++)
-                if (*p == '/') *p = '\\';
-        }
-        else
-        {
-            /* Binary: extract basename to bin/ */
-            const char *basename = e->name;
-            const char *slash = strrchr(e->name, '/');
-            if (slash) basename = slash + 1;
-            const char *bslash = strrchr(basename, '\\');
-            if (bslash) basename = bslash + 1;
-            snprintf(out_path, sizeof(out_path), "%s\\%s", s_bin_dir, basename);
-        }
+        snprintf(out_path, sizeof(out_path), "%s\\%s", s_install_dir, e->name);
+        for (char *p = out_path; *p; p++)
+            if (*p == '/') *p = '\\';
 
         /* Ensure parent directory exists */
         char parent[MAX_PATH];
@@ -214,18 +192,8 @@ static int s_write_uninstaller(void)
     fprintf(f, "echo Uninstalling sparkd...\n");
     fprintf(f, "echo.\n");
 
-    /* Remove binaries */
-    for (size_t i = 0; i < cres_table_count; i++)
-    {
-        const char *name = cres_table[i].name;
-        if (strncmp(name, UI_DIST_PREFIX, UI_DIST_PREFIX_LEN) == 0)
-            continue;  /* UI files handled below */
-        const char *sl = strrchr(name, '/');
-        if (sl) name = sl + 1;
-        fprintf(f, "del /q \"%s\\%s\" 2>nul\n", s_bin_dir, name);
-    }
-
-    /* Remove UI folder */
+    /* Remove bin and ui folders */
+    fprintf(f, "rmdir /s /q \"%s\\bin\" 2>nul\n", s_install_dir);
     fprintf(f, "rmdir /s /q \"%s\\ui\" 2>nul\n", s_install_dir);
 
     /* Remove from PATH */

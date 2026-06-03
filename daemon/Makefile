@@ -192,8 +192,16 @@ $(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) 
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Itools/ui -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
-# Installer (Windows only — depends on all tool binaries being built)
-$(INSTALL_RES_SRC) $(INSTALL_RES_HDR): $(CRES_TOOL) install_resources.txt $(TARGET) $(ALL_TOOLS) $(wildcard ../ui/dist/*) $(wildcard ../ui/dist/assets/*)
+# Installer (Windows only — stages into build/win32, then embeds the tree)
+WIN32DIR := $(BUILDDIR)/win32
+
+$(WIN32DIR): $(TARGET) $(ALL_TOOLS) $(wildcard ../ui/dist/*) $(wildcard ../ui/dist/assets/*)
+	@rm -rf $(WIN32DIR)
+	@mkdir -p $(WIN32DIR)/bin $(WIN32DIR)/ui
+	cp $(TARGET) $(ALL_TOOLS) $(WIN32DIR)/bin/
+	cp -r ../ui/dist/* $(WIN32DIR)/ui/
+
+$(INSTALL_RES_SRC) $(INSTALL_RES_HDR): $(CRES_TOOL) install_resources.txt $(WIN32DIR)
 	@mkdir -p $(RESDIR)
 	$(CRES_TOOL) -m install_resources.txt -o $(RESDIR)/install_resources
 

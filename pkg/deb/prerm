@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+BIN_DIR="/opt/sparkd/bin"
+LINK_DIR="/usr/local/bin"
+
+for bin in "$BIN_DIR/"*; do
+    name="$(basename "$bin")"
+    rm -f "$LINK_DIR/$name"
+done

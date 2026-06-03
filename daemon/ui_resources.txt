@@ -1,6 +1,8 @@
 # Embedded UI assets (generated from ui/dist after npm run build)
+root ../ui/dist
+
 # HTML is small, keep raw for meta tag injection
-../ui/dist/index.html
+index.html
 
 # CSS and JS are large, compress them
-z @../ui/dist/assets/
+z @assets/

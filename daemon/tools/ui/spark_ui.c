@@ -34,7 +34,7 @@ static volatile bool s_running = true;
 static uint64_t s_start_time_ms = 0;
 static char s_listen_port[16] = "7601";
 static char s_daemon_addr[256] = DEFAULT_DAEMON_ADDR;
-static char s_ui_root[1024] = {0};
+static char s_ui_root[1088] = {0};
 
 /* Get directory containing the running executable */
 static int s_get_exe_dir(char *buf, size_t buf_size)

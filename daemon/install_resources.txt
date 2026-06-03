@@ -1,10 +1,3 @@
-# Installer manifest — embeds all sparkd binaries and UI assets (compressed)
-z9 ../build/sparkd.exe
-z9 ../build/tools/sparkctl.exe
-z9 ../build/tools/spark-ui.exe
-z9 ../build/tools/spark-midi.exe
-z9 ../build/tools/spark-serial.exe
-z9 ../build/tools/spark-reaper.exe
-
-# UI dist folder (served by spark-ui)
-z9 @../ui/dist/
+# Installer manifest — embeds the staged win32 tree (bin/ + ui/)
+root ../build/win32
+z9 @./

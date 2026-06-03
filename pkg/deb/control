@@ -1,0 +1,10 @@
+Package: sparkd
+Version: ${VERSION}
+Section: sound
+Priority: optional
+Architecture: amd64
+Depends: libasound2
+Maintainer: sparkd contributors
+Description: DMX lighting controller with MIDI support
+ sparkd is a lightweight DMX lighting daemon with a web UI,
+ MIDI input, serial output, and a CLI control tool.

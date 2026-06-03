@@ -11,7 +11,7 @@ void test_cres_table_count(void)
 
 void test_cres_find_index_html(void)
 {
-    CResEntry *e = cres_find(cres_table, cres_table_count, "../ui/dist/index.html");
+    CResEntry *e = cres_find(cres_table, cres_table_count, "index.html");
     ASSERT_TRUE(e != NULL);
 }
 
@@ -23,7 +23,7 @@ void test_cres_find_nonexistent(void)
 
 void test_cres_load_raw(void)
 {
-    CResEntry *e = cres_find(cres_table, cres_table_count, "../ui/dist/index.html");
+    CResEntry *e = cres_find(cres_table, cres_table_count, "index.html");
     ASSERT_TRUE(e != NULL);
     ASSERT_EQ(cres_load(e), 0);
     ASSERT_TRUE(e->data != NULL);
@@ -32,7 +32,7 @@ void test_cres_load_raw(void)
 
 void test_cres_content_starts_with_doctype(void)
 {
-    CResEntry *e = cres_find(cres_table, cres_table_count, "../ui/dist/index.html");
+    CResEntry *e = cres_find(cres_table, cres_table_count, "index.html");
     ASSERT_TRUE(e != NULL);
     ASSERT_EQ(cres_load(e), 0);
     ASSERT_TRUE(e->size > 9);
@@ -62,7 +62,7 @@ void test_cres_load_compressed(void)
 
 void test_cres_mime_html(void)
 {
-    CResEntry *e = cres_find(cres_table, cres_table_count, "../ui/dist/index.html");
+    CResEntry *e = cres_find(cres_table, cres_table_count, "index.html");
     ASSERT_TRUE(e != NULL);
     ASSERT_STR_EQ(cres_mime(e), "text/html");
 }

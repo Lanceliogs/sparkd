@@ -79,6 +79,27 @@ All vendored -- zero system packages required beyond a C compiler and Make:
 - [YAML format](specs/yaml-format.md) -- project file format reference
 - [Full specification](specs/sparkd.md) -- complete system design
 
+## Pre-built Releases
+
+Pre-built binaries are available on the [Releases](https://github.com/music-music/sparkd/releases) page.
+
+### Windows
+
+Download `sparkd_vX.X.X_win64_setup.exe` and run it. Installs to `%LOCALAPPDATA%\sparkd` (no admin required), adds to PATH, and creates a Start Menu shortcut. An uninstaller is included.
+
+### Linux
+
+**Tarball:** Extract `sparkd-vX.X.X-linux-x64.tar.gz` and run `./install.sh` (installs to `/opt/sparkd`, symlinks to `/usr/local/bin`).
+
+**Debian/Ubuntu:** `sudo dpkg -i sparkd_X.X.X_amd64.deb`
+
+### System Requirements
+
+- **Windows:** 64-bit Windows 10 or later.
+- **Linux:** x86_64 with glibc 2.34+ (Ubuntu 22.04+, Debian 12+, Fedora 35+). Requires `libasound2` for MIDI support.
+
+Older Linux distributions are not supported by the pre-built binaries. Build from source if you need to target an older system.
+
 ## License
 
 See [LICENSE](LICENSE).

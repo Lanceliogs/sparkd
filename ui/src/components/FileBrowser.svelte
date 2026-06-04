@@ -376,14 +376,14 @@
     padding: 0.4rem 0;
   }
   .fb-sidebar-section {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
   }
   .fb-sidebar-title {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.35rem;
     width: 100%;
-    font-size: 0.55rem;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -410,11 +410,11 @@
   .fb-sidebar-item {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.45rem;
     width: 100%;
     text-align: left;
     padding: 0.25rem 0.6rem;
-    font-size: 0.68rem;
+    font-size: 0.70rem;
     background: none;
     border: none;
     border-radius: 0;

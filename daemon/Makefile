@@ -116,7 +116,7 @@ CUSTOM_TEST_BINS := $(BUILDDIR)/tests/test_auth$(EXE) \
 
 TARGET := $(BUILDDIR)/sparkd$(EXE)
 
-.PHONY: all clean test tools installer
+.PHONY: all clean test tools installer launcher
 
 all: $(TARGET)
 
@@ -195,14 +195,36 @@ $(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) 
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Itools/ui -o $@ $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) $(AUTH_OBJ) $(YAML_OBJS) $(LDFLAGS)
 
+# Launcher (Windows only — GUI subsystem, no console)
+ifeq ($(OS),Windows_NT)
+LAUNCHER_RES := $(BUILDDIR)/tools/win32/spark_launcher.res
+LAUNCHER_EXE := $(BUILDDIR)/tools/spark-launcher.exe
+
+$(LAUNCHER_RES): tools/win32/spark_launcher.rc tools/win32/spark.ico
+	@mkdir -p $(dir $@)
+	windres $< -O coff -o $@
+
+$(LAUNCHER_EXE): tools/win32/spark_launcher.c $(LAUNCHER_RES)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -mwindows -static -o $@ $^
+
+launcher: $(LAUNCHER_EXE)
+else
+launcher:
+	@echo "spark-launcher is Windows-only, skipping."
+endif
+
 # Installer (Windows only — stages into build/win32, then embeds the tree)
 WIN32DIR := $(BUILDDIR)/win32
 
-$(WIN32DIR): $(TARGET) $(ALL_TOOLS) $(wildcard ../ui/dist/*) $(wildcard ../ui/dist/assets/*)
+$(WIN32DIR): $(TARGET) $(ALL_TOOLS) $(LAUNCHER_EXE) $(wildcard ../ui/dist/*) $(wildcard ../ui/dist/assets/*)
 	@rm -rf $(WIN32DIR)
 	@mkdir -p $(WIN32DIR)/bin $(WIN32DIR)/ui
 	cp $(TARGET) $(ALL_TOOLS) $(WIN32DIR)/bin/
 	cp -r ../ui/dist/* $(WIN32DIR)/ui/
+ifeq ($(OS),Windows_NT)
+	cp $(LAUNCHER_EXE) $(WIN32DIR)/bin/
+endif
 
 $(INSTALL_RES_SRC) $(INSTALL_RES_HDR): $(CRES_TOOL) install_resources.txt $(WIN32DIR)
 	@mkdir -p $(RESDIR)
@@ -211,7 +233,7 @@ $(INSTALL_RES_SRC) $(INSTALL_RES_HDR): $(CRES_TOOL) install_resources.txt $(WIN3
 $(INSTALL_RES_OBJ): $(INSTALL_RES_SRC)
 	$(CC) -std=c11 -w -DCRES_COMPRESSION -I$(CRESDIR) -c $< -o $@
 
-$(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE): tools/spark_install.c $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ)
+$(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE): tools/win32/spark_install.c $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -o $@ $< $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ) $(LDFLAGS) -lole32 -lshell32
 

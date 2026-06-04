@@ -378,6 +378,27 @@ static int s_cmd_service_status(const char *service_name, const char *addr)
     }
 }
 
+static int s_cmd_service_open(const char *addr)
+{
+    char url[300];
+    snprintf(url, sizeof(url), "http://%s", addr);
+
+#ifdef _WIN32
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "start %s", url);
+    system(cmd);
+#elif __APPLE__
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "open %s", url);
+    system(cmd);
+#else
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "xdg-open %s >/dev/null 2>&1 &", url);
+    system(cmd);
+#endif
+    return 0;
+}
+
 static void s_normalize_addr(char *addr, size_t size)
 {
     if (strncmp(addr, "0.0.0.0", 7) == 0)
@@ -423,7 +444,7 @@ static int s_handle_service_subcommand(const char *service_name,
 
     if (!action)
     {
-        fprintf(stderr, "sparkctl %s: missing action (up|down|status)\n",
+        fprintf(stderr, "sparkctl %s: missing action (up|down|status|open)\n",
             service_name);
         return 1;
     }
@@ -442,6 +463,10 @@ static int s_handle_service_subcommand(const char *service_name,
     else if (strcmp(action, "status") == 0)
     {
         return s_cmd_service_status(service_name, addr);
+    }
+    else if (strcmp(action, "open") == 0)
+    {
+        return s_cmd_service_open(addr);
     }
     else
     {
@@ -503,6 +528,7 @@ static void usage(void)
     fprintf(stderr, "  ui up [OPTS]       Start spark-ui in background (OPTS passed to spark-ui)\n");
     fprintf(stderr, "  ui down            Stop spark-ui gracefully\n");
     fprintf(stderr, "  ui status          Check if spark-ui is running\n");
+    fprintf(stderr, "  ui open            Open the UI in the default browser\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Engine commands:\n");
     fprintf(stderr, "  status             Get engine state\n");

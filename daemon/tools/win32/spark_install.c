@@ -134,10 +134,10 @@ static int s_create_shortcut(void)
     spark_fs_mkdir_p(shortcut_dir);
 
     char shortcut_path[MAX_PATH];
-    snprintf(shortcut_path, sizeof(shortcut_path), "%s\\sparkctl.lnk", shortcut_dir);
+    snprintf(shortcut_path, sizeof(shortcut_path), "%s\\Sparkd.lnk", shortcut_dir);
 
     char target[MAX_PATH];
-    snprintf(target, sizeof(target), "%s\\sparkctl.exe", s_bin_dir);
+    snprintf(target, sizeof(target), "%s\\spark-launcher.exe", s_bin_dir);
 
     /* Use PowerShell to create the .lnk (avoids COM boilerplate) */
     char cmd[2048];
@@ -147,9 +147,10 @@ static int s_create_shortcut(void)
         "$sc = $ws.CreateShortcut('%s'); "
         "$sc.TargetPath = '%s'; "
         "$sc.WorkingDirectory = '%s'; "
+        "$sc.IconLocation = '%s,0'; "
         "$sc.Description = 'sparkd lighting controller'; "
         "$sc.Save()\"",
-        shortcut_path, target, s_bin_dir);
+        shortcut_path, target, s_bin_dir, target);
 
     if (system(cmd) != 0)
     {

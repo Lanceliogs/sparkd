@@ -817,7 +817,11 @@ int main(int argc, char **argv)
     fflush(stdout);
 
     if (open_browser)
-        s_open_browser(listen_url);
+    {
+        char browser_url[270];
+        snprintf(browser_url, sizeof(browser_url), "http://127.0.0.1:%s", s_listen_port);
+        s_open_browser(browser_url);
+    }
 
     while (s_running)
         mg_mgr_poll(&mgr, 100);

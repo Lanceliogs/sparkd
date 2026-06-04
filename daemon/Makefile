@@ -197,10 +197,15 @@ $(BUILDDIR)/tools/spark-ui$(EXE): $(UI_OBJS) $(MG_OBJ) $(ENV_OBJS) $(CLOCK_OBJ) 
 
 # Launcher (Windows only — GUI subsystem, no console)
 ifeq ($(OS),Windows_NT)
-LAUNCHER_RES := $(BUILDDIR)/tools/win32/spark_launcher.res
 LAUNCHER_EXE := $(BUILDDIR)/tools/spark-launcher.exe
+LAUNCHER_RES := $(BUILDDIR)/tools/win32/spark_launcher.res
+INSTALLER_ICO_RES := $(BUILDDIR)/tools/win32/spark_install.res
 
 $(LAUNCHER_RES): tools/win32/spark_launcher.rc tools/win32/spark.ico
+	@mkdir -p $(dir $@)
+	windres $< -O coff -o $@
+
+$(INSTALLER_ICO_RES): tools/win32/spark_install.rc tools/win32/spark.ico
 	@mkdir -p $(dir $@)
 	windres $< -O coff -o $@
 
@@ -233,9 +238,9 @@ $(INSTALL_RES_SRC) $(INSTALL_RES_HDR): $(CRES_TOOL) install_resources.txt $(WIN3
 $(INSTALL_RES_OBJ): $(INSTALL_RES_SRC)
 	$(CC) -std=c11 -w -DCRES_COMPRESSION -I$(CRESDIR) -c $< -o $@
 
-$(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE): tools/win32/spark_install.c $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ)
+$(BUILDDIR)/sparkd_v$(VERSION)_win64_setup$(EXE): tools/win32/spark_install.c $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ) $(INSTALLER_ICO_RES)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -o $@ $< $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ) $(LDFLAGS) -lole32 -lshell32
+	$(CC) $(CFLAGS) -I$(RESDIR) -I$(CRESDIR) -o $@ $< $(INSTALL_RES_OBJ) $(CRES_OBJ) $(MINIZ_OBJ) $(FS_OBJ) $(INSTALLER_ICO_RES) $(LDFLAGS) -lole32 -lshell32
 
 # ---- Tests ----
 

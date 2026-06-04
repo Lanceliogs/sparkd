@@ -236,9 +236,17 @@ int main(int argc, char **argv)
             silent = 1;
     }
 
+    printf("  ========================================================\n");
+    printf(" ######  ########     ###    ########  ##    ## ########  \n");
+    printf("##    ## ##     ##   ## ##   ##     ## ##   ##  ##     ## \n");
+    printf("##       ##     ##  ##   ##  ##     ## ##  ##   ##     ## \n");
+    printf(" ######  ########  ##     ## ########  #####    ##     ## \n");
+    printf("      ## ##        ######### ##   ##   ##  ##   ##     ## \n");
+    printf("##    ## ##        ##     ## ##    ##  ##   ##  ##     ## \n");
+    printf(" ######  ##        ##     ## ##     ## ##    ## ########  \n");
+    printf("  ========================================================\n");
     printf("\n");
-    printf("  sparkd installer v%s\n", SPARKD_VERSION);
-    printf("  ========================\n\n");
+    printf("  installer v%s\n", SPARKD_VERSION);
 
     /* Resolve install path */
     const char *appdata = getenv("LOCALAPPDATA");
@@ -259,7 +267,7 @@ int main(int argc, char **argv)
     printf("    bin/    executables\n");
     printf("    ui/     web interface\n");
     if (upgrading)
-        printf("\n  Existing installation detected — will overwrite.\n");
+        printf("\n  Existing installation detected => Will overwrite.\n");
 
     if (!silent)
     {

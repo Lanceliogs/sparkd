@@ -39,16 +39,7 @@ fixtures:
   - id: test-1
     name: Test 1
     start-address: 20
-    channel-count: 4
-    channels:
-      - name: ch1
-        offset: 0
-      - name: ch2
-        offset: 1
-      - name: ch3
-        offset: 2
-      - name: ch4
-        offset: 3
+    copy-from: "test-2"
 
 scenes:
   - id: red-wash

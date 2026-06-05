@@ -552,6 +552,7 @@ static void usage(void)
 
 int main(int argc, char **argv)
 {
+    spark_log_init(SPARK_LOG_SILENT);
     spark_env_load();
 
     char daemon_addr[256];

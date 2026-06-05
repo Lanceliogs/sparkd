@@ -46,14 +46,17 @@ A typical performance workflow:
 
 ## Edit-Reload Cycle
 
+> **Important:** The daemon (sparkd) and the Editor maintain separate project states. The engine runs the project that was last loaded/reloaded into the daemon. The Editor works on its own copy independently. This means you can safely edit a project in the Editor while the engine is running — your changes won't affect the live output until you explicitly save and reload.
+
 When tweaking a show without restarting:
 
 ### Via UI
 
-1. Click **Stop** in Live view
-2. Switch to **Editor**, make changes (fixtures, scenes, hardware)
-3. Click **SAVE**
-4. Switch back to **Live**, click **Reload**, then **Start**
+1. Switch to **Editor**, make your changes (fixtures, scenes, hardware)
+2. Click **SAVE** (writes to disk — does NOT affect the running engine)
+3. Switch to **Live**, click **Stop**
+4. Click **Reload** (daemon re-reads the file from disk)
+5. Click **Start**
 
 ### Via terminal
 
@@ -173,16 +176,18 @@ shows/
     project.spark.yaml
 ```
 
-Use `SPARK_PROJECT_ROOTS` for quick access in the file browser:
+Use `SPARK_PROJECT_ROOTS` for quick access in the Editor's file browser:
 
 ```bash
 SPARK_PROJECT_ROOTS=Shows@/home/user/shows
 ```
 
-Switch between shows by opening different project files in the Editor, or via CLI:
+Switch the engine to a different project via CLI:
 
 ```bash
 sparkctl stop
 sparkctl reload ~/shows/corporate/project.spark.yaml
 sparkctl start
 ```
+
+This reloads the daemon's runtime project (what the engine actually runs). The Editor's open project is unaffected — you'd open the new file separately in the Editor if you want to edit it.

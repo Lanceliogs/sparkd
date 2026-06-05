@@ -15,4 +15,4 @@ A show-safe MIDI-to-DMX lighting engine with a web-based UI.
 
 - [Daemon (sparkd)](daemon.md) — CLI arguments, HTTP API, lifecycle
 - [sparkctl](sparkctl.md) — CLI commands for controlling the daemon and UI
-- [spark-midi](tools.md) — MIDI device debugging tool
+- [CLI Tools](tools.md) — spark-midi, spark-serial, spark-reaper

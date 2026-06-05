@@ -68,17 +68,27 @@ dmx:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `device` | conditional | Serial port (e.g. `COM3`, `/dev/ttyUSB0`) |
+| `device` | conditional | Serial port, `auto`, or `auto:tag` (see below) |
 | `backend` | yes | `open`, `pro`, or `dummy` |
 | `refresh-rate-hz` | no | Update rate in Hz (default: 25, range: 1-44) |
 
 **Backends:**
 
-- `open` — Open DMX USB protocol (break + raw frames). Works with most generic USB-DMX interfaces.
+- `open` — Open DMX USB protocol (break + raw frames). Works with most generic USB-DMX interfaces (FTDI-based clones, Eurolite, etc.).
 - `pro` — Enttec Pro protocol (packetized serial). For Enttec DMX USB Pro and compatibles.
 - `dummy` — No output. The engine runs normally but nothing is sent to hardware. Great for testing.
 
+**Device values:**
+
+- A serial port path: `COM3` (Windows) or `/dev/ttyUSB0` (Linux)
+- `auto` — auto-detect any known DMX USB device at engine start
+- `auto:enttec` — auto-detect Enttec devices only
+- `auto:eurolite` — auto-detect Eurolite devices only
+- `auto:ftdi` — auto-detect any FTDI-based device
+
 Omit the `dmx:` section entirely to default to `dummy`.
+
+> **Tip:** Use `spark-serial list` to see connected USB-serial devices and `spark-serial find` to test auto-detection from the command line.
 
 ## Fixtures
 

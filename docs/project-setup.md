@@ -74,27 +74,71 @@ Switch to the **HARDWARE** tab to set up your MIDI and DMX devices:
 
 ### MIDI
 
-- **Device** — the name (or part of the name) of your MIDI controller. sparkd does a substring match, so `"KeyStep"` matches `"Arturia KeyStep 32"`. Leave empty to disable MIDI input.
+- **Device** — the name (or part of the name) of your MIDI controller. sparkd does a case-insensitive substring match, so `"KeyStep"` matches `"Arturia KeyStep 32"`. Leave empty to disable MIDI input entirely.
 - **Mode**:
-  - `open-existing` — connect to a physical/virtual MIDI port already on the system
-  - `create-virtual` — create a new virtual MIDI port (useful for routing from a DAW)
+  - `open-existing` — connect to a physical or virtual MIDI port already present on the system
+  - `create-virtual` — create a new virtual MIDI port (Linux/macOS only). Useful for routing MIDI from a DAW like REAPER or Ableton.
 
 ![MIDI modes](images/editor_hardware_midi_mode.png)
 
-> **Tip:** Use `spark-midi list` in a terminal to see available MIDI devices.
+#### Troubleshooting MIDI
+
+Use the [`spark-midi`](tools.md#spark-midi--midi-debugging) CLI tool to debug MIDI issues:
+
+```bash
+# List all MIDI input devices detected on your system
+spark-midi list
+
+# Monitor incoming messages from a device (Ctrl+C to stop)
+spark-midi listen "KeyStep"
+```
+
+If `spark-midi list` doesn't show your device, check that it's plugged in and that no other application has exclusive access to it.
 
 ### DMX
 
-- **Device** — serial port path. On Windows this is a COM port (e.g. `COM3`), on Linux a `/dev/tty` path (e.g. `/dev/ttyUSB0`). Leave empty to use the dummy backend.
-- **Backend**:
-  - `open` — Open DMX protocol (break + raw frames). Works with most USB-DMX interfaces.
-  - `pro` — Enttec Pro protocol (packetized serial). For Enttec Pro and compatible interfaces.
-  - `dummy` — No DMX output. Useful for testing without hardware.
-- **Refresh Hz** — DMX update rate (1-44 Hz, default 25). Higher = more responsive, but some fixtures struggle above 30 Hz.
+- **Device** — the serial port where your USB-DMX interface is connected. On Windows this is a COM port (e.g. `COM3`), on Linux a `/dev/tty` path (e.g. `/dev/ttyUSB0`).
+- **Backend** — the DMX protocol to use:
+  - `open` — Open DMX USB protocol (break + raw frames). Used by most generic USB-DMX interfaces (FTDI-based clones, Eurolite USB-DMX512, etc.).
+  - `pro` — Enttec Pro protocol (packetized serial). Used by Enttec DMX USB Pro and compatible interfaces.
+  - `dummy` — No DMX output. The engine runs normally but nothing is sent. Great for testing without hardware.
+- **Refresh Hz** — DMX update rate (1-44 Hz, default 25). 25 Hz is a good balance between responsiveness and bus stability. Some cheap fixtures misbehave above 30 Hz.
 
 ![DMX backends](images/editor_hardware_dmx_backend.png)
 
-> **Not sure which backend?** Try both `open` and `pro` — only the correct one will work with your interface.
+#### Auto-detection
+
+Instead of specifying a serial port manually, you can use `auto` as the device value. sparkd will scan your USB-serial devices and find a known DMX interface automatically.
+
+You can also filter by manufacturer tag:
+
+| Device value | Behavior |
+|--------------|----------|
+| `auto` | Find any known DMX device (FTDI, Enttec, Eurolite) |
+| `auto:enttec` | Find Enttec devices only |
+| `auto:eurolite` | Find Eurolite devices only |
+| `auto:ftdi` | Find any FTDI-based device |
+
+Auto-detection resolves at engine start time — it finds the port and then opens it normally.
+
+#### Troubleshooting DMX
+
+Use the [`spark-serial`](tools.md#spark-serial--serialdmx-debugging) CLI tool to debug DMX/serial issues:
+
+```bash
+# List all USB-serial devices with VID:PID info
+spark-serial list
+
+# Auto-detect a DMX device (same logic as "auto" in the project)
+spark-serial find
+
+# Filter by manufacturer
+spark-serial find enttec
+```
+
+If `spark-serial list` shows your interface but `spark-serial find` doesn't match it, the device might use an unknown VID:PID. In that case, specify the port manually (e.g. `COM3` or `/dev/ttyUSB0`).
+
+> **Not sure which backend to use?** Try `open` first — it works with the vast majority of USB-DMX interfaces. If you have an Enttec Pro (or compatible), use `pro`. Only the correct protocol will produce output on your fixtures.
 
 ## Step 4: Create Scenes
 

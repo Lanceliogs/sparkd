@@ -99,7 +99,7 @@ Found DMX device:
 Use in project YAML:
   dmx:
     device: COM3
-    backend: open   # or 'pro' for DMX USB Pro
+    backend: open   # or 'pro' for Enttec Pro, 'artnet' for Ethernet nodes
 ```
 
 Filter by manufacturer:
@@ -135,7 +135,7 @@ spark-serial find
 | Device not listed | Check USB connection, try a different cable/port |
 | Listed but not "known" | Use the port path directly instead of `auto` |
 | `find` returns nothing | Device VID:PID not in the known list — specify port manually |
-| Wrong backend | Try both `open` and `pro` — only one will work |
+| Wrong backend | USB? Try both `open` and `pro`. Ethernet? Use `artnet` |
 
 ---
 

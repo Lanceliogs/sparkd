@@ -109,7 +109,9 @@ static void test_mkdir_p_and_remove(void)
     spark_fs_path_join(d1, sizeof(d1), s_tmpdir, "spark_fs_test_dir/nested/deep");
     spark_fs_path_join(d2, sizeof(d2), s_tmpdir, "spark_fs_test_dir/nested");
     spark_fs_path_join(d3, sizeof(d3), s_tmpdir, "spark_fs_test_dir");
-    remove(d1); remove(d2); remove(d3);
+    spark_fs_remove(d1);
+    spark_fs_remove(d2);
+    spark_fs_remove(d3);
 
     ASSERT_EQ(spark_fs_dir_exists(dir), 0);
     ASSERT_EQ(spark_fs_mkdir_p(dir), 0);

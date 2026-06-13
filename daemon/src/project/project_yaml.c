@@ -928,6 +928,8 @@ static int s_parse_dmx(yaml_parser_t *p, spark_project_config_t *cfg)
                 cfg->dmx_backend = SPARK_DMX_BACKEND_OPEN;
             else if (strcmp(v, "pro") == 0)
                 cfg->dmx_backend = SPARK_DMX_BACKEND_PRO;
+            else if (strcmp(v, "artnet") == 0)
+                cfg->dmx_backend = SPARK_DMX_BACKEND_ARTNET;
             else if (strcmp(v, "dummy") == 0)
                 cfg->dmx_backend = SPARK_DMX_BACKEND_DUMMY;
             else

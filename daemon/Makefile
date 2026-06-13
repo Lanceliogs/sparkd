@@ -43,9 +43,10 @@ YAML_CFLAGS := -DYAML_DECLARE_STATIC \
 
 SRCS := src/main.c src/log.c src/clock.c src/env.c src/fs.c src/engine.c src/http.c src/shutdown.c src/auth.c
 SRCS += src/project/project.c src/project/project_yaml.c
-SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/fixture_bank.c src/dmx/dmx_out.c
+SRCS += src/midi.c src/scene.c src/stage.c src/fixture.c src/fixture_bank.c
 SRCS += src/serial/serial_common.c $(SERIAL_SRCS)
-SRCS += src/dmx/dmx.c src/dmx/dmx_dummy.c src/dmx/dmx_open.c src/dmx/dmx_pro.c
+SRCS += src/dmx/dmx.c src/dmx/dmx_dummy.c src/dmx/dmx_open.c src/dmx/dmx_pro.c src/dmx/dmx_artnet.c
+SRCS += src/dmx/dmx_out.c
 
 OBJS := $(SRCS:src/%.c=$(BUILDDIR)/daemon/%.o)
 

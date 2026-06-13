@@ -101,6 +101,10 @@ static int s_start_dmx(void)
         spark_dmx_pro_init(&s_dmx_backend, s_config.dmx_device);
         spark_log_info("engine: DMX backend Pro on '%s'", s_config.dmx_device);
         break;
+    case SPARK_DMX_BACKEND_ARTNET:
+        spark_dmx_artnet_init(&s_dmx_backend, s_config.dmx_device);
+        spark_log_info("engine: DMX backend Art-Net to '%s'", s_config.dmx_device);
+        break;
     case SPARK_DMX_BACKEND_DUMMY:
     default:
         spark_dmx_dummy_init(&s_dmx_backend);

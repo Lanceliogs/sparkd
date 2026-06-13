@@ -94,7 +94,7 @@ Configure your MIDI input and DMX output devices:
 
 **DMX** settings:
 - **Device** — serial port (e.g. `COM3` on Windows, `/dev/ttyUSB0` on Linux)
-- **Backend** — protocol to use (`open`, `pro`, or `dummy`)
+- **Backend** — protocol to use (`open`, `pro`, `artnet`, or `dummy`)
 - **Refresh Hz** — DMX update rate (default: 25 Hz)
 
 ![DMX backends](images/editor_hardware_dmx_backend.png)

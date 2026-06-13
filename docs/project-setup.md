@@ -101,6 +101,7 @@ If `spark-midi list` doesn't show your device, check that it's plugged in and th
 - **Backend** — the DMX protocol to use:
   - `open` — Open DMX USB protocol (break + raw frames). Used by most generic USB-DMX interfaces (FTDI-based clones, Eurolite USB-DMX512, etc.).
   - `pro` — Enttec Pro protocol (packetized serial). Used by Enttec DMX USB Pro and compatible interfaces.
+  - `artnet` — Art-Net protocol (ArtDmx over UDP). Used by Ethernet/WiFi Art-Net nodes. The device field is the node's IP address.
   - `dummy` — No DMX output. The engine runs normally but nothing is sent. Great for testing without hardware.
 - **Refresh Hz** — DMX update rate (1-44 Hz, default 25). 25 Hz is a good balance between responsiveness and bus stability. Some cheap fixtures misbehave above 30 Hz.
 
@@ -118,8 +119,9 @@ You can also filter by manufacturer tag:
 | `auto:enttec` | Find Enttec devices only |
 | `auto:eurolite` | Find Eurolite devices only |
 | `auto:ftdi` | Find any FTDI-based device |
+| IP address (e.g. `192.168.1.100`) | Art-Net node (used with `artnet` backend) |
 
-Auto-detection resolves at engine start time — it finds the port and then opens it normally.
+Auto-detection resolves at engine start time — it finds the port and then opens it normally. For the `artnet` backend, the device field is always an IP address (no auto-detection).
 
 #### Troubleshooting DMX
 
@@ -138,7 +140,15 @@ spark-serial find enttec
 
 If `spark-serial list` shows your interface but `spark-serial find` doesn't match it, the device might use an unknown VID:PID. In that case, specify the port manually (e.g. `COM3` or `/dev/ttyUSB0`).
 
-> **Not sure which backend to use?** Try `open` first — it works with the vast majority of USB-DMX interfaces. If you have an Enttec Pro (or compatible), use `pro`. Only the correct protocol will produce output on your fixtures.
+#### Art-Net (Ethernet DMX)
+
+For Art-Net nodes (Ethernet/WiFi DMX interfaces), select the `artnet` backend and enter the node's IP address in the device field. Sparkd sends ArtDmx packets via UDP unicast to port 6454.
+
+- Make sure the Art-Net node is on the same network (or reachable via routing)
+- Use `ping <ip>` to verify connectivity before configuring
+- No auto-detection is available for Art-Net — you must specify the IP manually
+
+> **Not sure which backend to use?** If your interface is on Ethernet/WiFi, use `artnet`. For USB interfaces, try `open` first — it works with the vast majority. If you have an Enttec Pro (or compatible), use `pro`. Only the correct protocol will produce output on your fixtures.
 
 ## Step 4: Create Scenes
 

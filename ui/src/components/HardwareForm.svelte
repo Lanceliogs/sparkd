@@ -41,7 +41,10 @@
 
   <h3 class="section-title">DMX</h3>
   <p class="help-text">
-    Device is the serial port for your DMX interface. On Windows this is a COM port (e.g. COM3), on Linux a /dev/tty path. Leave empty to use the dummy backend (no output).
+    Device is the serial port or the IP address for your DMX interface.<br/>
+    For open and pro backends: On Windows this is a COM port (e.g. COM3), on Linux a /dev/tty path.
+    For artnet backend, it is an IP address (XXX.XXX.XXX.XXX). You should be able to ping it, or to test the port 6454 (UDP) using nmap. 
+    Leave empty to use the dummy backend (no output).
   </p>
   <div class="form-grid">
     <label for="hw-dmx-dev">Device</label>
@@ -51,6 +54,7 @@
       <option value="">none</option>
       <option value="open">open</option>
       <option value="pro">pro</option>
+      <option value="artnet">artnet</option>
       <option value="dummy">dummy</option>
     </select>
     <label for="hw-refresh">Refresh Hz</label>
@@ -59,9 +63,10 @@
   <p class="help-text help-detail">
     <strong>open</strong> — Open DMX protocol (break + raw frames). Used by many USB-DMX interfaces.<br/>
     <strong>pro</strong> — Enttec Pro protocol (packetized serial). Used by Enttec Pro and compatible interfaces.<br/>
+  <strong>artnet</strong> — Art-Net protocol (ArtDMX packets). Used by Art-Net network interfaces.<br/>
     <strong>dummy</strong> — No DMX output. Useful for testing without hardware.<br/>
-    Not sure which one? Try both — only the correct one will work with your interface.<br/>
-    Refresh rate: 1–44 Hz. Default <strong>25 Hz</strong> is a good balance between responsiveness and bus stability.
+    Not sure which one? Ethernet? Use artnet. USB? Try open and pro — only the correct one will work with your interface.<br/>
+    Refresh rate: 1–44 Hz. Default <strong>25 Hz</strong> is a good balance between responsiveness and bus stability for light only. If movements, go faster.
   </p>
 
   {#if dirty}

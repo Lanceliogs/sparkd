@@ -68,27 +68,40 @@ dmx:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `device` | conditional | Serial port, `auto`, or `auto:tag` (see below) |
-| `backend` | yes | `open`, `pro`, or `dummy` |
+| `device` | conditional | Serial port, `auto`, `auto:tag`, or IP address (artnet) |
+| `backend` | yes | `open`, `pro`, `artnet`, or `dummy` |
 | `refresh-rate-hz` | no | Update rate in Hz (default: 25, range: 1-44) |
 
 **Backends:**
 
 - `open` — Open DMX USB protocol (break + raw frames). Works with most generic USB-DMX interfaces (FTDI-based clones, Eurolite, etc.).
 - `pro` — Enttec Pro protocol (packetized serial). For Enttec DMX USB Pro and compatibles.
+- `artnet` — Art-Net protocol (ArtDmx packets over UDP, port 6454). For Ethernet/WiFi Art-Net nodes.
 - `dummy` — No output. The engine runs normally but nothing is sent to hardware. Great for testing.
 
 **Device values:**
 
-- A serial port path: `COM3` (Windows) or `/dev/ttyUSB0` (Linux)
+- A serial port path: `COM3` (Windows) or `/dev/ttyUSB0` (Linux) — for `open` and `pro` backends
 - `auto` — auto-detect any known DMX USB device at engine start
 - `auto:enttec` — auto-detect Enttec devices only
 - `auto:eurolite` — auto-detect Eurolite devices only
 - `auto:ftdi` — auto-detect any FTDI-based device
+- An IP address (e.g. `192.168.1.100`) — for the `artnet` backend (unicast to the Art-Net node)
 
 Omit the `dmx:` section entirely to default to `dummy`.
 
 > **Tip:** Use `spark-serial list` to see connected USB-serial devices and `spark-serial find` to test auto-detection from the command line.
+
+### Art-Net example
+
+```yaml
+dmx:
+  backend: artnet
+  device: 192.168.1.100
+  refresh-rate-hz: 30
+```
+
+Sends ArtDmx packets (universe 0) via UDP unicast to the specified IP on port 6454. The Art-Net node must be reachable on your network — use `ping` to verify.
 
 ## Fixtures
 

@@ -19,7 +19,7 @@
 #endif
 
 #ifndef SPARK_SERIAL_PORT_STRLEN
-#define SPARK_SERIAL_PORT_STRLEN 256
+#define SPARK_SERIAL_PORT_STRLEN 264 /* 256 + 8 because snprintf wanted a bit more, and I don't like warnings */
 #endif
 
 #ifndef SPARK_MIDI_PORT_STRLEN

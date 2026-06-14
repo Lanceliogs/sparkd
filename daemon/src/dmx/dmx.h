@@ -52,6 +52,8 @@ struct spark_dmx_backend {
     _Atomic uint64_t frames_sent;
     _Atomic uint64_t write_errors;
     _Atomic uint64_t reconnects;
+    /* health (backends that support polling update these) */
+    _Atomic bool node_responsive;
     /* backend-private data (each backend can cast this) */
     void *priv;
 };

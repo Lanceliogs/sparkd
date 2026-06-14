@@ -89,6 +89,7 @@ INSTALL_RES_OBJ := $(RESDIR)/install_resources.o
 ALL_TOOLS := $(BUILDDIR)/tools/sparkctl$(EXE) \
              $(BUILDDIR)/tools/spark-midi$(EXE) \
              $(BUILDDIR)/tools/spark-serial$(EXE) \
+             $(BUILDDIR)/tools/spark-artnet$(EXE) \
              $(BUILDDIR)/tools/spark-ui$(EXE) \
              $(BUILDDIR)/tools/spark-reaper$(EXE)
 
@@ -183,6 +184,10 @@ $(BUILDDIR)/tools/spark-midi$(EXE): tools/spark_midi.c $(LIB_OBJS) $(PM_OBJS) $(
 $(BUILDDIR)/tools/spark-serial$(EXE): tools/spark_serial.c $(SERIAL_OBJS) $(BUILDDIR)/daemon/log.o
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(SERIAL_OBJS) $(BUILDDIR)/daemon/log.o $(LDFLAGS)
+
+$(BUILDDIR)/tools/spark-artnet$(EXE): tools/spark_artnet.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 $(BUILDDIR)/tools/spark-reaper$(EXE): tools/spark_reaper.c $(ENV_OBJS) $(YAML_OBJS)
 	@mkdir -p $(dir $@)

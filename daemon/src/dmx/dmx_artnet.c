@@ -13,29 +13,35 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <fcntl.h>
 #define closesocket close
 #endif
 
 #define SPARK_DMX_ARTNET_PACKET_SIZE 530
-#define SPARK_DMX_ARTPOLL_TIMEOUT_MS 500
+
+#define SPARK_DMX_ARTPOLL_POLL_EVERY 75
+#define SPARK_DMX_ARTPOLL_CHECK_EVERY 5
 
 typedef struct {
-    int sock; // socket file descriptor (-1 when closed)
-    struct sockaddr_in dest; // destination: IP + port 6454
+    int sock;
+    struct sockaddr_in dest;
+    int poll_check_tries;
 } dmx_artnet_priv_t;
 
 static dmx_artnet_priv_t s_dmx_artnet_priv;
 
 static const uint8_t s_artpoll_packet[] = {'A', 'r', 't', '-', 'N', 'e', 't', '\0', 0x00, 0x20, 0x00, 0x0e, 0x00, 0x00};
+static const uint8_t s_artpoll_response_head[] = {'A', 'r', 't', '-', 'N', 'e', 't', '\0', 0x00, 0x21};
 
-static int s_set_socket_timeout(int sock, int timeout_ms)
+
+
+static int s_set_socket_nonblocking(int sock)
 {
     #ifdef _WIN32
-    DWORD t_ms = timeout_ms; 
-    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&t_ms, sizeof(t_ms));
+    u_long mode = 1;
+    return ioctlsocket(sock, FIONBIO, &mode);
     #else
-    struct timeval tv = { .tv_sec = timeout_ms / 1000, .tv_usec = timeout_ms * 1000 };
-    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    return fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
     #endif
 }
 
@@ -45,13 +51,42 @@ static int s_poll(spark_dmx_backend_t *backend)
     int written = sendto(priv->sock, (const char*)s_artpoll_packet, sizeof(s_artpoll_packet), 0, (struct sockaddr*)&priv->dest, sizeof(priv->dest));
     if (written < 0)
         return -1;
+    
+    priv->poll_check_tries = 3;
+    return 0;
+}
 
-    uint8_t buffer[64];
-    int read = recvfrom(priv->sock, (char*)buffer, sizeof(buffer), 0, (struct sockaddr*)&priv->dest, sizeof(priv->dest));
+static int s_check_poll_response(spark_dmx_backend_t *backend)
+{
+    dmx_artnet_priv_t *priv = backend->priv;
+    priv->poll_check_tries--;
+
+    uint8_t buffer[256];
+    int read = recvfrom(priv->sock, (char*)buffer, sizeof(buffer), 0, NULL, NULL);
     if (read < 0)
+    {
+        if (priv->poll_check_tries == 0)
+        {
+            spark_atomic_store(&backend->node_responsive, false);
+            spark_log_debug("artnet:poll: no response");
+        }
         return -1;
+    }
 
-    // TODO return memcmp();
+    if (memcmp(buffer, s_artpoll_response_head, sizeof(s_artpoll_response_head)) == 0)
+    {
+        spark_atomic_store(&backend->node_responsive, true);
+        priv->poll_check_tries = 0;
+
+        char short_name[19] = {0};
+        if (read >= 44)
+            memcpy(short_name, &buffer[26], 18);
+        spark_log_info("artnet:poll: node alive (%s)", short_name[0] ? short_name : "unnamed");
+        return 0;
+    }
+
+    spark_log_warn("artnet:poll: unexpected response received to artpoll packet");
+    return -1;
 }
 
 static int s_open(spark_dmx_backend_t *backend)
@@ -66,8 +101,7 @@ static int s_open(spark_dmx_backend_t *backend)
         spark_log_error("dmx_artnet: could not create socket");
         return -1;
     }
-    s_set_socket_timeout(priv->sock, SPARK_DMX_ARTPOLL_TIMEOUT_MS);
-    s_poll()
+    s_set_socket_nonblocking(priv->sock);
 
     spark_atomic_store(&backend->state, SPARK_DMX_CONNECTED);
     spark_atomic_inc(&backend->reconnects);
@@ -94,11 +128,16 @@ static int s_send_frame(spark_dmx_backend_t *backend, const uint8_t frame[SPARK_
     if (spark_atomic_load(&backend->state) != SPARK_DMX_CONNECTED)
         return -1;
 
+    dmx_artnet_priv_t *priv = backend->priv;
+    uint64_t frames_sent = spark_atomic_load(&backend->frames_sent);
+    if (frames_sent % SPARK_DMX_ARTPOLL_POLL_EVERY == 0)
+        s_poll(backend);
+    if (priv->poll_check_tries > 0 && frames_sent % SPARK_DMX_ARTPOLL_CHECK_EVERY == 0)
+        s_check_poll_response(backend);
+
     uint8_t packet[SPARK_DMX_ARTNET_PACKET_SIZE];
     s_build_packet(packet, frame);
 
-    /* Send packet here */
-    dmx_artnet_priv_t *priv = backend->priv;
     int written = sendto(priv->sock, (const char*)packet, SPARK_DMX_ARTNET_PACKET_SIZE, 0, (struct sockaddr*)&priv->dest, sizeof(priv->dest));
 
     if (written < 0)

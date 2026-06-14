@@ -446,11 +446,14 @@ static void s_handle_dmx_status(struct mg_connection *c)
     uint64_t frames = spark_atomic_load_u64(&backend->frames_sent);
     uint64_t errors = spark_atomic_load_u64(&backend->write_errors);
     uint64_t reconn = spark_atomic_load_u64(&backend->reconnects);
+    bool responsive = spark_atomic_load(&backend->node_responsive);
 
     mg_http_reply(c, 200, s_json_content_type,
         "{\"backend\":\"%s\",\"device\":\"%s\",\"state\":\"%s\","
+        "\"node_responsive\":%s,"
         "\"stats\":{\"frames_sent\":%llu,\"write_errors\":%llu,\"reconnects\":%llu}}\n",
         backend_name, cfg->dmx_device, s_dmx_state_str(state),
+        responsive ? "true" : "false",
         (unsigned long long)frames,
         (unsigned long long)errors,
         (unsigned long long)reconn);

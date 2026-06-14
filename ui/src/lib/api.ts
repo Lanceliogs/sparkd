@@ -129,6 +129,7 @@ export interface DmxStatus {
   backend: string;
   device: string;
   state: string;
+  node_responsive: boolean;
   stats: { frames_sent: number; write_errors: number; reconnects: number };
 }
 
@@ -143,9 +144,9 @@ export async function getMidiStatus(): Promise<MidiStatus> {
 export async function getDmxStatus(): Promise<DmxStatus> {
   try {
     const res = await authFetch(`${BASE}/api/dmx/status`);
-    if (!res.ok) return { backend: 'none', device: '', state: 'disconnected', stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } };
+    if (!res.ok) return { backend: 'none', device: '', state: 'disconnected', node_responsive: false, stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } };
     return await res.json();
-  } catch { return { backend: 'none', device: '', state: 'disconnected', stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } }; }
+  } catch { return { backend: 'none', device: '', state: 'disconnected', node_responsive: false, stats: { frames_sent: 0, write_errors: 0, reconnects: 0 } }; }
 }
 
 /* ---- Editor API ---- */

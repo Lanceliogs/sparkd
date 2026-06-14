@@ -254,7 +254,15 @@ int spark_fs_copy(const char *src, const char *dst)
 int spark_fs_remove(const char *path)
 {
     if (!path) return -1;
+#ifdef _WIN32
+    DWORD attr = GetFileAttributesA(path);
+    if (attr == INVALID_FILE_ATTRIBUTES) return -1;
+    if (attr & FILE_ATTRIBUTE_DIRECTORY)
+        return RemoveDirectoryA(path) ? 0 : -1;
+    return DeleteFileA(path) ? 0 : -1;
+#else
     return remove(path) == 0 ? 0 : -1;
+#endif
 }
 
 /* ------------------------------------------------------------------ */
